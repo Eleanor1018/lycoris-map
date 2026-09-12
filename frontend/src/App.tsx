@@ -5,6 +5,7 @@ import Register from "./pages/Register.tsx";
 import Layout from "./layout/Layout.tsx";
 import Maps from "./pages/Maps.tsx";
 import Documents from "./pages/Documents.tsx";
+import Discover from "./pages/Discover.tsx";
 import Profile from "./pages/Profile.tsx";
 import ChangePassword from "./pages/ChangePassword.tsx";
 import Search from "./pages/Search.tsx";
@@ -30,6 +31,7 @@ export default function App() {
                 <Route path="/about" element={<About/>}></Route>
                 <Route path="/maps" element={<Maps key={language} />}></Route>
                 <Route path="/documents" element={<Documents/>}></Route>
+                <Route path="/discover" element={<Discover key={language}/>}></Route>
                 <Route path="/documents/:slug?" element={<Documents></Documents>}></Route>
                 <Route path="/login" element={<Login/>}></Route>
                 <Route path="/register" element={<Register/>}></Route>
