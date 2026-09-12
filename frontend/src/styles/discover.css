@@ -5,141 +5,38 @@
     color: var(--ly-color-ink);
     font-family: var(--ly-font-body);
 }
-.discover-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 20px;
-    margin-bottom: 24px;
-}
-.discover-eyebrow {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 11px;
-    font-weight: 800;
-    letter-spacing: 0.14em;
-    color: #7b5877;
-}
-.discover-heading h1 {
-    font-size: clamp(28px, 3vw, 40px);
-    letter-spacing: -0.045em;
-    line-height: 1.2;
-    margin: 10px 0;
-    font-weight: 800;
-}
-.discover-heading p {
-    font-size: 15px;
-    color: #796f7b;
-    margin: 0;
-    line-height: 1.6;
-}
-.discover-origin {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 18px;
-    margin-bottom: 26px;
-    border: 1px solid #e9dceb;
-    border-radius: 18px;
-    background: #f7f1fa;
-}
-.discover-origin > div {
-    flex: 1;
-    min-width: 0;
-}
-.discover-origin strong {
-    display: block;
-    font-size: 14px;
-    font-weight: 700;
-}
-.discover-origin span {
-    display: block;
-    font-size: 12px;
-    color: #796f7b;
-    line-height: 1.7;
-    overflow-wrap: anywhere;
-}
-.discover-layout {
-    display: grid;
-    grid-template-columns: 232px minmax(0, 1fr);
-    gap: 32px;
-    align-items: start;
-}
-.discover-filters {
-    position: sticky;
-    top: calc(var(--nav-height, 90px) + 16px);
-    border: 1px solid #e9e1eb;
-    border-radius: 22px;
-    background: #fff;
-    padding: 18px;
-}
-.discover-filter-title {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 4px;
-}
-.discover-filter-title h2,
-.discover-results h2 {
-    font-size: 18px;
-    margin: 0;
-    font-weight: 750;
-}
-.discover-field-label {
-    font-size: 12px;
-    color: #817683;
-    margin: 16px 0 10px;
-}
-.discover-categories {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-.discover-categories .MuiButton-root {
-    justify-content: flex-start;
-    padding: 10px 12px;
-    min-height: 44px;
-    border-radius: 13px;
-    color: #685b6d;
-    font-size: 13px;
-    text-transform: none;
-}
-.discover-categories .selected {
-    color: #533755;
-    background: #ede1f5;
-    font-weight: 750;
-}
-.discover-categories .selected:hover {
-    background: #e5d7f0;
-}
-.discover-filter-note {
-    font-size: 12px;
-    line-height: 1.7;
-    color: #817683;
-    border-top: 1px solid #eee7ef;
-    margin: 16px 0 0;
-    padding-top: 16px;
-}
-.discover-filter-toggle {
-    display: none;
-}
-.discover-results {
-    min-width: 0;
-}
 .discover-results-heading {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 20px;
+    gap: 24px;
+    margin-bottom: 24px;
 }
-.discover-results-heading > div > span {
-    display: block;
-    color: #817683;
-    font-size: 12px;
-    line-height: 1.6;
-    margin-top: 6px;
+.discover-results-heading h1 {
+    flex-shrink: 0;
+    font-size: 24px;
+    line-height: 1.4;
+    margin: 0;
+    font-weight: 750;
+}
+.discover-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: min(100%, 520px);
+    min-width: 0;
+}
+.discover-search {
+    flex: 1;
+    min-width: 0;
+}
+.discover-category {
+    width: 170px;
+    flex-shrink: 0;
+}
+.discover-controls .MuiInputBase-root {
+    height: 44px;
+    background: #fff;
 }
 .discover-list {
     list-style: none;
@@ -318,100 +215,30 @@
     .discover-page {
         padding: 24px 20px 48px;
     }
-    .discover-layout {
-        grid-template-columns: minmax(0, 1fr);
-        gap: 20px;
-    }
-    .discover-filters {
-        position: static;
-        padding: 0;
-        border-radius: 16px;
-    }
-    .discover-filter-toggle {
-        display: flex;
-        width: 100%;
-        padding: 12px 16px;
-        gap: 10px;
-        border: 0;
-        background: transparent;
-        text-align: left;
-        align-items: center;
-        min-height: 56px;
-        color: inherit;
-        font: inherit;
-        cursor: pointer;
-    }
-    .discover-filter-toggle > span:first-of-type {
-        flex: 1;
-        font-weight: 700;
-        font-size: 14px;
-    }
-    .discover-filter-toggle small {
-        display: block;
-        font-weight: 400;
-        font-size: 11px;
-        color: #817683;
-        line-height: 1.8;
-    }
-    .discover-filter-body {
-        display: none;
-        padding: 0 16px 16px;
-    }
-    .discover-filter-body.is-open {
-        display: block;
-    }
-    .discover-categories {
-        flex-direction: row;
-        flex-wrap: wrap;
-    }
-    .discover-origin {
-        margin-bottom: 18px;
-    }
 }
 @media (max-width: 599px) {
     .discover-page {
         padding: 20px 16px 40px;
     }
-    .discover-heading {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        align-items: center;
-        gap: 12px;
-        margin-bottom: 18px;
-    }
-    .discover-heading h1 {
-        font-size: 28px;
-        margin: 0;
-    }
-    .discover-heading p,
-    .discover-eyebrow {
-        display: none;
-    }
-    .discover-heading .MuiButton-root {
-        font-size: 12px;
-        padding: 10px 14px;
-    }
-    .discover-origin {
-        padding: 10px 12px;
-        gap: 7px;
-    }
-    .discover-origin > svg {
-        display: none;
-    }
-    .discover-origin strong {
-        font-size: 12px;
-    }
-    .discover-origin span {
-        font-size: 10px;
-    }
-    .discover-origin .MuiButton-root {
-        font-size: 12px;
-        padding: 4px;
-    }
     .discover-results-heading {
-        align-items: flex-start;
-        flex-wrap: wrap;
-        gap: 14px;
+        align-items: stretch;
+        flex-direction: column;
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+    .discover-results-heading h1 {
+        font-size: 22px;
+    }
+    .discover-controls {
+        width: 100%;
+        gap: 8px;
+    }
+    .discover-category {
+        width: 136px;
+    }
+    .discover-controls .MuiInputBase-root,
+    .discover-controls .MuiInputLabel-root {
+        font-size: 13px;
     }
     .discover-card {
         grid-template-columns: minmax(0, 1fr);

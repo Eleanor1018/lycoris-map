@@ -119,7 +119,7 @@ describe('Discover nearby places', () => {
     it('uses the saved map center, sorts real distances, and excludes private/out-of-radius points', () => {
         visit()
         expectIds([1, 3, 6, 2])
-        cy.contains('上次查看的地图位置').should('be.visible')
+        cy.get('.discover-page h1').should('have.text', '附近点位')
         cy.wait('@nearby')
             .its('request.query')
             .should('include', {
@@ -134,29 +134,19 @@ describe('Discover nearby places', () => {
             .and('not.contain.text', '文档')
     })
 
-    it('filters by category, radius, photos and search, and resets empty results', () => {
+    it('filters from the category dropdown and search, and resets empty results', () => {
         visit()
         expectIds([1, 3, 6, 2])
-        cy.get('.discover-categories')
-            .contains('button', '友好医疗机构')
-            .click()
+        cy.get('[role="combobox"][aria-label="点位类别"]').click()
+        cy.get('[role="option"]').contains('友好医疗机构').click()
         expectIds([2])
-        cy.contains('button', '重置').click()
-        cy.get('input[type="checkbox"]').check()
-        expectIds([1, 6])
-        cy.get('input[type="checkbox"]').uncheck()
-        cy.get('[role="combobox"]').click()
-        cy.get('[role="option"]')
-            .contains(/^1 km$/)
-            .click()
-        expectIds([1, 3, 6])
-        cy.get('input')
-            .filter('[id]')
-            .filter('[type="text"]')
-            .first()
-            .type('nothing-matches')
+        cy.get('.discover-search input').type('nothing-matches')
         cy.contains('这里暂时没有符合条件的点位').should('be.visible')
         cy.contains('button', '重置筛选').click()
+        expectIds([1, 3, 6, 2])
+        cy.get('.discover-search input').type('卫生间')
+        expectIds([1])
+        cy.get('.discover-search input').clear()
         expectIds([1, 3, 6, 2])
     })
 
@@ -190,36 +180,6 @@ describe('Discover nearby places', () => {
             .and('include', 'lang=zh')
         cy.wait('@detail')
         cy.get('.leaflet-popup-content').should('contain.text', '近处卫生间')
-    })
-
-    it('recovers from denied location without calling the map center your current location', () => {
-        visit()
-        cy.contains('button', '使用我的位置').click()
-        cy.contains('暂时无法获取定位。').should('be.visible')
-        cy.contains('上次查看的地图位置').should('be.visible')
-        expectIds([1, 3, 6, 2])
-    })
-
-    it('refreshes the query origin after successful geolocation', () => {
-        cy.visit('/discover?lang=zh', {
-            onBeforeLoad(win) {
-                setupWindow(win, (success) =>
-                    success({
-                        coords: {
-                            latitude: origin.lat + 0.002,
-                            longitude: origin.lng,
-                        },
-                    } as GeolocationPosition)
-                )
-            },
-        })
-        expectIds([1, 3, 6, 2])
-        cy.contains('button', '使用我的位置').click()
-        cy.contains('strong', '当前位置').should('be.visible')
-        cy.get('[data-testid="discover-card"]')
-            .first()
-            .should('have.attr', 'data-marker-id', '3')
-        cy.get('[data-marker-id="3"]').should('contain.text', '0 m')
     })
 
     it('shows a recoverable request error and works after retry', () => {
@@ -264,9 +224,8 @@ describe('Discover nearby places', () => {
         cy.then(() => {
             fast = true
         })
-        cy.get('.discover-categories')
-            .contains('button', '无障碍卫生间')
-            .click()
+        cy.get('[role="combobox"][aria-label="点位类别"]').click()
+        cy.get('[role="option"]').contains('无障碍卫生间').click()
         cy.get('[data-testid="discover-card"]').should(
             'contain.text',
             'Current result'
@@ -274,21 +233,31 @@ describe('Discover nearby places', () => {
         cy.wait(1300)
         cy.contains('Obsolete result').should('not.exist')
         cy.get('button[aria-label="切换到英文"]').click()
-        cy.contains('h1', 'Discover nearby').should('be.visible')
-        cy.contains('button', 'Use my location').should('be.visible')
-        cy.contains('Nearest first').should('be.visible')
+        cy.contains('h1', 'Nearby places').should('be.visible')
+        cy.get('[role="combobox"][aria-label="Place type"]').should(
+            'be.visible'
+        )
     })
 
-    it('opens Discover from the narrow-screen drawer, with reachable filters and no overflow', () => {
+    it('opens Discover from the narrow-screen drawer, with the dropdown beside search and no overflow', () => {
         cy.viewport(320, 740)
         cy.visit('/maps?lang=zh', { onBeforeLoad: setupWindow })
         cy.get('button[aria-label="打开登录导航菜单"]').click()
         cy.get('.MuiDrawer-paper').contains('发现').click()
         cy.location('pathname').should('equal', '/discover')
-        cy.get('.discover-filter-toggle').click()
-        cy.get('.discover-categories').contains('button', '母婴室').click()
+        cy.get('[role="combobox"][aria-label="点位类别"]').click()
+        cy.get('[role="option"]').contains('母婴室').click()
         expectIds([3])
-        cy.get('.discover-filter-toggle').click()
+        cy.get('.discover-controls').should(($controls) => {
+            const search = $controls
+                .find('.discover-search')[0]
+                .getBoundingClientRect()
+            const dropdown = $controls
+                .find('.discover-category')[0]
+                .getBoundingClientRect()
+            expect(dropdown.left).to.be.greaterThan(search.right)
+            expect(dropdown.top).to.equal(search.top)
+        })
         cy.document().should((doc) =>
             expect(doc.documentElement.scrollWidth).to.be.at.most(320)
         )
