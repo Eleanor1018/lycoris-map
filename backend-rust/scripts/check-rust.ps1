@@ -1,5 +1,6 @@
 #!/usr/bin/env pwsh
-# Lycoris Rust backend local checks (public marker reads + phase 2 auth/users/avatars).
+# Lycoris Rust backend local checks (all 43 mounted contract templates: phase 1 marker reads,
+# phase 2 auth/users/avatars, phase 3 marker writes/review and image proposals/cleanup).
 #
 # Validates targets BEFORE any DDL: TEST_DATABASE_URL / TEST_REDIS_URL must be loopback and
 # the migration database must be `lycoris_rust` or a `lycoris_test_` synthetic database.

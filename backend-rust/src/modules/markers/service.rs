@@ -268,6 +268,20 @@ impl MarkerService {
         self.localize_rows(rows, lang).await
     }
 
+    /// 本地化单个数据库行，供图片上传/审批返回本地化 `MarkerDto`。
+    ///
+    /// 复用与公开读取相同的译文加载与回退规则；行必须来自可信查询（如
+    /// [`MediaService::submit_marker_image`](crate::media::MediaService::submit_marker_image)
+    /// 返回的原点位或审批后的点位），不在此另做可见性判断。
+    pub async fn localize_row(
+        &self,
+        row: MarkerRow,
+        lang: &'static str,
+    ) -> Result<MarkerDto, ApiError> {
+        let mut rows = self.localize_rows(vec![row], lang).await?;
+        rows.pop().ok_or(ApiError::Internal)
+    }
+
     /// 批量本地化：一次加载所有译文，避免 N+1。
     async fn localize_rows(
         &self,

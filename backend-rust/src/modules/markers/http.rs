@@ -1,28 +1,30 @@
-//! 公开点位读取 HTTP 层：薄 handler、查询参数解析、响应与 Vary 头。
+//! 公开点位读取与点位图片上传 HTTP 层：薄 handler、查询参数解析、响应与 Vary 头。
 //!
-//! 成功响应为 JSON 数组或对象，字段与 Java `MapMarker` 一致；错误为中文纯文本
-//! （`markers` 模块的错误形状）。所有成功响应都带
+//! 成功响应为 JSON 数组或对象，字段与 Java `MapMarker` 一致；读取错误为中文纯文本
+//! （`markers` 模块的错误形状），写入（图片上传）错误按契约选形状（400/404/503 文本、
+//! 413 `ApiResponse`、保存类 500）。所有成功响应都带
 //! `Vary: Accept-Language, X-App-Language`，便于按语言缓存。
 
 use axum::Json;
 use axum::Router;
-use axum::extract::{Path, Query, State};
+use axum::extract::{Multipart, Path, Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use serde::Deserialize;
 
 use crate::app::AppState;
-use crate::auth::OptionalUser;
+use crate::auth::{CurrentUser, OptionalUser};
 use crate::error::{ApiError, ErrorShape};
 use crate::modules::markers::localization;
 use crate::modules::markers::model::{MarkerDto, Viewer};
+use crate::multipart::{file_field_response, marker_upload_media_error_response, read_file_field};
 
 const DEFAULT_NEARBY_RADIUS: i32 = 1000;
 const DEFAULT_NEARBY_CATEGORY: &str = "accessible_toilet";
 const VARY_VALUE: &str = "Accept-Language, X-App-Language";
 
-/// 构建公开点位路由。静态段优先于 `/{id}`，不会互相遮蔽。
+/// 构建点位路由。静态段优先于 `/{id}`，不会互相遮蔽。
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/markers/public", get(list_public))
@@ -30,6 +32,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/markers/nearby", get(nearby))
         .route("/api/markers/viewport", get(viewport))
         .route("/api/markers/{id}", get(detail))
+        .route("/api/markers/{id}/image", post(upload_image))
 }
 
 #[derive(Debug, Deserialize)]
@@ -168,13 +171,64 @@ async fn detail(
     }
 }
 
+/// POST /api/markers/{id}/image（登录，multipart，字段 `file`）。
+///
+/// 认证（[`CurrentUser`]）与写来源校验已在提取器/中间件层完成，此处才读取业务体；从数据库
+/// 身份构造真实 [`Viewer`]（公共 ID / 角色 / 删除标记），用户名与公共 ID 交给
+/// [`MediaService::submit_marker_image`](crate::media::MediaService::submit_marker_image)。
+/// 成功返回经 [`MarkerService::localize_row`](crate::modules::markers::service::MarkerService::localize_row)
+/// 本地化的原点位（提交**不**直接换图）。错误形状按 Java 契约：400/404/503 为中文纯文本，
+/// 413 保持 `ApiResponse`，保存类内部错误统一 `500 "上传失败"`。
+async fn upload_image(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+    headers: HeaderMap,
+    Query(params): Query<LangOnly>,
+    user: CurrentUser,
+    mut multipart: Multipart,
+) -> Response {
+    let bytes = match read_file_field(&mut multipart, "file", crate::media::MAX_UPLOAD_BYTES).await
+    {
+        Ok(bytes) => bytes,
+        Err(error) => return file_field_response(error, ErrorShape::Text),
+    };
+
+    let lang = localization::for_read(params.lang.as_deref(), &headers);
+    let identity = &user.0;
+    let public_id = identity.user.public_id.to_string();
+    let viewer = Viewer {
+        public_id: Some(public_id.as_str()),
+        role: identity.user.role.as_str(),
+        deleted: identity.user.deleted,
+    };
+
+    match state
+        .media
+        .submit_marker_image(
+            id,
+            Some(&viewer),
+            identity.user.username_or_empty(),
+            &public_id,
+            bytes,
+        )
+        .await
+    {
+        Ok(row) => match state.markers.localize_row(row, lang).await {
+            Ok(marker) => json_marker(&marker),
+            Err(error) => error_response(error),
+        },
+        Err(error) => marker_upload_media_error_response(error),
+    }
+}
+
 pub(super) fn json_markers(markers: &[MarkerDto]) -> Response {
     let mut response = Json(markers).into_response();
     with_vary(&mut response);
     response
 }
 
-pub(super) fn json_marker(marker: &MarkerDto) -> Response {
+/// 本地化点位 JSON 响应（附 `Vary`）；供点位图片上传与管理员审批复用。
+pub(crate) fn json_marker(marker: &MarkerDto) -> Response {
     let mut response = Json(marker).into_response();
     with_vary(&mut response);
     response

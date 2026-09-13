@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.98.1"
 publish = false
-description = "Lycoris Rust 后端（阶段 1：骨架、配置、健康检查与迁移基线）"
+description = "Lycoris Rust 后端（Axum + SQLx）"
 
 [lib]
 name = "lycoris_backend"

@@ -188,6 +188,18 @@ pub fn avatar_media_error_response(error: MediaServiceError) -> Response {
     media_error_response(error, ErrorShape::ApiResponse)
 }
 
+/// 点位图片上传媒体错误的响应（MarkerController 风格）。
+///
+/// 与头像一致，`Internal` 保持 Java `MarkerController.uploadMarkerImage` 的
+/// `500 "上传失败"`；其余按阶段 3 点位图片契约走通用映射：400/404/409/503 为中文纯文本，
+/// 413 始终为 `ApiResponse`。（点位图片上传越权/缺失由 `NotFound` 覆盖，不产生 409。）
+pub fn marker_upload_media_error_response(error: MediaServiceError) -> Response {
+    if matches!(error, MediaServiceError::Internal) {
+        return web::text(StatusCode::INTERNAL_SERVER_ERROR, "上传失败");
+    }
+    media_error_response(error, ErrorShape::Text)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{avatar_media_error_response, media_error_response};

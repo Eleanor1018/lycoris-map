@@ -1,15 +1,15 @@
 # backend-rust
 
-Lycoris Rust 后端（Axum + SQLx）工作目录。**阶段 1 公开点位读取**与
-**阶段 2 认证/用户/头像**已接入 HTTP：可编译运行的 lib + bin、配置、健康检查、迁移基线集，
+Lycoris Rust 后端（Axum + SQLx）工作目录。**阶段 1 公开点位读取**、
+**阶段 2 认证/用户/头像**与**阶段 3 点位图片上传/管理员图片提案与清理**已接入 HTTP：
+可编译运行的 lib + bin、配置、健康检查、迁移基线集，
 5 条公开点位读取（`/api/markers/public`、`/search`、`/nearby`、`/viewport`、`/{id}`，
 含本地化与 Redis 查询缓存），9 条 AuthController + 4 条 AdminUserController +
-1 条 AdminAuthController（合计 **19** 条阶段 1/2 接口）以及 2 条受控 `/uploads` 读取路由，
-配合真实 PG / Redis 集成测试。阶段 3 的 **18 条点位写入/收藏/审核非图片路由**已接通，
-详情 `GET /api/markers/{id}` 已接 `OptionalUser`。阶段 3 的媒体服务（点位图片提案提交/审批、
-失效引用清理）已在 `MediaService` 中作为**核心准备**，但对应 **5 条图片 HTTP 路由**
-（`POST /api/markers/{id}/image` 与管理员 4 条）**尚未挂载**，由另一独立改动接入，
-本轮不接管生产流量；生产仍由 `backend/` 的 Spring Boot 服务承担。
+1 条 AdminAuthController（合计 **19** 条阶段 1/2 接口）、阶段 3 的 **18 条点位写入/收藏/审核
+非图片路由**与 **5 条图片路由**（`POST /api/markers/{id}/image` 与 4 条 `VerifiedAdmin` 管理接口）
+以及 2 条受控 `/uploads` 路由（合计契约 UploadController 的 1 个模板）均已挂载，
+配合真实 PG / Redis 集成测试。**43 个既有 API 契约模板全部挂载**（`/health/live`、`/health/ready`
+两个探针另列）；本轮不接管生产流量，生产仍由 `backend/` 的 Spring Boot 服务承担。
 
 设计依据：`docs/rust-migration/auth-design.md`、`docs/rust-migration/api-contract.md`。
 本轮保留 Cookie + 账号 + 密码 + 管理员二次验证体验，最终认证重设计另案。
@@ -36,7 +36,7 @@ Lycoris Rust 后端（Axum + SQLx）工作目录。**阶段 1 公开点位读取
 | `src/auth.rs` | `OptionalUser` / `CurrentUser` / `AdminUser` / `VerifiedAdmin` 提取器 |
 | `src/origin.rs` | 写请求来源校验中间件 |
 | `src/ratelimit.rs` | 注册限流（Redis 原子 INCR + TTL） |
-| `src/routes/` | 阶段 2 HTTP 处理器：`auth`、`admin`、`avatar`（3 个头像路由）、`uploads`（受控读取） |
+| `src/routes/` | HTTP 处理器：`auth`、`admin`（账号）、`admin_markers`（阶段 3 图片提案/清理）、`avatar`（3 个头像路由）、`uploads`（受控读取） |
 | `src/migrate.rs` | 内嵌迁移、`--migrate` 执行与启动只读校验 |
 | `migrations/0001_baseline.sql` | 从 `docs/rust-migration/schema-baseline.sql` 精确派生 |
 | `.sqlx/` | SQLx 离线元数据，`SQLX_OFFLINE=true` 时无需数据库即可编译 |
@@ -45,14 +45,14 @@ Lycoris Rust 后端（Axum + SQLx）工作目录。**阶段 1 公开点位读取
 | `tests/markers_http.rs` | 点位写入/收藏/审核 HTTP 真实 PG / Redis 集成测试（真实 Router + 登录 Cookie + 权限矩阵） |
 | `tests/media.rs` | 媒体核心集成测试（合成图与真实临时目录，无需 PG/Redis） |
 | `tests/media_business.rs` | 媒体业务真实 PG / Redis / 临时文件集成测试（头像、访问矩阵、提案、清理） |
-| `tests/media_http.rs` | 头像 3 路由、受控 `/uploads`、私有点位 detail 的真实 PG / Redis / 临时文件 HTTP 集成测试 |
+| `tests/media_http.rs` | 头像 3 路由、受控 `/uploads`、私有点位 detail、阶段 3 点位图片上传与管理员图片提案/清理的真实 PG / Redis / 临时文件 HTTP 集成测试 |
 | `tests/auth_integration.rs` | 认证/用户真实 PG / Redis 集成测试 |
 | `tests/common/mod.rs` | 集成测试共享工具（临时库、回环校验、请求辅助） |
 | `scripts/check-rust.ps1` | 迁移合成开发库、校验离线元数据、离线构建并跑 fmt / clippy / test |
 | `compose.test.yml` | 隔离测试依赖：PostgreSQL 18.6 + PostGIS 3.6.4、Redis 8.10.1 |
 | `scripts/check-services.py` | 启动并校验上述两个容器及精确版本（仅标准库） |
 
-## 已实现路由（19 阶段 1/2：14 认证/用户/头像 + 5 公开点位；另 2 受控读取）
+## 已实现路由（43 个既有契约模板全部挂载；`/health/live`、`/health/ready` 探针另列）
 
 | 方法 | 路径 | 认证 |
 | --- | --- | --- |
@@ -73,11 +73,19 @@ Lycoris Rust 后端（Axum + SQLx）工作目录。**阶段 1 公开点位读取
 | GET | `/uploads/avatars/{filename}` | 匿名（不加载会话） |
 | GET | `/uploads/markers/{filename}` | 匿名/属主/管理员/提案作者（资源级） |
 | GET | `/api/markers/public`、`/search`、`/nearby`、`/viewport`、`/{id}` | 公开读；`/{id}` 接 `OptionalUser` 构真实 Viewer |
+| POST | `/api/markers/{id}/image` | 登录（`CurrentUser` + 写来源校验 + multipart；只建 PENDING 提案） |
+| GET | `/api/admin/markers/pending-images` | 管理员 + 二次验证 |
+| POST | `/api/admin/markers/image-proposals/{id}/approve` | 管理员 + 二次验证 |
+| POST | `/api/admin/markers/image-proposals/{id}/reject` | 管理员 + 二次验证 |
+| POST | `/api/admin/markers/cleanup-missing-images` | 管理员 + 二次验证 |
 
 响应形状按契约分别保留：安全入口 401 固定 `{"message":"Spring Security Error"}`；
 已认证但角色不足的 403 为 Spring Boot 默认错误 JSON
 `{timestamp,status,error,path}`（真实 Java 行为，非空体）；管理员二次验证 403 仍为中文纯文本；
-管理员成功为普通 JSON；Auth/头像接口为 `ApiResponse`（失败 `data:null`）。**不做全局统一包裹。**
+管理员成功为普通 JSON；Auth/头像接口为 `ApiResponse`（失败 `data:null`）；阶段 3 点位图片上传
+成功为本地化普通 JSON（带 `Vary`），业务错误 400/404/503 为中文纯文本、413 保持 `ApiResponse`、
+保存类 500 为 `上传失败` 文本；管理员图片接口成功为普通 JSON/空体，业务错误为中文纯文本。
+**不做全局统一包裹。**
 
 请求体上限与 413：
 
@@ -196,13 +204,13 @@ PATCH 与管理员 PATCH 使用全局 8 MiB（`web::MarkerJsonBody`），因为 
 - **权限**：`root`（`UPLOAD_DIR`）必须由服务运行用户独占写权限，其他本地用户不可写，
   以免放入可执行内容或替换目录。核心不引入 `unsafe`。
 
-## 受控媒体业务（头像已接 HTTP，点位图片待阶段 3）
+## 受控媒体业务（头像与阶段 3 点位图片均已接 HTTP）
 
 `MediaService`（`src/media/service.rs`）构造只依赖 `PgPool` + `ImageStore` +
 `MarkerCache`；**身份由调用方以可信 `Viewer` / 用户名 / 用户 ID 传入**，本层不解析会话、
 不信任请求字段，只做资源级授权与一致性校验，并复用 `markers::model::can_view`。
 
-可供 HTTP 层调用的方法（✅ 已挂载路由，⏳ 阶段 3 待接线）：
+可供 HTTP 层调用的方法（✅ 已挂载路由）：
 
 | 方法 | 对应接口 | 状态 | 要点 |
 | --- | --- | --- | --- |
@@ -210,10 +218,10 @@ PATCH 与管理员 PATCH 使用全局 8 MiB（`web::MarkerJsonBody`），因为 
 | `avatar_url_by_user_id(user_id)` | `GET /api/me/avatar` | ✅ | 同上 |
 | `upload_avatar(user_id, expected_row_version, caller_public_id, bytes)` | `POST /api/me/avatar` | ✅ | 保存后以 `id + deleted=false + row_version` 条件更新 `avatar_url` 与 `row_version`，**不覆盖资料其他列**；返回 `Updated`/`NotFound`/`VersionConflict` |
 | `open_uploads(directory, filename, viewer)` | `GET /uploads/avatars|markers/{filename}` | ✅ | 授权后返回流式 `OpenedImage`，不整张读入内存；非法/不存在/不可见一律 404 |
-| `submit_marker_image(id, viewer, username, public_id, bytes)` | `POST /api/markers/{id}/image` | ⏳ | 可见性检查在解码前；落盘后事务内重锁点位复检，插入 `PENDING` 提案，点位不变，返回原 `MarkerRow` |
-| `list_pending_images(viewer)` | `GET /api/admin/markers/pending-images` | ⏳ | 8 字段、`createdAt DESC` |
-| `approve_image_proposal(id, viewer, reviewer)` / `reject_image_proposal(...)` | 管理员图片审批 | ⏳ | 一次性、同事务 |
-| `cleanup_missing_images(viewer)` | `POST /api/admin/markers/cleanup-missing-images` | ⏳ | `{checked,cleared,message}` |
+| `submit_marker_image(id, viewer, username, public_id, bytes)` | `POST /api/markers/{id}/image` | ✅ | 可见性检查在解码前；落盘后事务内重锁点位复检，插入 `PENDING` 提案，点位不变，返回原 `MarkerRow` |
+| `list_pending_images(viewer)` | `GET /api/admin/markers/pending-images` | ✅ | 8 字段、`createdAt DESC` |
+| `approve_image_proposal(id, viewer, reviewer)` / `reject_image_proposal(...)` | 管理员图片审批 | ✅ | 一次性、同事务 |
+| `cleanup_missing_images(viewer)` | `POST /api/admin/markers/cleanup-missing-images` | ✅ | `{checked,cleared,message}` |
 
 - 错误类型 `MediaServiceError` 提供 `status()` 与 `message()`（如 `图片提案不存在`、
   `关联点位不存在`、`该提案已处理`），HTTP 层据此选择响应形状；管理员与二次验证由 HTTP
@@ -360,16 +368,21 @@ HTTP 观察），不启动常驻外部 HTTP 服务器。每个用例从测试管
 可信代理与 IP 伪造、写来源校验（same-site 仍校验 Referer、非法 FetchMetadata 拒绝）、
 原生 App 无浏览器头放行、资料 null/空串、管理员分页/搜索/软删除形状、JSON 媒体类型与 413。
 
-`tests/media_http.rs` 覆盖头像 3 路由、受控 `/uploads` 与私有点位 detail：Cookie 登录后
-属主/管理员可见私有待审、匿名与他人 404；头像完整上传 → `/api/me/avatar` → 公共 ID 头像 →
-`/uploads/avatars/*` 全链路（MIME、`Cache-Control`、`nosniff`、`Content-Length`、7 字段
-`UserResponse`）；无图/已删/非法引用 404；未登录 401 与写来源拒绝；multipart 覆盖
+`tests/media_http.rs` 覆盖头像 3 路由、受控 `/uploads`、私有点位 detail 与阶段 3 的 5 条图片
+路由：Cookie 登录后属主/管理员可见私有待审、匿名与他人 404；头像完整上传 → `/api/me/avatar` →
+公共 ID 头像 → `/uploads/avatars/*` 全链路（MIME、`Cache-Control`、`nosniff`、`Content-Length`、
+7 字段 `UserResponse`）；无图/已删/非法引用 404；未登录 401 与写来源拒绝；multipart 覆盖
 缺 `file`/空文件/重复 `file`/无效图/超 5 MiB/整个请求超 8 MiB（含无 `Content-Length` 尾随
 未知字段与已知 `Content-Length` 提前拒绝）均为契约形状 413，>2 MiB 且 <5 MiB 合法输入通过
 （证明 Axum 默认 2 MiB 已被 8 MiB 覆盖）；`/uploads/markers` 的匿名/属主/管理员/他人访问矩阵；
-avatars 与匿名 markers 读取在 Redis 不可用时仍可读（不加载会话）。另含：**已允许 Origin 的
-已知 `Content-Length` 超限 413 与流式 multipart 超限 413 都带
-`Access-Control-Allow-Origin`/`Credentials` 与 `Vary`，非白名单 Origin 不发 allow-origin**；
+avatars 与匿名 markers 读取在 Redis 不可用时仍可读（不加载会话）。阶段 3 另覆盖：`POST
+/api/markers/{id}/image` 成功并按 `lang` 本地化、只建 `PENDING` 提案且不改 `mark_image`、
+匿名/他人看不到待审文件而属主/管理员/有权限提案者可见、非法/超限沿头像已验证 helper 且点位接口
+413 形状；4 条管理路由的管理员与二次验证矩阵（匿名 401 固定 JSON、普通用户 403 Boot JSON、
+未二次 403 文本），审批返回本地化 `MarkerDto`、重复/提案缺失/关联点位缺失错误，驳回后与关联
+点位删除后的图片权限维持媒体核心，两条审批 HTTP 并发只有一个成功，清理只取消确实缺失的引用
+且不删文件。另含：**已允许 Origin 的已知 `Content-Length` 超限 413 与流式 multipart 超限 413
+都带 `Access-Control-Allow-Origin`/`Credentials` 与 `Vary`，非白名单 Origin 不发 allow-origin**；
 **不读 body 的 `GET /health/live` 带超限 `Content-Length` 仍 413**；JSON 提取器超限为结构化
 `{"code":413,"message":"上传文件过大，请选择 5MB 以内的图片"}`、读取中途出错为 400
 `请求体读取失败`；**成功、404 fallback 与全局 body limit 413 都带合法且互不相同的服务端
@@ -428,11 +441,14 @@ cargo test --manifest-path backend-rust/Cargo.toml
 
 ## 边界与后续
 
-- 阶段 1/2 的 **19** 条接口（5 公开读 + 9 AuthController + 4 AdminUserController +
-  1 AdminAuthController）与阶段 3 的 **18** 条点位写入/收藏/审核非图片路由已接入 HTTP；
-  受控 `/uploads/{directory}/{filename}` 契约 1 条由 Rust 拆为 `avatars`/`markers` 两条显式
-  路由。阶段 3 剩余 **5** 条图片 HTTP（`POST /api/markers/{id}/image` 与管理员 4 条）由另一
-  独立改动接入，本层**不宣称 43 接口全部完成**。
+- **43 个既有契约模板全部挂载**：阶段 1/2 的 **19** 条（5 公开读 + 9 AuthController +
+  4 AdminUserController + 1 AdminAuthController）、阶段 3 的 **18** 条点位写入/收藏/审核非图片
+  路由与 **5** 条图片路由，以及受控 `/uploads/{directory}/{filename}` 契约 1 条（由 Rust 拆为
+  `avatars`/`markers` 两条显式路由）；`/health/live`、`/health/ready` 两个探针另列。
+- `OptionalUser` 提取器用于私有点位 detail 与 `markers` 图片读取，按数据库当前身份构造真实
+  `Viewer`；`avatars` 读取不加载会话。图片上传只建 `PENDING` 提案，审批/清理复用
+  `MediaService` 事务、授权与缓存失效。
+- 阶段 3 最终验收与推送由温晓完成，本工作树不单独声称全阶段完成。
 - `OptionalUser` 提取器已用于私有点位 detail 与 `markers` 图片读取；`avatars` 读取不加载会话。
 - 固定查询使用 SQLx 编译期宏（`queries/*.sql` + `.sqlx` 离线元数据），用户值全部 bind；
   仅临时测试库名等真正动态 SQL 使用运行期 `AssertSqlSafe`。`.sqlx` 已在本工作树生成并校验。

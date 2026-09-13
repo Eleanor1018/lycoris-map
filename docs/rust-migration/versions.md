@@ -339,9 +339,55 @@ REJECTED 立即隐藏、内容修改读取最新、坏 JSON 与 Redis 故障回�
 `lycoris%2Frust`（编码分隔符）→ 拒绝；默认 `lycoris_rust` 正常执行门禁。所有错误信息均不含
 连接串或密码。
 
-未完成项（不声称阶段 3 完成）：点位图片上传 `POST /api/markers/{id}/image`、管理员图片提案
-提交/审批与 `cleanup-missing-images` 的 HTTP 路由尚未挂载，`MediaService` 仅为核心准备；
-点位写入/编辑/审核路由属阶段 3 另案。本改动未 commit/push，由温晓验收。
+未完成项（当时，不声称阶段 3 完成）：点位图片上传 `POST /api/markers/{id}/image`、管理员图片提案
+审批与 `cleanup-missing-images` 的 HTTP 路由尚未挂载，`MediaService` 仅为核心准备；
+点位写入/编辑/审核路由属阶段 3 另案（已在独立工作树验收 18 条非图片接口）。上述 5 条图片
+接口其后在同一 Rust 核心上接入，见下一节。本改动未 commit/push，由温晓验收。
+
+
+### 阶段 3：点位图片上传与管理员图片提案/清理 HTTP（2026-09-14，`work/rust-images-http-20260914`）
+
+在阶段 2 验收提交 `091a16b` 的隔离工作树上接入阶段 3 剩余 5 条图片 HTTP 接口，复用已验收的
+头像上传/流式读取/认证/来源中间件、multipart 逐块 5 MiB 文件/8 MiB 总量 helper、`MediaService`
+事务/授权/缓存与 `MarkerService` 本地化；**未重写**这些核心，也不重复其它工作树已验收的 18 条
+非图片路由。范围仅 `backend-rust/` 与 `docs/rust-migration/`，未改 Java/前端/服务器/恢复库/备份，
+未 commit/push。
+
+- `POST /api/markers/{id}/image`（`CurrentUser` + 写来源校验 + multipart `file`）：先认证与来源
+  校验，再逐块读取 `file`；从数据库身份构造真实 `Viewer`（`publicId`/`role`/`deleted`）与
+  `username`，调用 `MediaService.submit_marker_image`。只插入 `PENDING` 提案、**不**改
+  `map_markers.mark_image` 或推进 `version`；成功 `200` 返回经
+  `MarkerService.localize_row` 按 `lang`/请求头本地化的原点位（成功响应带
+  `Vary: Accept-Language, X-App-Language`）。错误形状：无会话 → 安全入口固定 401 JSON；
+  缺失/不可见点位 → `404 点位不存在` 文本；空文件/非法图片 → `400` 文本；超 5 MiB 或整请求
+  超 8 MiB → `413 ApiResponse`（复用头像已验证的形状）；保存类内部错误 → `500 上传失败`；
+  图片处理繁忙/依赖故障 → `503`。
+- 4 条管理接口全部 `VerifiedAdmin`：`GET /api/admin/markers/pending-images`（`PENDING`
+  `createdAt DESC`，8 字段普通 JSON 数组）、`POST /api/admin/markers/image-proposals/{id}/approve`
+  （同事务锁提案→更新点位 `mark_image`/`version`→写审核信息，`200` 返回本地化 `MarkerDto`）、
+  `POST .../{id}/reject`（`200` 空体）、`POST /api/admin/markers/cleanup-missing-images`
+  （`{checked,cleared,message}`）。未登录 → 固定 401 JSON；已认证非管理员 → Boot 默认 403 JSON
+  `{timestamp,status,error,path}`；管理员未二次/过期 → 文本 403；重复处理 → `400 该提案已处理`；
+  相关点位缺失 → `404 关联点位不存在`；提案缺失 → `404 图片提案不存在`。handler 不手写 SQL、
+  不二次更新；图片读取仍全部走已实现的 `/uploads` 权限检查。
+- `MarkerService` 新增 `localize_row`（复用公开读取的批量本地化与回退规则）供两处成功响应使用；
+  `src/multipart.rs` 新增 `marker_upload_media_error_response`（`Internal` 保持 `500 上传失败`，
+  其余文本形状、413 仍 `ApiResponse`）。`src/routes/admin_markers.rs` 为 4 条管理路由的薄 handler。
+- `Cargo.toml` 的 package description 由限定阶段 1 改为不限阶段的
+  `Lycoris Rust 后端（Axum + SQLx）`。
+- `tests/media_http.rs` 增补 7 项真实 Cookie + PG/Redis + 临时文件路由测试（原 9 项增至 16 项）：
+  上传成功并本地化、只建 `PENDING` 且不改点位图、匿名/他人看不到待审文件而属主/管理员/有权限
+  提案者可见、非法/超限上传沿用头像已验证 helper 且点位接口 413 形状、管理员权限与二次验证矩阵、
+  审批成功返回本地化 DTO 且重复/缺失/关联点位缺失错误、两条审批 HTTP 并发只有一个成功、驳回后与
+  关联点位删除后的图片权限维持媒体核心、清理只取消确实缺失的引用且不删文件。其它阶段 3 路由若
+  暂未合并，测试用合成 SQL 种点位，不重复实现 18 条路由。
+
+验证（`backend-rust/scripts/check-rust.ps1`，仅回环合成服务；温晓已设 `RUST_TEST_THREADS=2`，
+本轮保持 2）：`cargo sqlx prepare --check -- --all-targets`、`SQLX_OFFLINE=true cargo check
+--all-targets`、`cargo fmt --all -- --check`、`cargo clippy --all-targets -- -D warnings`、
+`cargo test` 全部通过；**133 个测试通过、0 失败、0 跳过**（39 单元 + 28 认证 PG/Redis +
+9 基础集成 + 17 公开点位 + 16 图片存储 + 8 媒体业务 + 16 媒体 HTTP）。本轮未新增 SQL，`.sqlx`
+离线元数据保持有效。阶段 3 最终 43 API 验收与推送由温晓完成，本工作树不提前声称全阶段完成。
 
 ### 阶段 3：点位写入、审核与收藏事务核心（2026-09-14）
 
@@ -592,6 +638,45 @@ SQLx CLI 0.9.0 校验通过；`cargo sqlx prepare --check -- --all-targets` 通�
 `cargo clippy --all-targets -- -D warnings` 零警告；`cargo test` **155** 个测试通过、
 0 失败 0 跳过（42 单元 + 28 认证 + 9 基础集成 + 8 点位 HTTP + 17 公开读取 + 17 写入事务 +
 16 媒体存储 + 8 媒体业务 + 10 媒体 HTTP，其中媒体 HTTP 新增 1 条）。
+
+### 阶段 3：点位图片 HTTP 与主工作树最终集成（2026-09-14，主工作树 `refactor/rust-backend`）
+
+温晓把图片 HTTP `6deb394` cherry-pick 到主工作树，4 处冲突的最终集成由本工作树完成（**不**
+`add`/`commit`/`continue`/`push`，待温晓验收提交）。范围仅 `backend-rust/` 与
+`docs/rust-migration/`；未改 Java/前端/服务器/恢复库/真实 uploads/备份。
+
+冲突解决与整合要点：
+
+- **`markers/http.rs`**：`json_marker` 保持 `pub(crate)`（供 `routes::admin_markers` 复用），
+  `json_markers`/`with_vary` 保持 `pub(super)`（供 `write_http` 复用）；保留 `OptionalUser`
+  真实身份与新增 `POST /api/markers/{id}/image`，18 条写接口仍全部挂载。
+- **`markers/service.rs`**：同时保留写核心的 `localize(Vec<MarkerRow>, lang)` 与图片模块的
+  `localize_row(row, lang)`，二者共用原有 `localize_rows` 批量本地化，译文加载/回退规则只有
+  一份，无重复 SQL 或规则。
+- **`tests/media_http.rs`**：合并两侧测试，保留请求 ID 新测试与图片 HTTP 的 7 项测试；沿用
+  图片侧 `TestEnv`（独立 `TempDir` 上传根 + `ADMIN_SECOND_PASSWORD_HASH` 二次验证哈希），
+  未删除任何测试来过门禁。
+- **`README`**：整理为 **43 个既有契约模板全部挂载**（`/uploads` 两个具体路由合计
+  UploadController 的 1 个模板；`/health/live`、`/health/ready` 两个探针另列），保留认证/写入/
+  媒体/请求 ID 与错误边界；更新顶部及 `app.rs`、`check-rust.ps1` 顶部滞后的阶段 1/2 注释。
+
+必须保留的已验收设计均在位：`AppState::new -> Result`，read/write/media 共用同一 `MarkerCache`；
+64 KiB 认证 JSON / 8 MiB 点位 JSON；全局 8 MiB 与每文件 5 MiB、`LengthLimit` 源链识别、统一 413/CORS；
+最外层服务端 UUID 请求 ID（忽略客户端值，响应 `X-Request-ID`）；图片流式读取与权限；脚本严格目标
+保护；所有权/审核锁与版本冲突；首次新建非空 `markImage` 拒绝。
+
+验证记录（2026-09-14，本机，仅回环合成服务，`RUST_TEST_THREADS=4`）：
+
+```
+powershell -NoProfile -File backend-rust/scripts/check-rust.ps1
+```
+
+结果：SQLx CLI 0.9.0 校验通过；合成开发库迁移成功；
+`cargo sqlx prepare --check -- --all-targets` 通过；`SQLX_OFFLINE=true cargo check --all-targets`
+成功；`cargo fmt --all -- --check` 通过；`cargo clippy --all-targets -- -D warnings` 零警告；
+`cargo test` **162** 个测试通过、0 失败 0 跳过（42 单元 + 28 认证 + 9 基础集成 + 8 点位 HTTP +
+17 公开读取 + 17 写入事务 + 16 媒体存储 + 8 媒体业务 + 17 媒体 HTTP）。仅清理各自用例的 UUID
+临时库，未枚举或删除其它数据库。阶段 3 最终接受状态由温晓收尾。
 
 ## 备注
 

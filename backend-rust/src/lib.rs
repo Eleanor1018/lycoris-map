@@ -8,14 +8,14 @@
 //! - [`media`]：图片存储与读取核心（头像/点位图片共用，不含路由与授权）；
 //! - [`multipart`]：上传用的 multipart 读取辅助与媒体错误映射；
 //! - [`migrate`]：内嵌迁移基线与启动只读校验；
-//! - [`modules`]：按业务域拆分的 HTTP 模块（当前为公开点位读取）；
+//! - [`modules`]：按业务域拆分的 HTTP 模块（公开点位读取与点位图片上传）；
 //! - [`session`]：类型化 Redis 会话（五类原子操作）；
 //! - [`password`]：受并发许可保护的 BCrypt 与历史明文兼容；
 //! - [`users`]：用户数据访问；
 //! - [`auth`]：身份提取器 `OptionalUser`/`CurrentUser`/`AdminUser`/`VerifiedAdmin`；
 //! - [`origin`]：写请求来源校验；
 //! - [`ratelimit`]：注册限流；
-//! - [`routes`]：阶段 2 HTTP 处理器。
+//! - [`routes`]：HTTP 处理器（认证/用户/头像/阶段 3 图片提案与清理）。
 
 pub mod app;
 pub mod auth;

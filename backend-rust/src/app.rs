@@ -1,6 +1,7 @@
 //! Axum 装配：AppState、Router 与健康检查。
 //!
-//! 这里挂载健康检查与公开点位读取路由；后续业务路由继续在此挂载。中间件固定
+//! 这里挂载健康检查、公开点位读取、阶段 2 认证/用户/头像/受控读取，以及阶段 3 的点位
+//! 写入/收藏/审核与图片提案/清理路由（43 个既有契约模板；`/health/*` 探针另列）。中间件固定
 //! 8 MiB 总请求上限、请求超时、服务端请求 ID + 按路由模板的访问日志，以及显式凭据白名单
 //! CORS；日志层最外层并附 `X-Request-ID`，CORS 仍包住所有错误来源。
 
@@ -166,6 +167,23 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/api/admin/users/{id}/restore",
             axum::routing::post(routes::admin::restore_user),
+        )
+        // 阶段 3：AdminMarkerController 图片提案与失效引用清理（全部 VerifiedAdmin）。
+        .route(
+            "/api/admin/markers/pending-images",
+            get(routes::admin_markers::pending_images),
+        )
+        .route(
+            "/api/admin/markers/image-proposals/{id}/approve",
+            axum::routing::post(routes::admin_markers::approve_image_proposal),
+        )
+        .route(
+            "/api/admin/markers/image-proposals/{id}/reject",
+            axum::routing::post(routes::admin_markers::reject_image_proposal),
+        )
+        .route(
+            "/api/admin/markers/cleanup-missing-images",
+            axum::routing::post(routes::admin_markers::cleanup_missing_images),
         )
         // 阶段 2：受控 `/uploads` 读取。目录白名单拆成显式路由：
         // `avatars` 不加载会话（匿名可读，保持 Java 语义）；`markers` 接 `OptionalUser`。
