@@ -1,0 +1,667 @@
+{
+  "baselineCommit": "8c60383",
+  "branch": "refactor/rust-backend",
+  "source": "backend/src/main/java/com/lycoris",
+  "inventoryDate": "2026-09-14",
+  "inventoryMethod": "source-code contract inventory; no runtime calls executed; not a test result",
+  "endpointCount": 43,
+  "responseShapes": [
+    {
+      "kind": "spring-security",
+      "contentType": "application/json; charset=UTF-8",
+      "shape": "{\"message\":\"Spring Security Error\"}",
+      "usedBy": "SecurityConfig authenticationEntryPoint: HTTP 401 for unauthenticated requests; authenticated callers lacking ROLE_ADMIN get HTTP 403 with an empty body"
+    },
+    {
+      "kind": "ApiResponse",
+      "contentType": "application/json",
+      "shape": "{\"code\":int,\"message\":string,\"data\":value-or-null}",
+      "usedBy": "AuthController JSON handlers only, plus GlobalExceptionHandler (409 optimistic lock, 413 max upload). HTTP status may differ from body code (login 401/code 4001, register 400/code 4002)."
+    },
+    {
+      "kind": "plain-text",
+      "contentType": "text/plain, charset not runtime-verified",
+      "shape": "raw error string, or empty body on success",
+      "usedBy": "MarkerController, AdminMarkerController, AdminAuthController, AdminUserController, UploadController error bodies and successful empty bodies"
+    },
+    {
+      "kind": "plain-json",
+      "contentType": "application/json",
+      "shape": "arbitrary Map/List JSON without code/message/data wrapper",
+      "usedBy": "AdminUserController success payloads, AdminMarkerController pending-edits/pending-images lists and cleanup-missing-images result"
+    }
+  ],
+  "languageResolution": {
+    "supported": ["zh", "en"],
+    "normalize": "trim, lowercase, replace underscore with hyphen; then en or en-* maps to en, zh or zh-* maps to zh, otherwise zh",
+    "readOrder": [
+      "explicit query parameter lang when present (even empty) is normalized",
+      "otherwise Accept-Language when present and non-blank: first language range with weight > 0 that is supported; a parse failure or no supported range yields zh with NO X-App-Language fallback",
+      "X-App-Language is consulted only when Accept-Language is absent or blank, then normalized; absent yields zh"
+    ],
+    "writeOrder": [
+      "body language field when non-null is normalized",
+      "otherwise the same fromHeaders order as read",
+      "no request context yields zh"
+    ]
+  },
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/login",
+      "controller": "AuthController",
+      "handler": "login",
+      "auth": "anonymous",
+      "request": "JSON {username, password}. username accepts username or email; if it contains @ it is looked up as email (lowercased) among non-deleted users, otherwise as exact username.",
+      "success": "200 ApiResponse {code:0, message:\"ok\", data:UserResponse{publicId,username,nickname,email,avatarUrl,pronouns,signature}}. Rotates session id, sets maxInactiveInterval, stores userId/username/email/role/sessionVersion, clears adminSecondVerified/adminSecondVerifiedAt.",
+      "errors": [
+        "401 ApiResponse {code:4001, message:\"Invalid username or password\"} when user missing or password mismatch",
+        "401 JSON {\"message\":\"Spring Security Error\"} is not used here because route is permitAll"
+      ],
+      "notes": "Legacy non-bcrypt stored password (not $2a$/$2b$/$2y$ and not starting with {) is compared literally then upgraded to bcrypt on success; hash-looking values never fall back to literal compare."
+    },
+    {
+      "method": "POST",
+      "path": "/api/register",
+      "controller": "AuthController",
+      "handler": "register",
+      "auth": "anonymous",
+      "request": "JSON {username, nickname, email, password, website}. website is a honeypot.",
+      "success": "200 ApiResponse {code:0, message:\"ok\", data:UserResponse}. Rotates session id and logs the new user in immediately.",
+      "errors": [
+        "400 ApiResponse {code:4004, message:\"注册请求无效\"} when website is non-blank",
+        "429 ApiResponse {code:429, message:\"请求过于频繁，请稍后再试\"} when per-IP rate limit exceeded (default 5 attempts / 600s)",
+        "400 ApiResponse {code:4002, message:\"Username or email already exists\"} when username empty, email empty, password length < 4, or username/email already taken"
+      ],
+      "notes": "Client IP from X-Forwarded-For first hop, else remoteAddr. Nickname defaults to trimmed username when blank. Email lowercased. Role USER."
+    },
+    {
+      "method": "GET",
+      "path": "/api/me",
+      "controller": "AuthController",
+      "handler": "me",
+      "auth": "login",
+      "request": "No body. Session cookie required.",
+      "success": "200 ApiResponse {code:0, message:\"ok\", data:UserResponse}.",
+      "errors": [
+        "401 ApiResponse {code:401, message:\"未登录\"} when no session userId or user not found; user-not-found also clears userId/username/email/role from session"
+      ],
+      "notes": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/avatar",
+      "controller": "AuthController",
+      "handler": "meAvatar",
+      "auth": "login",
+      "request": "No body. Session cookie required.",
+      "success": "200 raw image bytes; Content-Type from extension (jpeg/png/webp/gif); Cache-Control: public, max-age=600.",
+      "errors": [
+        "401 empty body when not logged in or user not found",
+        "400 empty body when resolved path escapes avatar directory",
+        "404 empty body when avatarUrl is null/blank, not under /uploads/avatars/, or file missing"
+      ],
+      "notes": "Only serves avatarUrl values starting with /uploads/avatars/. Path normalize plus startsWith check."
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/{publicId}/avatar",
+      "controller": "AuthController",
+      "handler": "userAvatarByPublicId",
+      "auth": "anonymous",
+      "request": "Path publicId (UUID string).",
+      "success": "200 raw image bytes with same content-type/cache behavior as /api/me/avatar.",
+      "errors": [
+        "404 empty body when publicId is invalid, user missing or deleted, or avatar file missing/invalid"
+      ],
+      "notes": "Public avatar read; does not expose profile fields."
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/me",
+      "controller": "AuthController",
+      "handler": "updateMe",
+      "auth": "login",
+      "request": "JSON {nickname, pronouns, signature}; only non-null fields are handled; values trimmed; blank nickname falls back to username; blank pronouns/signature become null.",
+      "success": "200 ApiResponse {code:0, message:\"ok\", data:UserResponse}.",
+      "errors": [
+        "401 ApiResponse {code:401, message:\"未登录\"} when not logged in",
+        "404 ApiResponse {code:404, message:\"用户不存在\"} when user missing"
+      ],
+      "notes": "Email and username are not editable here."
+    },
+    {
+      "method": "POST",
+      "path": "/api/me/avatar",
+      "controller": "AuthController",
+      "handler": "uploadAvatar",
+      "auth": "login",
+      "request": "multipart/form-data with part name file. Re-encoded and stored under avatars/.",
+      "success": "200 ApiResponse {code:0, message:\"ok\", data:UserResponse} with new avatarUrl.",
+      "errors": [
+        "401 ApiResponse {code:401, message:\"未登录\"} when not logged in",
+        "400 ApiResponse {code:400, message:ImageUploadService message} for empty or invalid image",
+        "500 ApiResponse {code:500, message:\"上传失败\"} for other upload failures",
+        "404 ApiResponse {code:404, message:\"用户不存在\"} when user missing",
+        "413 ApiResponse {code:413, message:\"上传文件过大，请选择 5MB 以内的图片\"} from global handler when servlet multipart limit exceeded"
+      ],
+      "notes": "Uses ImageUploadService limits: 5MB, 25,000,000 pixels, side 1..10000, formats JPEG/JPG/PNG/GIF/WEBP."
+    },
+    {
+      "method": "POST",
+      "path": "/api/me/password",
+      "controller": "AuthController",
+      "handler": "changePassword",
+      "auth": "login",
+      "request": "JSON {oldPassword, newPassword}.",
+      "success": "200 ApiResponse {code:0, message:\"ok\", data:null}. Updates session sessionVersion and clears adminSecondVerified/adminSecondVerifiedAt.",
+      "errors": [
+        "401 ApiResponse {code:401, message:\"未登录\"} when not logged in",
+        "400 ApiResponse {code:400, message:\"缺少参数\"} when oldPassword or newPassword is null",
+        "400 ApiResponse {code:400, message:\"原密码错误或新密码不合法\"} when old password wrong or new password length < 4",
+        "404 ApiResponse {code:404, message:\"用户不存在\"} when user missing"
+      ],
+      "notes": "Changing password revokes other sessions via sessionVersion increment; current session is refreshed explicitly."
+    },
+    {
+      "method": "POST",
+      "path": "/api/logout",
+      "controller": "AuthController",
+      "handler": "logout",
+      "auth": "login",
+      "request": "No body. Session cookie required.",
+      "success": "200 ApiResponse {code:0, message:\"ok\", data:null}; session invalidated.",
+      "errors": [
+        "401 JSON {\"message\":\"Spring Security Error\"} from SecurityConfig when not authenticated (anyRequest authenticated)"
+      ],
+      "notes": "Logout is not permitAll, so anonymous callers are blocked by Spring Security before reaching the handler."
+    },
+    {
+      "method": "GET",
+      "path": "/api/markers/{id}",
+      "controller": "MarkerController",
+      "handler": "detail",
+      "auth": "anonymous at route level; resource-level 404",
+      "request": "Path id must be numeric (SecurityConfig permitAll only matches /api/markers/[0-9]+).",
+      "success": "200 MapMarker JSON, localized by MarkerLocalizationAdvice.",
+      "errors": [
+        "404 empty body when marker missing or MarkerAccess.canView(marker, viewer) is false (private/unapproved and not owner/admin)"
+      ],
+      "notes": "Admin/owner can view private or non-approved markers; anonymous sees only isPublic && APPROVED."
+    },
+    {
+      "method": "POST",
+      "path": "/api/markers",
+      "controller": "MarkerController",
+      "handler": "create",
+      "auth": "login",
+      "request": "JSON MarkerCreateRequest {lat, lng, category, title, description, language, isPublic(default true), isActive(default true), openTimeStart, openTimeEnd, clientRequestId, markImage}.",
+      "success": "200 MapMarker JSON (not 201). New marker has reviewStatus=PENDING, isPublic default true, isActive default true, sourceLanguage = normalize(body language) when non-null, else fromHeaders (Accept-Language when present and non-blank, otherwise X-App-Language, otherwise zh); only zh/en are accepted.",
+      "errors": [
+        "401 text \"请先登录\" when session/user missing",
+        "400 text \"缺少必要字段\" when lat, lng, category or title is null",
+        "400 text category validation message when unsupported; legacy safe_place/dangerous_place map to self_definition; supported: accessible_toilet, friendly_clinic, baby_room, self_definition",
+        "400 text \"clientRequestId 过长\" when trimmed clientRequestId longer than 64",
+        "409 ApiResponse {code:409, message:\"数据已更新，请刷新后重试\"} only if an optimistic lock exception surfaces"
+      ],
+      "notes": "Idempotent via clientRequestId + unique constraint (user_public_id, client_request_id); replay returns the existing marker with 200."
+    },
+    {
+      "method": "GET",
+      "path": "/api/markers/public",
+      "controller": "MarkerController",
+      "handler": "listPublicActive",
+      "auth": "anonymous",
+      "request": "No parameters.",
+      "success": "200 JSON array of MapMarker where isPublic=true and reviewStatus=APPROVED.",
+      "errors": [],
+      "notes": "No explicit ordering; not a stable sort contract."
+    },
+    {
+      "method": "GET",
+      "path": "/api/markers/search",
+      "controller": "MarkerController",
+      "handler": "searchPublic",
+      "auth": "anonymous",
+      "request": "Query q (required).",
+      "success": "200 JSON array of MapMarker. Merged from source title/description/category/lat/lng matches, translation title/description matches with valid source hash, and coordinate matches within 0.00015 degrees when q parses as 'lat,lng'.",
+      "errors": [],
+      "notes": "Blank q returns []. Results localized. Deduplicated by marker id."
+    },
+    {
+      "method": "GET",
+      "path": "/api/markers/nearby",
+      "controller": "MarkerController",
+      "handler": "nearbyPublic",
+      "auth": "anonymous",
+      "request": "Query lat, lng, radius (default 1000), category (default accessible_toilet).",
+      "success": "200 JSON array of MapMarker, isPublic=true, APPROVED, matching category, ordered by spherical distance ascending. Radius clamped to 1..50000 meters.",
+      "errors": [
+        "400 text \"缺少 lat/lng 参数\" when lat or lng missing",
+        "400 text \"lat/lng 不合法\" when lat/lng out of range",
+        "400 text category validation message when unsupported category, or \"边界参数不合法\" for invalid window",
+        "500 text \"数据库未启用 PostGIS，请先执行：CREATE EXTENSION postgis;\" when a PostGIS-related SQL error surfaces"
+      ],
+      "notes": "Redis cache key prefix cache:marker:nearby:v1:, default TTL 12s; cached entries re-checked against current DB visibility. Current implementation uses bounding box plus Haversine, not PostGIS."
+    },
+    {
+      "method": "GET",
+      "path": "/api/markers/viewport",
+      "controller": "MarkerController",
+      "handler": "listByViewport",
+      "auth": "anonymous",
+      "request": "Query minLat, maxLat, minLng, maxLng (required), categories (optional comma-separated).",
+      "success": "200 JSON array of MapMarker, isPublic=true, APPROVED, within bounds, matching any requested category.",
+      "errors": [
+        "400 text \"缺少视口边界参数\" when a bound is missing",
+        "400 text \"边界参数不合法\" when minLat > maxLat or minLng > maxLng",
+        "400 text \"边界超出合法经纬度范围\" when bounds outside [-90,90]/[-180,180]"
+      ],
+      "notes": "Redis cache prefix cache:marker:viewport:v1:, default TTL 10s. Empty categories means no category filter."
+    },
+    {
+      "method": "GET",
+      "path": "/api/markers/all",
+      "controller": "MarkerController",
+      "handler": "listAll",
+      "auth": "admin",
+      "request": "No parameters.",
+      "success": "200 JSON array of all MapMarker rows.",
+      "errors": [
+        "401 JSON {\"message\":\"Spring Security Error\"} when not authenticated",
+        "403 empty body from Spring Security when authenticated but not ROLE_ADMIN"
+      ],
+      "notes": "Admin diagnostic. Does NOT require the admin second factor (unlike /api/admin/**)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/markers/{id}/image",
+      "controller": "MarkerController",
+      "handler": "uploadMarkerImage",
+      "auth": "login",
+      "request": "multipart/form-data with part name file; path id numeric.",
+      "success": "200 MapMarker JSON (unchanged marker). Creates MarkerImageProposal with status PENDING and imageUrl.",
+      "errors": [
+        "401 text \"请先登录\" when session/user missing",
+        "400 text \"文件为空\" when file empty",
+        "404 text \"点位不存在\" when marker missing or not viewable",
+        "400 text ImageUploadService message for invalid image",
+        "500 text \"上传失败\" for other upload failures",
+        "413 ApiResponse {code:413,...} from global handler when multipart limit exceeded"
+      ],
+      "notes": "Proposal records markerId, markerTitle, proposerUsername, proposerPublicId, imageUrl, status PENDING."
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/markers/{id}",
+      "controller": "MarkerController",
+      "handler": "updateMarker",
+      "auth": "login",
+      "request": "JSON MarkerUpdateRequest {category, title, description, language, isPublic, isActive, openTimeStart, openTimeEnd}.",
+      "success": "200 MapMarker JSON (unchanged marker). Creates MarkerEditProposal with status PENDING, baseMarkerVersion=marker.version, proposed values, proposerIsOwner, language.",
+      "errors": [
+        "401 text \"请先登录\" when session/user missing",
+        "404 text \"点位不存在\" when marker missing or not viewable",
+        "400 text \"请同时填写开始和结束时间，或都留空\" when exactly one open time is provided",
+        "400 text \"该语言尚无有效译文，请同时填写标题和描述（描述可为空）\" when targeting a language without valid translation without full text"
+      ],
+      "notes": "Owner can propose changes to own pending/private marker; proposal merge happens only on admin approval. Does not modify the marker directly."
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/markers/{id}",
+      "controller": "MarkerController",
+      "handler": "deleteMarker",
+      "auth": "login",
+      "request": "Path id numeric.",
+      "success": "200 empty body. Deletes favorites for the marker first, then the marker and its translations.",
+      "errors": [
+        "401 text \"请先登录\" when session/user missing",
+        "404 text \"点位不存在\" when marker missing",
+        "403 text \"无权限\" when requester is not the owner (userPublicId mismatch)"
+      ],
+      "notes": "This is the one place a non-viewable marker returns 403 (ownership failure) rather than 404."
+    },
+    {
+      "method": "POST",
+      "path": "/api/markers/{id}/favorite",
+      "controller": "MarkerController",
+      "handler": "favorite",
+      "auth": "login",
+      "request": "Path id numeric, no body.",
+      "success": "200 empty body. Inserts favorite if absent; idempotent.",
+      "errors": [
+        "401 text \"请先登录\" when session/user missing",
+        "404 text \"点位不存在\" when marker missing or not viewable"
+      ],
+      "notes": "Unique constraint uq_marker_fav_user_marker (userPublicId, markerId)."
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/markers/{id}/favorite",
+      "controller": "MarkerController",
+      "handler": "unfavorite",
+      "auth": "login",
+      "request": "Path id numeric, no body.",
+      "success": "200 empty body. Deletes favorite for current user; idempotent even if absent.",
+      "errors": [
+        "401 text \"请先登录\" when session/user missing"
+      ],
+      "notes": "Does not check marker visibility before deleting."
+    },
+    {
+      "method": "GET",
+      "path": "/api/markers/me/favorites",
+      "controller": "MarkerController",
+      "handler": "myFavorites",
+      "auth": "login",
+      "request": "No parameters.",
+      "success": "200 JSON array of marker ids (numbers) that the current user has favorited and can view.",
+      "errors": [
+        "401 text \"请先登录\" when session/user missing"
+      ],
+      "notes": "Non-viewable favorites are filtered out."
+    },
+    {
+      "method": "GET",
+      "path": "/api/markers/me/created",
+      "controller": "MarkerController",
+      "handler": "myCreatedMarkers",
+      "auth": "login",
+      "request": "No parameters.",
+      "success": "200 JSON array of MapMarker created by the current user's userPublicId (includes private/pending markers).",
+      "errors": [
+        "401 text \"请先登录\" when session/user missing"
+      ],
+      "notes": "Not filtered by visibility because the rows belong to the requester."
+    },
+    {
+      "method": "GET",
+      "path": "/api/markers/me/favorites/details",
+      "controller": "MarkerController",
+      "handler": "myFavoriteMarkers",
+      "auth": "login",
+      "request": "No parameters.",
+      "success": "200 JSON array of favorited MapMarker objects that are currently viewable; [] when no favorites.",
+      "errors": [
+        "401 text \"请先登录\" when session/user missing"
+      ],
+      "notes": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/markers/pending",
+      "controller": "AdminMarkerController",
+      "handler": "pendingList",
+      "auth": "admin + second factor",
+      "request": "No parameters.",
+      "success": "200 JSON array of MapMarker with reviewStatus=PENDING, ordered by updatedAt DESC.",
+      "errors": [
+        "401 JSON {\"message\":\"Spring Security Error\"} when not authenticated",
+        "403 text \"需要二级密码\" when second factor not verified",
+        "403 text \"二级密码已过期，请重新验证\" when older than 30 minutes"
+      ],
+      "notes": "Second factor can be disabled via admin.second-factor-enabled=false."
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/markers/{id}/approve",
+      "controller": "AdminMarkerController",
+      "handler": "approve",
+      "auth": "admin + second factor",
+      "request": "Path id numeric, no body.",
+      "success": "200 updated MapMarker with reviewStatus=APPROVED.",
+      "errors": [
+        "403 text second-factor messages",
+        "404 text \"点位不存在\" when marker missing"
+      ],
+      "notes": "Directly sets reviewStatus and saves; no version precondition."
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/markers/pending-edits",
+      "controller": "AdminMarkerController",
+      "handler": "pendingEditProposals",
+      "auth": "admin + second factor",
+      "request": "No parameters.",
+      "success": "200 JSON array of PENDING edit proposals ordered by createdAt DESC. Item fields: id, markerId, markerTitle, lat, lng, category, title, description, language, isPublic, isActive, openTimeStart, openTimeEnd, proposerUsername, proposerPublicId, proposerIsOwner, status, createdAt.",
+      "errors": [
+        "403 text second-factor messages"
+      ],
+      "notes": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/markers/edit-proposals/{id}/approve",
+      "controller": "AdminMarkerController",
+      "handler": "approveEditProposal",
+      "auth": "admin + second factor",
+      "request": "Path id numeric, no body.",
+      "success": "200 updated MapMarker. In one transaction: apply proposal category/isPublic/isActive/openTime, set reviewStatus=APPROVED, lastEditedBy fields, write translation, mark proposal APPROVED with reviewedBy/reviewedAt.",
+      "errors": [
+        "404 text \"编辑提案不存在\" when proposal missing",
+        "400 text \"该提案已处理\" when proposal status is not PENDING",
+        "404 text \"关联点位不存在\" when related marker missing",
+        "409 text \"点位已更新或提案缺少版本信息，请按最新内容重新提交后审核\" when baseMarkerVersion is null or differs from marker.version",
+        "409 ApiResponse {code:409, message:\"数据已更新，请刷新后重试\"} on optimistic lock failure"
+      ],
+      "notes": "Concurrent review conflict rolls back the whole transaction; the losing review does not partially apply."
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/markers/edit-proposals/{id}/reject",
+      "controller": "AdminMarkerController",
+      "handler": "rejectEditProposal",
+      "auth": "admin + second factor",
+      "request": "Path id numeric, no body.",
+      "success": "200 empty body. Proposal status set to REJECTED with reviewedBy/reviewedAt.",
+      "errors": [
+        "404 text \"编辑提案不存在\"",
+        "400 text \"该提案已处理\" when not PENDING",
+        "403 text second-factor messages"
+      ],
+      "notes": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/markers/{id}/reject",
+      "controller": "AdminMarkerController",
+      "handler": "reject",
+      "auth": "admin + second factor",
+      "request": "Path id numeric, no body.",
+      "success": "200 updated MapMarker with reviewStatus=REJECTED.",
+      "errors": [
+        "404 text \"点位不存在\"",
+        "403 text second-factor messages"
+      ],
+      "notes": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/markers/pending-images",
+      "controller": "AdminMarkerController",
+      "handler": "pendingImages",
+      "auth": "admin + second factor",
+      "request": "No parameters.",
+      "success": "200 JSON array of PENDING image proposals ordered by createdAt DESC. Item fields: id, markerId, markerTitle, proposerUsername, proposerPublicId, imageUrl, status, createdAt.",
+      "errors": [
+        "403 text second-factor messages"
+      ],
+      "notes": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/markers/image-proposals/{id}/approve",
+      "controller": "AdminMarkerController",
+      "handler": "approveImageProposal",
+      "auth": "admin + second factor",
+      "request": "Path id numeric, no body.",
+      "success": "200 updated MapMarker with markImage set to proposal imageUrl; proposal set APPROVED with reviewedBy/reviewedAt.",
+      "errors": [
+        "404 text \"图片提案不存在\"",
+        "400 text \"该提案已处理\" when not PENDING",
+        "404 text \"关联点位不存在\"",
+        "403 text second-factor messages"
+      ],
+      "notes": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/markers/image-proposals/{id}/reject",
+      "controller": "AdminMarkerController",
+      "handler": "rejectImageProposal",
+      "auth": "admin + second factor",
+      "request": "Path id numeric, no body.",
+      "success": "200 empty body. Proposal set REJECTED with reviewedBy/reviewedAt.",
+      "errors": [
+        "404 text \"图片提案不存在\"",
+        "400 text \"该提案已处理\" when not PENDING",
+        "403 text second-factor messages"
+      ],
+      "notes": ""
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/markers/all",
+      "controller": "AdminMarkerController",
+      "handler": "listAll",
+      "auth": "admin + second factor",
+      "request": "No parameters.",
+      "success": "200 JSON array of all MapMarker rows.",
+      "errors": [
+        "403 text second-factor messages"
+      ],
+      "notes": "Same data as GET /api/markers/all but requires second factor."
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/markers/{id}",
+      "controller": "AdminMarkerController",
+      "handler": "adminUpdate",
+      "auth": "admin + second factor",
+      "request": "JSON MarkerUpdateRequest {category, title, description, language, isPublic, isActive, openTimeStart, openTimeEnd}. Only non-null fields applied.",
+      "success": "200 updated MapMarker with reviewStatus=APPROVED, localized text applied, open time window normalized, availability recalculated.",
+      "errors": [
+        "404 text \"点位不存在\"",
+        "403 text second-factor messages",
+        "400 text open-time/category validation messages"
+      ],
+      "notes": "Admin direct edit does not create a proposal."
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/markers/{id}",
+      "controller": "AdminMarkerController",
+      "handler": "adminDelete",
+      "auth": "admin + second factor",
+      "request": "Path id numeric.",
+      "success": "200 empty body. Deletes marker with related translations and favorites.",
+      "errors": [
+        "404 text \"点位不存在\"",
+        "403 text second-factor messages"
+      ],
+      "notes": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/markers/cleanup-missing-images",
+      "controller": "AdminMarkerController",
+      "handler": "cleanupMissingImages",
+      "auth": "admin + second factor",
+      "request": "No body.",
+      "success": "200 JSON {checked, cleared, message:\"失效图片链接清理完成\"}. Clears markImage when the referenced /uploads/markers/ file is missing.",
+      "errors": [
+        "403 text second-factor messages"
+      ],
+      "notes": "Only inspects markImage values starting with /uploads/markers/."
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/users",
+      "controller": "AdminUserController",
+      "handler": "listUsers",
+      "auth": "admin + second factor",
+      "request": "Query page (default 0, negative clamped to 0), size (default 10, clamped 1..100), q (optional, case-insensitive like on username/nickname/email).",
+      "success": "200 JSON {page, size, totalPages, totalElements, items:[{id, publicId (string or null), username, nickname, email, avatarUrl, pronouns, signature, role, deleted, deletedAt}]}, ordered by id DESC.",
+      "errors": [
+        "403 text \"需要二级密码\" or \"二级密码已过期，请重新验证\""
+      ],
+      "notes": "Includes soft-deleted users (no deleted filter in searchForAdmin)."
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/users/{id}/reset-password",
+      "controller": "AdminUserController",
+      "handler": "resetPassword",
+      "auth": "admin + second factor",
+      "request": "Path id integer, no body.",
+      "success": "200 JSON {message:\"密码已重置为默认密码\", username}. Password set to admin.default-user-password (default Lycoris123!) and sessionVersion incremented.",
+      "errors": [
+        "404 text \"用户不存在\"",
+        "400 text \"已删除用户不能重置密码\" when user is soft-deleted",
+        "403 text second-factor messages"
+      ],
+      "notes": ""
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/users/{id}",
+      "controller": "AdminUserController",
+      "handler": "deleteUser",
+      "auth": "admin + second factor",
+      "request": "Path id integer.",
+      "success": "200 JSON {message:\"用户已删除\"}. Soft delete sets deleted=true, deletedAt, increments sessionVersion.",
+      "errors": [
+        "400 text \"不能删除当前登录管理员账号\" when session userId equals target id",
+        "404 text \"用户不存在\" when no non-deleted user with that id",
+        "403 text second-factor messages"
+      ],
+      "notes": "Already-deleted user is treated as not found."
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/users/{id}/restore",
+      "controller": "AdminUserController",
+      "handler": "restoreUser",
+      "auth": "admin + second factor",
+      "request": "Path id integer, no body.",
+      "success": "200 JSON {message:\"用户已恢复\"}. Sets deleted=false, deletedAt=null, increments sessionVersion.",
+      "errors": [
+        "404 text \"用户不存在\"",
+        "400 text \"该用户未被删除\" when user is not deleted",
+        "403 text second-factor messages"
+      ],
+      "notes": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/verify",
+      "controller": "AdminAuthController",
+      "handler": "verify",
+      "auth": "admin",
+      "request": "JSON {passcode}.",
+      "success": "200 empty body. Sets adminSecondVerified=true and adminSecondVerifiedAt=current millis; valid 30 minutes.",
+      "errors": [
+        "403 text \"未配置二级密码\" when admin.second-password-hash is blank",
+        "400 text \"缺少二级密码\" when passcode is null/blank",
+        "403 text \"二级密码错误\" when passcode does not match the configured bcrypt hash",
+        "401 JSON {\"message\":\"Spring Security Error\"} when not authenticated",
+        "403 empty body from Spring Security when not ROLE_ADMIN"
+      ],
+      "notes": "Second factor is a passcode compared with BCrypt, not a separate-device MFA."
+    },
+    {
+      "method": "GET",
+      "path": "/uploads/{directory}/{filename}",
+      "controller": "UploadController",
+      "handler": "image",
+      "auth": "avatars anonymous; markers resource-level",
+      "request": "Path directory must be avatars or markers; filename must match [A-Za-z0-9_.-]+ and have extension jpg/jpeg/png/gif/webp.",
+      "success": "200 raw image with mapped Content-Type, header X-Content-Type-Options: nosniff, Cache-Control: no-store.",
+      "errors": [
+        "404 empty body for unknown directory, disallowed filename/extension, path traversal, missing/non-regular file, or inaccessible marker image"
+      ],
+      "notes": "Marker image is readable when a marker with this markImage is viewable by the viewer, or when a matching imageUrl proposal's related marker exists and the viewer is ADMIN, the marker owner (publicId equals marker.userPublicId), or the proposal submitter (publicId equals proposal.proposerPublicId) while the marker is viewable. Proposal status is NOT checked (no status=PENDING condition). Private or unreadable marker images return 404, not 403."
+    }
+  ]
+}
