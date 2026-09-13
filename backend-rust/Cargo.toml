@@ -16,6 +16,13 @@ path = "src/main.rs"
 
 [dependencies]
 axum = "0.8.9"
+bytes = "1"
+image = { version = "0.25.10", default-features = false, features = [
+    "gif",
+    "jpeg",
+    "png",
+    "webp",
+] }
 sqlx = { version = "0.9.0", default-features = false, features = [
     "postgres",
     "runtime-tokio",
@@ -26,7 +33,15 @@ sqlx = { version = "0.9.0", default-features = false, features = [
     "macros",
     "migrate",
 ] }
-tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "net", "time", "signal"] }
+tokio = { version = "1.53.1", features = [
+    "fs",
+    "io-util",
+    "macros",
+    "net",
+    "rt-multi-thread",
+    "signal",
+    "time",
+] }
 tower = { version = "0.5.3", features = ["util"] }
 tower-http = { version = "0.7.1", features = ["cors", "limit", "timeout"] }
 fred = "10.1.0"
@@ -37,5 +52,6 @@ chrono = { version = "0.4.45", features = ["serde"] }
 chrono-tz = "0.10.4"
 uuid = { version = "1.26.1", features = ["v4"] }
 sha2 = "0.11.0"
+tempfile = "3.27.0"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

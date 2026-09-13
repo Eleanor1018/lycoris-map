@@ -17,12 +17,14 @@ Redis 查询缓存）均已就绪；写入与认证接口尚未实现，也不�
 | `src/app.rs` | `AppState` / Router、`/health/live`、`/health/ready`、中间件 |
 | `src/config.rs` | 环境变量配置，非法值报可读错误且不回显连接串 |
 | `src/error.rs` | 四类响应体与错误类型（不统一包裹） |
+| `src/media/` | 图片存储与读取核心（`mod.rs` + `storage.rs`，头像/点位图片共用） |
 | `src/migrate.rs` | 内嵌迁移、`--migrate` 执行与启动只读校验 |
 | `src/modules/markers/` | 公开点位读取：`model`（行/DTO）、`repository`（`sql/*.sql` + `query_file_as!`）、`localization`（语言/哈希/纯函数）、`cache`（Redis ID 缓存）、`service`、`http`（薄 handler） |
 | `migrations/0001_baseline.sql` | 从 `docs/rust-migration/schema-baseline.sql` 精确派生 |
 | `.sqlx/` | SQLx 离线元数据，`SQLX_OFFLINE=true` 时无需数据库即可编译 |
 | `tests/integration.rs` | 基础工程真实 PG / Redis 集成测试（临时建库并清理） |
 | `tests/markers_read.rs` | 公开点位读取真实 PG / Redis 集成测试 |
+| `tests/media.rs` | 媒体核心集成测试（合成图与真实临时目录，无需 PG/Redis） |
 | `tests/common/mod.rs` | 集成测试共享工具（临时库、回环校验、请求辅助） |
 | `scripts/check-rust.ps1` | 迁移合成开发库、校验离线元数据、离线构建并跑 fmt / clippy / test |
 | `compose.test.yml` | 隔离测试依赖：PostgreSQL 18.6 + PostGIS 3.6.4、Redis 8.10.1 |
@@ -99,6 +101,41 @@ Redis 缓存独立于 Java 的 `cache:marker:*` 命名空间，只存 ID 与缓�
 访问日志只记录路由模板、方法、状态与耗时（`lycoris_backend::http`），不记录带查询串的完整 URI；
 启动日志只记录“配置已加载”与监听地址，不打印连接串。`Config` 不派生 `Debug`。
 
+## 媒体核心（阶段 2 / 3 共用）
+
+`src/media` 提供 `ImageStore`（构造时接收显式 `root` 与并发上限）、`StoredImage`
+（目录 / 文件名 / URL）、`ImageBytes` 与 `MediaError`。它只处理磁盘媒体本身，
+**不含 HTTP 路由与身份/权限判断**：`markers` 图片的可见性与 `avatars` 的授权由上层
+接口决定。主要接口：
+
+| 接口 | 行为 |
+| --- | --- |
+| `ImageStore::new(root, max_concurrent)` | 创建并 canonicalize `root`；默认并发 `1`（`with_default_concurrency`） |
+| `save(directory, prefix, bytes)` | 校验真实格式与尺寸后重编码落盘，返回 `StoredImage`；无许可返回 `MediaError::Busy`（上层映射 503） |
+| `open(directory, filename)` | 校验路径后打开文件，返回 `OpenedImage{file,content_type,len}`；HTTP 应据此流式发送（如 `ReaderStream`），不整张读入内存 |
+| `read(directory, filename)` | 带 `MAX_READ_BYTES` 上限的便利方法/测试辅助，返回字节与 MIME；**不是 HTTP 必须方式** |
+| `exists(directory, filename)` | 校验路径后检查 `root` 内普通文件是否存在 |
+| `remove_new(&StoredImage)` | 仅删除“上层确认无引用”的单个新孤立文件，幂等，不递归扫描 |
+
+边界与约束：
+
+- 上传压缩字节至多 5 MiB；只认真实 JPEG/PNG/GIF/WebP（按魔数，不信扩展名或
+  `Content-Type`）。先读头部尺寸（宽高 `1..=10000`、像素乘积 `<= 25_000_000`），
+  再限制解码内存到 128 MiB 量级并只解首帧，解码后复核尺寸。
+- 有 alpha 重编码为 PNG，否则为 JPEG（质量 75）；不复制 EXIF 等源元数据。
+- 文件名固定为 `prefix-UUID.ext`，`prefix` 由服务端提供并再次校验（ASCII 字母数字与
+  `-`）；URL 为 `/uploads/{directory}/{filename}`。目录白名单仅 `avatars`/`markers`。
+- 目录/文件名不合法返回 `InvalidDirectory`/`InvalidName`；canonical 路径必须落在
+  canonical `root` 内，最终项必须是普通文件，符号链接/reparse 跳出按不存在处理。
+- 图片 CPU 处理在阻塞任务中执行，许可移动到任务内并持有到结束，请求超时不会提前
+  释放许可；无许可立即繁忙，输入不入无界队列。`max_concurrent` 必须大于 0。
+- 读取：`open` 不套用上传的 5 MiB 限制，历史大图（含 PNG 重编码结果）仍可展示；
+  `read` 的上限按实际读取字节数判定，文件在检查后增长也无法绕过。
+- 落盘：数据 `sync_all` 后用 `persist_noclobber` 落到最终名（不覆盖同名），Unix 上再
+  尽力 `sync` 父目录；完成落盘后才返回 URL 供业务引用。
+- **权限**：`root`（`UPLOAD_DIR`）必须由服务运行用户独占写权限，其他本地用户不可写，
+  以免放入可执行内容或替换目录。核心不引入 `unsafe`。
+
 ## 迁移边界（重要）
 
 - `migrations/0001_baseline.sql` 只用于**空库初始化**，与
@@ -151,3 +188,5 @@ cargo test --manifest-path backend-rust/Cargo.toml
 - 认证暂留既有语义，`tower-sessions` 不降级，适配设计由温晓在后续阶段确定。
 - 本阶段只交付公开点位读取；写接口、认证与 `OptionalViewer` 未实现，`isActive` 读取
   计算不回写数据库、不推进 `version`。
+- 媒体核心已就绪但尚未挂载路由：`/uploads/*` 与头像上传/读取的授权、缓存头与响应
+  形状由后续接口实现；核心不宣称已完成图片授权。

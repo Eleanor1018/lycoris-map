@@ -5,11 +5,13 @@
 //! - [`app`]：Axum Router、AppState 与健康检查；
 //! - [`config`]：环境变量配置，错误信息不泄露连接串密码；
 //! - [`error`]：显式的四类响应体与错误类型；
+//! - [`media`]：图片存储与读取核心（头像/点位图片共用，不含路由与授权）；
 //! - [`migrate`]：内嵌迁移基线与启动只读校验；
 //! - [`modules`]：按业务域拆分的 HTTP 模块（当前为公开点位读取）。
 
 pub mod app;
 pub mod config;
 pub mod error;
+pub mod media;
 pub mod migrate;
 pub mod modules;

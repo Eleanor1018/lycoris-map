@@ -1,8 +1,7 @@
 //! Axum 装配：AppState、Router 与健康检查。
 //!
-//! 本阶段不含点位 HTTP 业务，只提供 `/health/live` 与 `/health/ready`；
-//! 后续业务路由在此挂载。中间件固定 8 MiB 总请求上限、请求超时、按路由模板
-//! 的访问日志与显式凭据白名单 CORS。
+//! 这里挂载健康检查与公开点位读取路由；后续业务路由继续在此挂载。中间件固定
+//! 8 MiB 总请求上限、请求超时、按路由模板的访问日志与显式凭据白名单 CORS。
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
