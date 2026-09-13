@@ -4,7 +4,7 @@
 - 盘点对象：`backend/src/main/java/com/lycoris` 现有 Java 源码，未运行任何接口
 - 计数口径：按真实 HTTP 处理方法计数（`@GetMapping` / `@PostMapping` / `@PatchMapping` / `@DeleteMapping`），类级 `@RequestMapping` 只作为路径前缀，不计为接口
 - 接口总数：**43**（AuthController 9 + MarkerController 15 + AdminMarkerController 13 + AdminUserController 4 + AdminAuthController 1 + UploadController 1）
-- 性质：**源码契约盘点**，不是运行测试结论。未执行接口调用、未验证真实 PG/Redis、未声称任何测试通过
+- 性质：初版为**源码契约盘点**；后续运行确认单列在第 7 节，不能把源码分支直接当作运行时已覆盖的行为。
 - 认证基线：本轮延续现有 Cookie + Session 体验作为阶段 2 基线；`JWT` / `OAuth` 等未引入，认证重设计另列待办
 
 ## 1. 全局约定
@@ -252,3 +252,13 @@
 - 计数命令：对 `backend/src/main/java/com/lycoris/controller` 下 `@GetMapping/@PostMapping/@PatchMapping/@DeleteMapping` 逐方法统计（类级 `@RequestMapping` 不计）。
 - 结果：AuthController 9、MarkerController 15、AdminMarkerController 13、AdminUserController 4、AdminAuthController 1、UploadController 1，合计 **43**。
 - 本盘点不包含任何运行测试结论；所有状态码、错误体与默认值均来自源码阅读，运行期 charset、异常包装顺序等仍需阶段 1/2 的真实请求验证。
+
+## 7. 后续 HTTP 运行确认
+
+2026-09-14，温晓在隔离 PostgreSQL 18.6 / Redis 8.10.1 上运行旧 Java 3.5.9，使用合成账号和点位检查：
+
+- 点位成功对象包含本文件第 3 节列出的 **23 个字段**。JSON Content-Type 为 `application/json`；自定义点位错误文本为 `text/plain;charset=UTF-8`。
+- 缺失 nearby 的必需 `lat/lng` 参数时，Spring 参数提取先于控制器运行，返回 HTTP 400 的框架 JSON（含 timestamp/status/error/path）；控制器内“缺少 lat/lng 参数”文本分支没有被该请求走到。Rust 保持 400 并给出明确文本错误，不复制 Spring 的时间戳错误页。此项属于参数解析错误表现差异，成功数据及业务授权状态继续对齐。
+- `GET /api/me` 在正确连接隔离 Redis 时返回 401 `{"message":"Spring Security Error"}`。最初只用于恢复库公开读取的 Java 进程没有配置正确 Redis 地址，该环境下的认证错误不能作为兼容样本。
+- `Accept-Language: en;garbage`、`en;q=0.5;extra=1`、`en--x`、`en_` 均回退 zh；重复区间 `en;q=0,zh;q=0.5,en;q=1` 也返回 zh（首个同名区间生效），不能按最大重复权重选择 en。
+- 空点位列表的 Java Advice 没有加语言 Vary；Rust 对空列表也保留语言 Vary，这是不改变响应数据的缓存声明补全。
