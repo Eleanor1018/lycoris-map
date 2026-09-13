@@ -144,22 +144,23 @@ async fn viewport(
 
 async fn detail(
     State(state): State<AppState>,
+    user: OptionalUser,
     Path(id): Path<i64>,
     headers: HeaderMap,
     Query(params): Query<LangOnly>,
-    user: OptionalUser,
 ) -> Response {
-    let lang = localization::for_read(params.lang.as_deref(), &headers);
-    // 按当前数据库身份构造真实 Viewer：属主/管理员可见私有待审，其他匿名 404。
-    let identity = user.0;
-    let public_id = identity
+    // 资源级可见性：身份只从当前数据库账号构造 `Viewer`（管理员或属主可见私有/待审），
+    // 匿名只可读 `isPublic && APPROVED`。绝不从请求参数伪造身份。
+    let public_id = user
+        .0
         .as_ref()
         .map(|identity| identity.user.public_id.to_string());
-    let viewer = identity.as_ref().map(|identity| Viewer {
+    let viewer = user.0.as_ref().map(|identity| Viewer {
         public_id: public_id.as_deref(),
-        role: identity.user.role.as_str(),
+        role: if identity.is_admin() { "ADMIN" } else { "USER" },
         deleted: identity.user.deleted,
     });
+    let lang = localization::for_read(params.lang.as_deref(), &headers);
     match state.markers.detail(id, viewer.as_ref(), lang).await {
         Ok(Some(marker)) => json_marker(&marker),
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
@@ -167,19 +168,19 @@ async fn detail(
     }
 }
 
-fn json_markers(markers: &[MarkerDto]) -> Response {
+pub(super) fn json_markers(markers: &[MarkerDto]) -> Response {
     let mut response = Json(markers).into_response();
     with_vary(&mut response);
     response
 }
 
-fn json_marker(marker: &MarkerDto) -> Response {
+pub(super) fn json_marker(marker: &MarkerDto) -> Response {
     let mut response = Json(marker).into_response();
     with_vary(&mut response);
     response
 }
 
-fn with_vary(response: &mut Response) {
+pub(super) fn with_vary(response: &mut Response) {
     response
         .headers_mut()
         .insert(header::VARY, HeaderValue::from_static(VARY_VALUE));

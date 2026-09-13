@@ -434,6 +434,137 @@ NULL/过期基准 409 且仍 `PENDING`；原文与译文编辑共用同一 `vers
 绕过 HTTP 认证的假路由来声称全接口完成。
 
 
+### 阶段 3：点位写入/收藏/审核 HTTP 接入（2026-09-14）
+
+本改动在已验收的事务核心上接通 MarkerController 与 AdminMarkerController 的非图片路由，
+共 **18** 条，并加一项真实权限修正。范围仅 `backend-rust/` 与 `docs/rust-migration`；
+未改主工作树/其它工作树/Java/前端/服务器/恢复库/真实 uploads，未 commit/push。
+
+- `src/modules/markers/write_http.rs`：薄 handler。身份只从
+  `CurrentUser`/`AdminUser`/`VerifiedAdmin` 的 `Identity.user` 当前数据库行构造 `Actor`
+  （`publicId`/`username`/`role`），绝不从请求体填 owner/admin。成功 `MarkerRow`/`Vec<MarkerRow>`
+  一律经 `MarkerService::localize` 生成与读取接口同形的 23 字段响应并带语言 `Vary`；
+  `pending-edits` 直接返回既有 18 字段 `EditProposalDto` 普通 JSON。写请求的编辑语言取
+  body `language`（非 null 优先）否则 `localization::from_headers`；响应语言独立用
+  `localization::for_read(query.lang, headers)`。
+- 路由与权限：用户写/本人读取（`POST /api/markers`、`PATCH`/`DELETE /api/markers/{id}`、
+  `POST`/`DELETE /api/markers/{id}/favorite`、`GET /api/markers/me/favorites`、`/me/created`、
+  `/me/favorites/details`）用 `CurrentUser`；`GET /api/markers/all` 用 `AdminUser`
+  （不二次验证）；`GET /api/admin/markers/{pending,pending-edits,all}`、
+  `POST /api/admin/markers/{id}/{approve,reject}`、`PATCH`/`DELETE /api/admin/markers/{id}`、
+  `POST /api/admin/markers/edit-proposals/{id}/{approve,reject}` 用 `VerifiedAdmin`。
+  匿名 401 安全入口 JSON、缺角色 403 Boot JSON（带请求 path）、二次密码 403 纯文本、
+  业务属主 403 纯文本均由既有提取器/`WriteError` 契约给出。无新增绕过来源校验的路由。
+- 既有 `GET /api/markers/{id}` 接 `OptionalUser`：身份只从当前数据库账号构造 `Viewer`
+  （管理员或属主可见私有/待审，匿名仍只读公开已审核），不新增路由，也不从请求参数伪造身份。
+- `app.rs`：`AppState` 挂载 `MarkerWriteService`（与读取共用同一 `MarkerCache` 命名空间），
+  `build_router` 合并 `write_http::router()`。`http.rs` 的 `json_marker(s)`/`with_vary`
+  改为 `pub(super)` 供复用，未复制第二套本地化。
+- 安全兼容收紧：新建点位 `markImage` 只接受 `null`/空白（空白归一为 `null`），非空一律
+  400 `markImage 只能为空，请通过图片上传提交`。检查落在事务核心**首次完整验证**处，
+  因此不能从其它入口绕过；`clientRequestId` 幂等重放仍先返回原点位，历史引用不迁移。
+  `api-contract.md`/`api-contract.json` 已记录。该收紧只影响新建，两个现网客户端新建均传
+  空串/`null`。
+
+验证记录（2026-09-14，本机，仅回环合成服务）：
+
+```
+powershell -NoProfile -File backend-rust/scripts/check-rust.ps1
+```
+
+`tests/markers_http.rs` 用真实 Router、真实 `/api/login` 会话 Cookie 与 UUID 临时
+PG/Redis 覆盖：18 条路由的匿名/普通用户/管理员未二次/管理员二次权限矩阵与错误形状；
+完整 `create → owner 私有可见(me/created) → admin approve → 匿名可见 → favorite/list/unfavorite
+→ ordinary PATCH 只提案 → pending-edits → approve/reject → ?lang=en 译文详情 → admin PATCH
+使旧译文失效回退 → owner/admin delete`；两条同基准提案的 HTTP 并发审核
+（一人 200、一人 409）；非空 `markImage` 不落点、`null`/空串/空白接受且幂等重放不被重放载荷
+影响，并在核心层直接断言拒绝（不限 handler）。每个用例只清理自己的 UUID 临时库。
+
+结果：SQLx CLI 0.9.0 校验通过；`cargo sqlx prepare --check` 通过；`SQLX_OFFLINE=true
+cargo check --all-targets` 成功；`cargo fmt --all -- --check` 通过；`cargo clippy
+--all-targets -- -D warnings` 零警告；`cargo test` **143** 个测试全部通过、0 失败 0 跳过：
+41 单元 + 28 认证 + 9 基础集成 + **7 点位 HTTP 接入（新增）** + 17 公开读取 + 17 写入事务 +
+16 媒体存储 + 8 媒体业务（本工作树已含已验收媒体模块，故总数高于写入核心单项的 57）。
+只新增 `tests/markers_http.rs`，未改动既有写入/读取/认证/媒体测试。
+
+未完成（明确不在本次范围，交温晓合并验收）：`POST /api/markers/{id}/image` 及
+AdminMarkerController 的 4 条媒体路由、头像 3 路由由主分支另做；本次未临时 mock 它们。
+
+温晓第一轮审查返工（2026-09-14，同一工作树，未提交）：
+
+1. **JSON 请求体读取边界**：认证继续 64 KiB；点位创建、普通 PATCH、管理员 PATCH 改用全局
+   8 MiB，`description`（PG `text`）不再被认证的小请求上限顺带收紧。`web::JsonBody` 与
+   新增 `web::MarkerJsonBody` 共用唯一有界读取实现 `read_json_body`，未复制解析代码。
+   非 JSON 媒体类型 415 纯文本、解析失败 400 纯文本；超限 413 统一
+   `ApiResponse{code:413,message:"上传文件过大，请选择 5MB 以内的图片",data:null}`；其它底层
+   读取失败沿错误源链区分，只有真正 `http_body_util::LengthLimitError` 才判超限，否则 400
+   纯文本。为此把已在传递依赖中的 `http-body-util = 0.1.5` 提升为直接依赖（仅为识别该错误）。
+   注：全局 `RequestBodyLimitLayer` 对带 `Content-Length` 的超限请求会先返回其自带 413，
+   该全局包装由主分支阶段 2 统一处理，合并后复核；提取器层的统一 413 覆盖无
+   `Content-Length` 与 64 KiB 认证边界。新增真实 Router 断言：>64 KiB 且 <8 MiB 的合法
+   `description` 在创建/普通 PATCH/管理员 PATCH 均成功、非法 JSON 400、非 JSON 类型 415、
+   >8 MiB 413 统一文案。
+2. **编辑提案 DTO 字段**：以 Java `pendingEditProposals` 为准，客户端响应为 **18 字段**；
+   内部行含 `baseMarkerVersion` 属第 19 个内部字段，**不**泄露给客户端。测试直接断言
+   `pending-edits` 响应字段集合恰为 18 个，`baseMarkerVersion` 经数据库断言仅用于审核语义。
+   温晓初始指令中的“19 字段”为计数错误，不为凑数新增字段。
+3. **markImage 核心规则**：`create_marker` 首次完整校验处覆盖 `null`/空串/空白（归一为
+   `null`）与非空恶意 URL 拒绝，HTTP 与服务层各验一次；非空请求不落点（HTTP 断言
+   `me/created` 为空并核对数据库无该标题行），已有 `clientRequestId` 幂等重放即使重传非空
+   `markImage` 仍先返回旧点位，按已确认重放优先语义。
+
+返工后复跑完整门禁：SQLx CLI 0.9.0 校验、`cargo sqlx prepare --check`、`SQLX_OFFLINE=true
+cargo check --all-targets`、`cargo fmt --all -- --check`、`cargo clippy --all-targets -D warnings`
+全部通过；`cargo test` **144** 个测试通过、0 失败 0 跳过（41 单元 + 28 认证 + 9 基础 +
+**8 点位 HTTP（新增 1）** + 17 公开读取 + 17 写入事务 + 16 媒体存储 + 8 媒体业务）。
+
+### 阶段 3：点位写入/收藏/审核 HTTP 与主工作树整合（2026-09-14，主工作树 `refactor/rust-backend`）
+
+温晓把写入核心 `d1aa643` 与 18 条 HTTP `c5dc2bf` cherry-pick 到主工作树后，冲突与适配留在
+主工作树完成（本改动**不** `add`/`commit`/`continue`/`push`，待温晓检查后收尾）。范围仅
+`backend-rust/` 与 `docs/rust-migration/`；未改 Java/前端/服务器/恢复库/真实 uploads/备份。
+
+冲突解决与整合要点：
+
+- **Cargo**：保留阶段 2 的 `tokio-util`（`io`，`ReaderStream` 流式响应）与已有的
+  `http-body-util = 0.1.5`（识别 `LengthLimitError`）；`Cargo.lock` 保留 `futures-util`
+  （读取失败 400 测试用 dev-dependency），去掉重复的 `http-body-util` 声明。
+  `cargo sqlx prepare` 正常生成离线元数据。
+- **`web.rs`**：丢弃重复的 JSON 解析实现，认证 64 KiB（`web::JsonBody`）与点位写 8 MiB
+  （`web::MarkerJsonBody`）共用唯一 `read_json_body`；非 JSON 媒体类型 415、底层非超限读取
+  失败 400（不误报 413）、反序列化失败 400。超限只认真正的 `http_body_util::LengthLimitError`，
+  JSON 与 multipart 复用唯一的 `web::is_length_limit_error`；413 统一走
+  `multipart::payload_too_large_response`（同一文案/响应）。保留头像 `stream_image`。
+- **`app.rs`**：保留阶段 2 的 `ImageStore`/`MediaService`、`Config.media_max_concurrency`、
+  `AppState::new -> Result<Self, AppError>`（`main` 用 `?`）与全局 `RequestBodyLimit` +
+  `DefaultBodyLimit`、CORS 最外层与 `normalize_payload_too_large` 统一 413。新增
+  `MarkerWriteService`，read/write/media 三个服务**共用同一个 `MarkerCache`**（同一命名空间），
+  不为三者建不一致缓存。
+- **`markers/http.rs`**：保留 `OptionalUser` 真实身份（管理员/属主可见私有待审，匿名仅公开
+  已审核，`404` 空体），`json_marker`/`json_markers`/`with_vary` 以 `pub(super)` 供
+  `write_http` 复用，未退回匿名 `None`。18 条写路由、`markImage` 首次空值限制、普通 PATCH
+  只建提案、`VerifiedAdmin` 审核等均保留。
+- **测试**：`tests/markers_http.rs` 的 `Env` 新增自有 `TempDir` 上传根并持有到整个 `Env`
+  生命周期，绝不用默认真实 `uploads/`，也不在构造后立即 drop 再交给 router。另一个独立
+  工作树负责剩余 5 条图片 HTTP，本任务不重复这些路由。
+
+验证记录（2026-09-14，本机，仅回环合成服务；与图片 HTTP 工作树并行，`RUST_TEST_THREADS=2`）：
+
+```
+powershell -NoProfile -File backend-rust/scripts/check-rust.ps1   # 前置设置 RUST_TEST_THREADS=2
+```
+
+结果：SQLx CLI 0.9.0 校验通过；合成开发库迁移成功；
+`cargo sqlx prepare --check -- --all-targets` 通过（`.sqlx` 正常生成）；
+`SQLX_OFFLINE=true cargo check --all-targets` 成功；`cargo fmt --all -- --check` 通过；
+`cargo clippy --all-targets -- -D warnings` 零警告；`cargo test` **154** 个测试通过、
+0 失败 0 跳过（42 单元 + 28 认证 + 9 基础集成 + 8 点位 HTTP + 17 公开读取 + 17 写入事务 +
+16 媒体存储 + 8 媒体业务 + 9 媒体 HTTP）。仅清理各自用例的 UUID 临时库，未枚举或 drop
+其它数据库。
+
+阶段 3 的**最终完成状态**仍由温晓验收后更新：`POST /api/markers/{id}/image` 与
+AdminMarkerController 的 4 条媒体路由由另一独立工作树接入，本层不宣称 43 接口全部完成。
+
 ## 备注
 
 `lycoris-restore-review` 容器属温晓的私有恢复验收环境，不在本次范围。本阶段仅新建并操作 `lycoris-rust-postgres`、`lycoris-rust-redis`。

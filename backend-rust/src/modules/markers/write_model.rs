@@ -19,6 +19,8 @@ pub const MSG_PROPOSAL_NOT_FOUND: &str = "编辑提案不存在";
 pub const MSG_RELATED_MARKER_NOT_FOUND: &str = "关联点位不存在";
 pub const MSG_PROPOSAL_ALREADY_HANDLED: &str = "该提案已处理";
 pub const MSG_STALE_VERSION: &str = "点位已更新或提案缺少版本信息，请按最新内容重新提交后审核";
+/// 新建点位的 `markImage` 只允许 null/空白；图片必须经上传提案与审核关联。
+pub const MSG_MARK_IMAGE_UPLOAD_ONLY: &str = "markImage 只能为空，请通过图片上传提交";
 
 /// 已认证身份。
 ///

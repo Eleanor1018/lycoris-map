@@ -146,6 +146,7 @@
 - SecurityConfig 对 `GET /api/markers/{纯数字}` 放行（匿名），可见性由控制器 `MarkerAccess.canView` 判定，不可见返回 404。
 10. **GET /api/markers/{id}**：`id` 为 Long 路径参数（安全放行仅匹配数字）。不可见 → 404 空体；可见 → 200 `MapMarker`（经本地化 Advice）。成功体为实体字段（见第 3 节）。
 11. **POST /api/markers**（登录）：请求 `MarkerCreateRequest`。无会话 → 401 文本 `请先登录`；`lat/lng/category/title` 任一为 null → 400 文本 `缺少必要字段`。`category` 归一：`safe_place`/`dangerous_place` → `self_definition`，其余仅接受 `accessible_toilet/friendly_clinic/baby_room/self_definition`，否则 400 文本列出支持项；`clientRequestId` 超 64 → 400。创建后 `reviewStatus="PENDING"`、`isPublic` 默认 true、`isActive` 默认 true、`sourceLanguage` 按写入语言规则、`username/userPublicId` 取自会话。成功 200 返回新实体（非 201）。`DataIntegrityViolation` 且带 `clientRequestId` → 回查并返回已有点位。
+    - **安全兼容收紧（2026-09-14）**：新建点位的 `markImage` 只接受 `null` 或空白串（空白归一为 `null`）；任何非空值返回 400 文本 `markImage 只能为空，请通过图片上传提交`。Java DTO 注释本已限定“先允许传空字符串或不传”，Web 新建草稿为空串、移动端提交 `null`；旧实现接受任意 URL 会让调用者伪造自己的点位引用，从而取得他人私有图片的读取权。收紧点在事务核心的首次完整校验处，因此不能从其它入口绕过；命中 `clientRequestId` 的幂等重放仍先返回原点位、不改动历史引用。
 12. **GET /api/markers/public**：返回 `isPublic=true` 且 `APPROVED` 的列表（200）。
 13. **GET /api/markers/search**：参数 `q`。空白 → `[]`。合并三类命中并去重：原文 `title/description/category/lat/lng` 模糊匹配、译文 `title/description` 模糊匹配（且译文哈希有效），以及 `q` 能被解析为坐标时 `lat/lng` 容差 `0.00015` 附近匹配；结果经本地化。成功 200 列表。
 14. **GET /api/markers/nearby**：参数 `lat`、`lng`、`radius`（默认 1000）、`category`（默认 `accessible_toilet`）。
@@ -240,6 +241,7 @@
 - **审核版本冲突 409**：编辑提案审核时 `baseMarkerVersion` 缺失或不等于当前点位版本 → 409 `点位已更新或提案缺少版本信息，请按最新内容重新提交后审核`；并发乐观锁失败经全局处理 → 409 `数据已更新，请刷新后重试`。
 - **幂等**：创建点位 `clientRequestId` + 唯一约束；收藏 `POST/DELETE` 幂等。
 - **上传限制**：请求 5MB / 8MB，业务 5MB、2500 万像素、边长 ≤ 10000。
+- **新建点位图片引用收紧**：`POST /api/markers` 的 `markImage` 非空即 400（`markImage 只能为空，请通过图片上传提交`）；图片统一经上传提案 + 审核写入，避免伪造引用读取他人私有图片。幂等重放仍返回原点位。
 
 ## 5. 待办：认证后续重设计（不在本次实现）
 

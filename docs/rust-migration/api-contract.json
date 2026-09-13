@@ -208,9 +208,10 @@
         "400 text \"缺少必要字段\" when lat, lng, category or title is null",
         "400 text category validation message when unsupported; legacy safe_place/dangerous_place map to self_definition; supported: accessible_toilet, friendly_clinic, baby_room, self_definition",
         "400 text \"clientRequestId 过长\" when trimmed clientRequestId longer than 64",
+        "400 text \"markImage 只能为空，请通过图片上传提交\" when markImage is present and not blank",
         "409 ApiResponse {code:409, message:\"数据已更新，请刷新后重试\"} only if an optimistic lock exception surfaces"
       ],
-      "notes": "Idempotent via clientRequestId + unique constraint (user_public_id, client_request_id); replay returns the existing marker with 200."
+      "notes": "Idempotent via clientRequestId + unique constraint (user_public_id, client_request_id); replay returns the existing marker with 200. Security tighten (2026-09-14): new markers may only omit or blank markImage; images must be attached through the upload proposal and review flow, preventing a caller from forging a reference to someone else's private image. The check runs in the first full validation of the write core, so no other entry point bypasses it; clientRequestId replays still return the existing marker unchanged."
     },
     {
       "method": "GET",

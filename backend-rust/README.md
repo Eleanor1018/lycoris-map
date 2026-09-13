@@ -3,9 +3,12 @@
 Lycoris Rust 后端（Axum + SQLx）工作目录。**阶段 1 公开点位读取**与
 **阶段 2 认证/用户/头像**已接入 HTTP：可编译运行的 lib + bin、配置、健康检查、迁移基线集，
 5 条公开点位读取（`/api/markers/public`、`/search`、`/nearby`、`/viewport`、`/{id}`，
-含本地化与 Redis 查询缓存），14 条认证/用户/头像路由，以及 2 条受控 `/uploads` 读取路由，
-配合真实 PG / Redis 集成测试。阶段 3 的媒体服务（点位图片提案提交/审批、失效引用清理）
-已在 `MediaService` 中作为**核心准备**，但对应写入/审核 HTTP 路由**尚未挂载**，
+含本地化与 Redis 查询缓存），9 条 AuthController + 4 条 AdminUserController +
+1 条 AdminAuthController（合计 **19** 条阶段 1/2 接口）以及 2 条受控 `/uploads` 读取路由，
+配合真实 PG / Redis 集成测试。阶段 3 的 **18 条点位写入/收藏/审核非图片路由**已接通，
+详情 `GET /api/markers/{id}` 已接 `OptionalUser`。阶段 3 的媒体服务（点位图片提案提交/审批、
+失效引用清理）已在 `MediaService` 中作为**核心准备**，但对应 **5 条图片 HTTP 路由**
+（`POST /api/markers/{id}/image` 与管理员 4 条）**尚未挂载**，由另一独立改动接入，
 本轮不接管生产流量；生产仍由 `backend/` 的 Spring Boot 服务承担。
 
 设计依据：`docs/rust-migration/auth-design.md`、`docs/rust-migration/api-contract.md`。
@@ -22,10 +25,10 @@ Lycoris Rust 后端（Axum + SQLx）工作目录。**阶段 1 公开点位读取
 | `src/app.rs` | `AppState` / Router / 中间件装配 |
 | `src/config.rs` | 环境变量配置，非法值报可读错误且不回显连接串 |
 | `src/error.rs` | 四类响应体与错误类型（不统一包裹） |
-| `src/modules/markers/` | 公开点位读取：`model`（行/DTO）、`repository`（`sql/*.sql` + `query_file_as!`）、`localization`（语言/哈希/纯函数）、`cache`（Redis ID 缓存）、`service`、`http`（薄 handler） |
+| `src/modules/markers/` | 点位读取与写入：`model`（行/DTO）、`repository`（`sql/*.sql` + `query_file_as!`）、`localization`（语言/哈希/纯函数）、`cache`（Redis ID 缓存）、`service`（读取/本地化）、`http`（公开读取薄 handler）、`write`/`write_model`（已验收写入事务）、`write_http`（写入/收藏/审核薄 handler） |
 | `src/media/` | 媒体核心与业务：`storage.rs`（存储/读取）、`model.rs`（行/DTO）、`repository.rs`（固定 SQL）、`service.rs`（`MediaService`）、`sql/*.sql`（头像/提案/清理固定语句） |
 | `src/multipart.rs` | multipart 读取辅助（单文件逐块限额、流式丢弃未知字段）与**显式形状**的错误映射：头像用 `ApiResponse`，阶段 3 点位图片业务错误用中文纯文本（全局 413 始终 `ApiResponse`） |
-| `src/web.rs` | JSON 提取器、Cookie 读写、流式图片响应辅助 |
+| `src/web.rs` | JSON 提取器（认证 64 KiB / 点位写 8 MiB，共用唯一有界读取实现）、Cookie 读写、流式图片响应辅助 |
 | `src/session.rs` | 类型化 Redis 会话（创建/读取续期/删除/二次验证/版本推进） |
 | `src/password.rs` | 受并发许可保护的 BCrypt 与历史明文兼容 |
 | `src/users.rs` | 用户数据访问（SQLx 编译期宏，用户值全部 bind） |
@@ -39,6 +42,7 @@ Lycoris Rust 后端（Axum + SQLx）工作目录。**阶段 1 公开点位读取
 | `.sqlx/` | SQLx 离线元数据，`SQLX_OFFLINE=true` 时无需数据库即可编译 |
 | `tests/integration.rs` | 基础工程真实 PG / Redis 集成测试（临时建库并清理） |
 | `tests/markers_read.rs` | 公开点位读取真实 PG / Redis 集成测试 |
+| `tests/markers_http.rs` | 点位写入/收藏/审核 HTTP 真实 PG / Redis 集成测试（真实 Router + 登录 Cookie + 权限矩阵） |
 | `tests/media.rs` | 媒体核心集成测试（合成图与真实临时目录，无需 PG/Redis） |
 | `tests/media_business.rs` | 媒体业务真实 PG / Redis / 临时文件集成测试（头像、访问矩阵、提案、清理） |
 | `tests/media_http.rs` | 头像 3 路由、受控 `/uploads`、私有点位 detail 的真实 PG / Redis / 临时文件 HTTP 集成测试 |
@@ -48,7 +52,7 @@ Lycoris Rust 后端（Axum + SQLx）工作目录。**阶段 1 公开点位读取
 | `compose.test.yml` | 隔离测试依赖：PostgreSQL 18.6 + PostGIS 3.6.4、Redis 8.10.1 |
 | `scripts/check-services.py` | 启动并校验上述两个容器及精确版本（仅标准库） |
 
-## 已实现路由（14 认证/用户/头像 + 5 公开点位 + 2 受控读取）
+## 已实现路由（19 阶段 1/2：14 认证/用户/头像 + 5 公开点位；另 2 受控读取）
 
 | 方法 | 路径 | 认证 |
 | --- | --- | --- |
@@ -90,6 +94,44 @@ Lycoris Rust 后端（Axum + SQLx）工作目录。**阶段 1 公开点位读取
   `Access-Control-Allow-Origin`/`Access-Control-Allow-Credentials` 与 `Vary: Origin`；非白名单
   Origin 不发 `allow-origin`。
 
+
+## 点位写入/收藏/审核（18，阶段 3）
+
+非图片点位路由（图像 5 条由另一改动接入），身份只从当前数据库账号构造 `Actor`，
+成功 `MarkerRow`/`Vec<MarkerRow>` 统一经 `MarkerService::localize`（23 字段 + 语言 `Vary`），
+`pending-edits` 为普通 JSON（18 字段）。
+
+| 方法 | 路径 | 认证 |
+| --- | --- | --- |
+| POST | `/api/markers` | 登录 |
+| PATCH / DELETE | `/api/markers/{id}` | 登录 |
+| POST / DELETE | `/api/markers/{id}/favorite` | 登录 |
+| GET | `/api/markers/me/favorites`、`/me/created`、`/me/favorites/details` | 登录 |
+| GET | `/api/markers/all` | 管理员（不要求二次验证） |
+| GET | `/api/admin/markers/pending`、`/pending-edits`、`/all` | 管理员 + 二次验证 |
+| POST | `/api/admin/markers/{id}/approve`、`/reject` | 管理员 + 二次验证 |
+| PATCH / DELETE | `/api/admin/markers/{id}` | 管理员 + 二次验证 |
+| POST | `/api/admin/markers/edit-proposals/{id}/approve`、`/reject` | 管理员 + 二次验证 |
+
+**JSON 请求体读取边界**：认证/用户请求沿用 64 KiB（`web::JsonBody`）；点位创建、普通
+PATCH 与管理员 PATCH 使用全局 8 MiB（`web::MarkerJsonBody`），因为 `description` 在 PG 为
+`text` 且 Java 无 64 KiB 限制。两条路径共用同一有界读取实现，不复制解析代码；行为：
+
+- 非 JSON 媒体类型（`application/jsonp` 等）→ 415 中文纯文本；
+- 超过各自上限 → 413 统一 `ApiResponse` `{code:413,message:"上传文件过大，请选择 5MB 以内的图片",data:null}`；
+- 其它底层读取失败 → 400 中文纯文本（沿错误源链识别真正的 `http_body_util::LengthLimitError`，
+  不把读取失败统一假称超限）；
+- JSON 反序列化失败 → 400 中文纯文本。
+
+> 全局 `RequestBodyLimitLayer`（8 MiB）在 `Content-Length` 已表明超限时会先于 handler 返回
+> 其自带 413；该全局 413 由主分支阶段 2 的 `normalize_payload_too_large` 统一为同一
+> `ApiResponse` 形状。整合后 JSON 提取器与 multipart 共用唯一的 `web::is_length_limit_error`
+> 与 `multipart::payload_too_large_response`（同一超限文案/响应），提取器层再覆盖无
+> `Content-Length`（分块/未知长度）及 64 KiB 认证边界，无重复实现。
+
+新建点位 `markImage` 只接受 `null`/空白（归一为 `null`），非空一律 400
+`markImage 只能为空，请通过图片上传提交`；检查在写入事务核心的首次完整校验处，
+`clientRequestId` 幂等重放仍先返回原点位。
 
 ## 公开点位读取（匿名）
 
@@ -377,9 +419,11 @@ cargo test --manifest-path backend-rust/Cargo.toml
 
 ## 边界与后续
 
-- 阶段 2 头像 3 路由与受控 `/uploads/avatars|markers` 已接入 HTTP；`GET /api/markers/{id}`
-  已按数据库身份构造真实 `Viewer`。阶段 3 的点位图片提案提交/审批与失效引用清理
-  **尚未挂载 HTTP 路由**，`MediaService` 核心已就绪，不宣称阶段 3 完成。
+- 阶段 1/2 的 **19** 条接口（5 公开读 + 9 AuthController + 4 AdminUserController +
+  1 AdminAuthController）与阶段 3 的 **18** 条点位写入/收藏/审核非图片路由已接入 HTTP；
+  受控 `/uploads/{directory}/{filename}` 契约 1 条由 Rust 拆为 `avatars`/`markers` 两条显式
+  路由。阶段 3 剩余 **5** 条图片 HTTP（`POST /api/markers/{id}/image` 与管理员 4 条）由另一
+  独立改动接入，本层**不宣称 43 接口全部完成**。
 - `OptionalUser` 提取器已用于私有点位 detail 与 `markers` 图片读取；`avatars` 读取不加载会话。
 - 固定查询使用 SQLx 编译期宏（`queries/*.sql` + `.sqlx` 离线元数据），用户值全部 bind；
   仅临时测试库名等真正动态 SQL 使用运行期 `AssertSqlSafe`。`.sqlx` 已在本工作树生成并校验。

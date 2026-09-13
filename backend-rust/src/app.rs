@@ -26,6 +26,7 @@ use crate::media::{ImageStore, MediaService};
 use crate::modules::markers::cache::MarkerCache;
 use crate::modules::markers::repository::MarkerRepository;
 use crate::modules::markers::service::MarkerService;
+use crate::modules::markers::write::MarkerWriteService;
 use crate::origin::enforce_write_origin;
 use crate::password::PasswordHasher;
 use crate::ratelimit::RegisterRateLimiter;
@@ -43,6 +44,7 @@ pub struct AppState {
     pub redis: Client,
     pub config: Arc<Config>,
     pub markers: MarkerService,
+    pub markers_write: MarkerWriteService,
     pub session: SessionStore,
     pub passwords: PasswordHasher,
     pub rate_limiter: RegisterRateLimiter,
@@ -58,17 +60,21 @@ impl AppState {
     /// 图片存储根目录在启动时创建并 canonicalize；失败返回明确错误，
     /// **不** `unwrap`/`panic`。`main` 在 `--migrate` 路径不会构造 `AppState`，
     /// 因此迁移不会初始化上传路径。
+    ///
+    /// 读取、写入与媒体三个服务共用同一个 `MarkerCache`（同一命名空间），
+    /// 避免为 read/write/media 建出不一致的缓存实例。
     pub fn new(db: PgPool, redis: Client, config: Config) -> Result<Self, AppError> {
-        let cache = MarkerCache::new(
+        let marker_cache = MarkerCache::new(
             redis.clone(),
             config.marker_cache_enabled,
             config.marker_cache_namespace.clone(),
         );
         let markers = MarkerService::new(
             MarkerRepository::new(db.clone()),
-            cache.clone(),
+            marker_cache.clone(),
             config.availability_zone,
         );
+        let markers_write = MarkerWriteService::new(db.clone(), marker_cache.clone());
         let session = SessionStore::new(
             redis.clone(),
             config.session_namespace.clone(),
@@ -87,12 +93,13 @@ impl AppState {
             config.redis_command_timeout,
         );
         let images = ImageStore::new(&config.upload_dir, config.media_max_concurrency)?;
-        let media = MediaService::new(db.clone(), images.clone(), cache);
+        let media = MediaService::new(db.clone(), images.clone(), marker_cache);
         Ok(Self {
             db,
             redis,
             config: Arc::new(config),
             markers,
+            markers_write,
             session,
             passwords,
             rate_limiter,
@@ -111,6 +118,8 @@ pub fn build_router(state: AppState) -> Router {
         .route("/health/live", get(health_live))
         .route("/health/ready", get(health_ready))
         .merge(crate::modules::markers::http::router())
+        // 阶段 3：点位写入/收藏/审核（18 个非图片路由）。
+        .merge(crate::modules::markers::write_http::router())
         // 阶段 2：AuthController（9 个中的 6 个非头像路由）
         .route("/api/login", axum::routing::post(routes::auth::login))
         .route("/api/register", axum::routing::post(routes::auth::register))

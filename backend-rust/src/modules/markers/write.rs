@@ -22,9 +22,9 @@ use crate::modules::markers::localization::{
 };
 use crate::modules::markers::model::{MarkerRow, TranslationRow, can_view};
 use crate::modules::markers::write_model::{
-    Actor, EditProposalRow, MSG_MARKER_NOT_FOUND, MSG_PROPOSAL_ALREADY_HANDLED,
-    MSG_PROPOSAL_NOT_FOUND, MSG_RELATED_MARKER_NOT_FOUND, MSG_STALE_VERSION, MarkerCreateRequest,
-    MarkerUpdateRequest, WriteError, db_len, utf16_len,
+    Actor, EditProposalRow, MSG_MARK_IMAGE_UPLOAD_ONLY, MSG_MARKER_NOT_FOUND,
+    MSG_PROPOSAL_ALREADY_HANDLED, MSG_PROPOSAL_NOT_FOUND, MSG_RELATED_MARKER_NOT_FOUND,
+    MSG_STALE_VERSION, MarkerCreateRequest, MarkerUpdateRequest, WriteError, db_len, utf16_len,
 };
 
 /// 数据库 `varchar` 列的字符上限（PostgreSQL `char_length` 语义）。
@@ -32,7 +32,6 @@ const TITLE_MAX: usize = 120;
 const CATEGORY_MAX: usize = 64;
 const USERNAME_MAX: usize = 64;
 const PUBLIC_ID_MAX: usize = 64;
-const MARK_IMAGE_MAX: usize = 512;
 const CLIENT_REQUEST_ID_MAX: usize = 64;
 
 /// 从 `map_markers` 一次写回的全部可变字段。
@@ -111,11 +110,9 @@ impl MarkerWriteService {
         if db_len(&title) > TITLE_MAX {
             return Err(WriteError::BadRequest("title 过长".to_string()));
         }
-        if let Some(mark_image) = req.mark_image.as_deref()
-            && db_len(mark_image) > MARK_IMAGE_MAX
-        {
-            return Err(WriteError::BadRequest("markImage 过长".to_string()));
-        }
+        // 安全收紧：新建点位不得直接携带图片引用（null/空白归一为 null），
+        // 图片只能经上传提案与审核流程关联，避免调用者伪造引用读取他人私有图片。
+        let mark_image = normalize_mark_image(req.mark_image.as_deref())?;
         let (open_time_start, open_time_end) =
             resolve_open_window(req.open_time_start.as_deref(), req.open_time_end.as_deref())?;
         let language = resolve_language(req.language.as_deref(), request_language);
@@ -140,7 +137,7 @@ impl MarkerWriteService {
             is_active,
             open_time_start,
             open_time_end,
-            req.mark_image,
+            mark_image,
             actor.username.as_str(),
             actor.public_id.as_str(),
             client_request_id.as_deref(),
@@ -701,6 +698,17 @@ fn normalize_category(raw: Option<&str>) -> Result<String, WriteError> {
         Ok(value) => Ok(value),
         Err(crate::error::ApiError::BadRequest(message)) => Err(WriteError::BadRequest(message)),
         Err(_) => Err(WriteError::BadRequest("不支持的 category".to_string())),
+    }
+}
+
+/// 新建点位 `markImage` 归一：`None` 与空白串为 `None`，任何非空值一律 400。
+fn normalize_mark_image(raw: Option<&str>) -> Result<Option<String>, WriteError> {
+    match raw {
+        None => Ok(None),
+        Some(value) if value.trim().is_empty() => Ok(None),
+        Some(_) => Err(WriteError::BadRequest(
+            MSG_MARK_IMAGE_UPLOAD_ONLY.to_string(),
+        )),
     }
 }
 

@@ -8,7 +8,8 @@
 //! - [`service`]：读取业务编排（可见性、去重、批量译文、缓存回源）；
 //! - [`write_model`]：`Actor`、写入请求 DTO、提案行与局部 `WriteError`；
 //! - [`write`]：创建/收藏/删除/编辑提案/管理员审核的事务核心；
-//! - [`http`]：薄 handler 与路由。
+//! - [`http`]：公开读取的薄 handler 与路由；
+//! - [`write_http`]：写入/收藏/审核的薄 handler 与路由（认证 + 本地化复用）。
 
 pub mod cache;
 pub mod http;
@@ -17,4 +18,5 @@ pub mod model;
 pub mod repository;
 pub mod service;
 pub mod write;
+pub mod write_http;
 pub mod write_model;
