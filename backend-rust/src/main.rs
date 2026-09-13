@@ -53,7 +53,7 @@ async fn run() -> Result<(), AppError> {
     tracing::info!("迁移校验通过");
 
     let redis = connect_redis(&config.redis_url).await?;
-    let state = AppState::new(pool.clone(), redis.clone(), config.clone());
+    let state = AppState::new(pool.clone(), redis.clone(), config.clone())?;
     let router = build_router(state);
 
     let listener = tokio::net::TcpListener::bind((config.server_host, config.server_port)).await?;

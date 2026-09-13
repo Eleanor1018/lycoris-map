@@ -23,9 +23,12 @@ pub const DEFAULT_AVAILABILITY_ZONE: Tz = chrono_tz::Asia::Shanghai;
 /// 默认查询缓存命名空间（Rust 独立，不复用 Java 的 `cache:marker:*`）。
 pub const DEFAULT_MARKER_CACHE_NAMESPACE: &str = "lycoris:rust:marker";
 
-/// 默认请求体总上限（8 MiB）；后续 multipart 上传将显式覆盖 Axum 默认的 2 MiB，
-/// 图片自身的 5 MiB 校验在后续上传业务中实现。
+/// 默认请求体总上限（8 MiB）。multipart 上传显式覆盖 Axum 默认的 2 MiB
+/// （`DefaultBodyLimit`）；图片自身的 5 MiB 校验由上传业务逐块累计判断。
 pub const REQUEST_BODY_LIMIT_BYTES: usize = 8 * 1024 * 1024;
+
+/// 默认同时执行的图片 CPU 处理任务数（一个并发许可）。
+pub const DEFAULT_MEDIA_CONCURRENCY: u32 = 1;
 
 /// 默认会话 Cookie 名。批量并行验收可用 `SESSION_COOKIE_NAME` 覆盖为独立名，
 /// 避免与 Java 的 `LYCORIS_SESSION` 混用。
@@ -79,6 +82,8 @@ pub struct Config {
     pub server_host: IpAddr,
     pub server_port: u16,
     pub upload_dir: PathBuf,
+    /// 图片 CPU 处理的并发许可数（必须为正值，默认 1）。
+    pub media_max_concurrency: usize,
     pub cors_allowed_origins: Vec<HeaderValue>,
     /// 写请求 Origin 白名单（与 CORS 分开实施）。未配置时回落到 CORS 白名单。
     pub write_allowed_origins: Vec<HeaderValue>,
@@ -133,6 +138,7 @@ impl Config {
             server_host: IpAddr::from([127, 0, 0, 1]),
             server_port: DEFAULT_SERVER_PORT,
             upload_dir: PathBuf::from("uploads"),
+            media_max_concurrency: DEFAULT_MEDIA_CONCURRENCY as usize,
             cors_allowed_origins: Vec::new(),
             write_allowed_origins: Vec::new(),
             db_max_connections: 10,
@@ -183,6 +189,10 @@ impl Config {
         let upload_dir = optional("UPLOAD_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("uploads"));
+        let media_max_concurrency = non_zero(
+            "MEDIA_MAX_CONCURRENCY",
+            parse_or("MEDIA_MAX_CONCURRENCY", DEFAULT_MEDIA_CONCURRENCY)?,
+        )? as usize;
         let cors_allowed_origins =
             parse_origins(&optional("CORS_ALLOWED_ORIGINS").unwrap_or_default())?;
         let availability_zone = match optional("APP_AVAILABILITY_ZONE") {
@@ -216,6 +226,7 @@ impl Config {
             server_host,
             server_port,
             upload_dir,
+            media_max_concurrency,
             cors_allowed_origins,
             write_allowed_origins,
             // SQLx 连接池 0 连接会导致 panic，必须为正值。

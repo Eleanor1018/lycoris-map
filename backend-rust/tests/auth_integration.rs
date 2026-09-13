@@ -221,6 +221,8 @@ async fn test_second_hash() -> String {
 /// 测试环境：临时库 + Redis + Router + 独立命名空间。
 struct TestEnv {
     _temp: TempDatabase,
+    /// 临时上传根目录，保证测试不写真实 `uploads/` 且退出即清理。
+    _upload: tempfile::TempDir,
     pool: PgPool,
     router: Router,
     /// 供测试直接调度改密切换窗口（服务公开方法），生产代码不含测试开关。
@@ -248,11 +250,14 @@ impl TestEnv {
         config.write_allowed_origins = vec![HeaderValue::from_static(ALLOWED_ORIGIN)];
         config.admin_second_password_hash = Some(test_second_hash().await);
         configure(&mut config);
+        let upload = tempfile::TempDir::new().expect("创建临时上传目录失败");
+        config.upload_dir = upload.path().to_path_buf();
 
-        let state = AppState::new(pool.clone(), redis, config.clone());
+        let state = AppState::new(pool.clone(), redis, config.clone()).expect("构造 AppState 失败");
         let router = build_router(state.clone());
         Self {
             _temp: temp,
+            _upload: upload,
             pool,
             router,
             state,
@@ -262,7 +267,10 @@ impl TestEnv {
 
     /// 直接构造使用坏 Redis 的 AppState（用于限流故障用例）。
     fn router_with_redis(&self, redis: Client) -> Router {
-        build_router(AppState::new(self.pool.clone(), redis, self.config.clone()))
+        build_router(
+            AppState::new(self.pool.clone(), redis, self.config.clone())
+                .expect("构造 AppState 失败"),
+        )
     }
 
     async fn send(&self, request: TestRequest<'_>) -> Resp {

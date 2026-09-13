@@ -1,13 +1,12 @@
 # backend-rust
 
-Lycoris Rust 后端（Axum + SQLx）工作目录。当前同时交付**阶段 1 公开点位读取**与
-**阶段 2 认证/用户核心（第一项独立改动）**：可编译运行的 lib + bin、配置、健康检查、
-迁移基线集，**公开点位读取**（`/api/markers/public`、`/search`、`/nearby`、`/viewport`、
-`/{id}`，含本地化与 Redis 查询缓存）与 **11 个认证/用户路由**及真实 PG / Redis 集成测试
-均已就绪。媒体侧另有**未挂载路由**的 `MediaService`（头像条件更新、受控 `/uploads` 读取、
-图片提案提交/审批、失效图片清理，见下文），依赖可信身份由未来 HTTP 层传入，因此暂不接线
-HTTP。头像与点位图片写入的 HTTP 路由、`OptionalViewer` 尚未接通，也不接管生产流量；
-生产仍由 `backend/` 的 Spring Boot 服务承担。
+Lycoris Rust 后端（Axum + SQLx）工作目录。**阶段 1 公开点位读取**与
+**阶段 2 认证/用户/头像**已接入 HTTP：可编译运行的 lib + bin、配置、健康检查、迁移基线集，
+5 条公开点位读取（`/api/markers/public`、`/search`、`/nearby`、`/viewport`、`/{id}`，
+含本地化与 Redis 查询缓存），14 条认证/用户/头像路由，以及 2 条受控 `/uploads` 读取路由，
+配合真实 PG / Redis 集成测试。阶段 3 的媒体服务（点位图片提案提交/审批、失效引用清理）
+已在 `MediaService` 中作为**核心准备**，但对应写入/审核 HTTP 路由**尚未挂载**，
+本轮不接管生产流量；生产仍由 `backend/` 的 Spring Boot 服务承担。
 
 设计依据：`docs/rust-migration/auth-design.md`、`docs/rust-migration/api-contract.md`。
 本轮保留 Cookie + 账号 + 密码 + 管理员二次验证体验，最终认证重设计另案。
@@ -25,7 +24,8 @@ HTTP。头像与点位图片写入的 HTTP 路由、`OptionalViewer` 尚未接�
 | `src/error.rs` | 四类响应体与错误类型（不统一包裹） |
 | `src/modules/markers/` | 公开点位读取：`model`（行/DTO）、`repository`（`sql/*.sql` + `query_file_as!`）、`localization`（语言/哈希/纯函数）、`cache`（Redis ID 缓存）、`service`、`http`（薄 handler） |
 | `src/media/` | 媒体核心与业务：`storage.rs`（存储/读取）、`model.rs`（行/DTO）、`repository.rs`（固定 SQL）、`service.rs`（`MediaService`）、`sql/*.sql`（头像/提案/清理固定语句） |
-| `src/web.rs` | JSON 提取器、Cookie 读写、响应辅助 |
+| `src/multipart.rs` | multipart 读取辅助（单文件逐块限额、流式丢弃未知字段）与**显式形状**的错误映射：头像用 `ApiResponse`，阶段 3 点位图片业务错误用中文纯文本（全局 413 始终 `ApiResponse`） |
+| `src/web.rs` | JSON 提取器、Cookie 读写、流式图片响应辅助 |
 | `src/session.rs` | 类型化 Redis 会话（创建/读取续期/删除/二次验证/版本推进） |
 | `src/password.rs` | 受并发许可保护的 BCrypt 与历史明文兼容 |
 | `src/users.rs` | 用户数据访问（SQLx 编译期宏，用户值全部 bind） |
@@ -33,7 +33,7 @@ HTTP。头像与点位图片写入的 HTTP 路由、`OptionalViewer` 尚未接�
 | `src/auth.rs` | `OptionalUser` / `CurrentUser` / `AdminUser` / `VerifiedAdmin` 提取器 |
 | `src/origin.rs` | 写请求来源校验中间件 |
 | `src/ratelimit.rs` | 注册限流（Redis 原子 INCR + TTL） |
-| `src/routes/` | 阶段 2 HTTP 处理器 |
+| `src/routes/` | 阶段 2 HTTP 处理器：`auth`、`admin`、`avatar`（3 个头像路由）、`uploads`（受控读取） |
 | `src/migrate.rs` | 内嵌迁移、`--migrate` 执行与启动只读校验 |
 | `migrations/0001_baseline.sql` | 从 `docs/rust-migration/schema-baseline.sql` 精确派生 |
 | `.sqlx/` | SQLx 离线元数据，`SQLX_OFFLINE=true` 时无需数据库即可编译 |
@@ -41,13 +41,14 @@ HTTP。头像与点位图片写入的 HTTP 路由、`OptionalViewer` 尚未接�
 | `tests/markers_read.rs` | 公开点位读取真实 PG / Redis 集成测试 |
 | `tests/media.rs` | 媒体核心集成测试（合成图与真实临时目录，无需 PG/Redis） |
 | `tests/media_business.rs` | 媒体业务真实 PG / Redis / 临时文件集成测试（头像、访问矩阵、提案、清理） |
+| `tests/media_http.rs` | 头像 3 路由、受控 `/uploads`、私有点位 detail 的真实 PG / Redis / 临时文件 HTTP 集成测试 |
 | `tests/auth_integration.rs` | 认证/用户真实 PG / Redis 集成测试 |
 | `tests/common/mod.rs` | 集成测试共享工具（临时库、回环校验、请求辅助） |
 | `scripts/check-rust.ps1` | 迁移合成开发库、校验离线元数据、离线构建并跑 fmt / clippy / test |
 | `compose.test.yml` | 隔离测试依赖：PostgreSQL 18.6 + PostGIS 3.6.4、Redis 8.10.1 |
 | `scripts/check-services.py` | 启动并校验上述两个容器及精确版本（仅标准库） |
 
-## 已实现路由（11）
+## 已实现路由（14 认证/用户/头像 + 5 公开点位 + 2 受控读取）
 
 | 方法 | 路径 | 认证 |
 | --- | --- | --- |
@@ -55,6 +56,9 @@ HTTP。头像与点位图片写入的 HTTP 路由、`OptionalViewer` 尚未接�
 | POST | `/api/register` | 匿名（写来源校验 + 限流） |
 | GET | `/api/me` | 登录 |
 | PATCH | `/api/me` | 登录 |
+| GET | `/api/me/avatar` | 登录（`CurrentUser`） |
+| POST | `/api/me/avatar` | 登录（`CurrentUser` + 写来源校验 + multipart） |
+| GET | `/api/users/{publicId}/avatar` | 匿名 |
 | POST | `/api/me/password` | 登录 |
 | POST | `/api/logout` | 登录 |
 | POST | `/api/admin/verify` | 管理员 |
@@ -62,11 +66,30 @@ HTTP。头像与点位图片写入的 HTTP 路由、`OptionalViewer` 尚未接�
 | POST | `/api/admin/users/{id}/reset-password` | 管理员 + 二次验证 |
 | DELETE | `/api/admin/users/{id}` | 管理员 + 二次验证 |
 | POST | `/api/admin/users/{id}/restore` | 管理员 + 二次验证 |
+| GET | `/uploads/avatars/{filename}` | 匿名（不加载会话） |
+| GET | `/uploads/markers/{filename}` | 匿名/属主/管理员/提案作者（资源级） |
+| GET | `/api/markers/public`、`/search`、`/nearby`、`/viewport`、`/{id}` | 公开读；`/{id}` 接 `OptionalUser` 构真实 Viewer |
 
 响应形状按契约分别保留：安全入口 401 固定 `{"message":"Spring Security Error"}`；
 已认证但角色不足的 403 为 Spring Boot 默认错误 JSON
 `{timestamp,status,error,path}`（真实 Java 行为，非空体）；管理员二次验证 403 仍为中文纯文本；
-管理员成功为普通 JSON；Auth 接口为 `ApiResponse`（失败 `data:null`）。**不做全局统一包裹。**
+管理员成功为普通 JSON；Auth/头像接口为 `ApiResponse`（失败 `data:null`）。**不做全局统一包裹。**
+
+请求体上限与 413：
+
+- **全局 8 MiB**：tower-http `RequestBodyLimitLayer` 对所有接口（含不读 body 的 `GET /health/*`）
+  按 `Content-Length` 提前 413，未知长度的流式 body 由 `Limited` 在读取时抛 `LengthLimitError`；
+  `DefaultBodyLimit::max(8 MiB)` 同时覆盖 Axum 默认 2 MiB 的 extractor 限制。两者产生的 413
+  统一为 `ApiResponse{code:413,message:"上传文件过大，请选择 5MB 以内的图片",data:null}`。
+- **JSON 提取器**：认证/资料接口保持 64 KiB 上限；只有真正的 `LengthLimitError` 返回结构化 413，
+  复用统一文案 `上传文件过大，请选择 5MB 以内的图片`；截断/网络读取失败返回 400 `请求体读取失败`。
+  超限分类沿整条 `source()` 链识别 `LengthLimitError`，不依赖错误字符串。
+- **multipart 读取**：逐块累计 ≤5 MiB、不依赖 `Content-Length`、读到结束；重复/缺/空 `400`，
+  超限 `413`（同上形状）。
+- **CORS 为最外层**：限流/标准化后的 413 与其它响应都由统一 CORS 层补齐
+  `Access-Control-Allow-Origin`/`Access-Control-Allow-Credentials` 与 `Vary: Origin`；非白名单
+  Origin 不发 `allow-origin`。
+
 
 ## 公开点位读取（匿名）
 
@@ -78,15 +101,16 @@ HTTP。头像与点位图片写入的 HTTP 路由、`OptionalViewer` 尚未接�
 | GET | `/api/markers/search?q=` | 合并原文/类别/经纬度文本、有效译文与可解析坐标（容差 `0.00015`）命中并去重；缺失 `q` 为 400，仅显式空串/空白返回 `[]` |
 | GET | `/api/markers/nearby?lat=&lng=&radius=&category=` | 包围盒 + Haversine（6 371 000 m），半径默认 `1000`（夹取 `1..50000`），类别默认 `accessible_toilet`，按距离升序 |
 | GET | `/api/markers/viewport?minLat=&maxLat=&minLng=&maxLng=&categories=` | 视口内公开点位；`categories` 为逗号分隔白名单，空表示不过滤 |
-| GET | `/api/markers/{id}` | 详情；本阶段匿名只返回 `is_public+APPROVED`，否则 `404` 空体 |
+| GET | `/api/markers/{id}` | 详情：接 `OptionalUser`，按当前数据库身份构真实 `Viewer`；属主/管理员可见私有待审，其他匿名 `404` 空体 |
 
 - 响应字段与 Java `MapMarker` 一致（camelCase，23 项），`isActive` 读取时按
   `APP_AVAILABILITY_ZONE`（默认 `Asia/Shanghai`）实时计算，类别读取时归一，均不回写、不推进 `version`。
 - 语言优先级：显式 `lang` > 非空 `Accept-Language`（不支持或非法直接 `zh`，不回退
   `X-App-Language`）> `X-App-Language` > `zh`；成功响应带
   `Vary: Accept-Language, X-App-Language`。
-- 资源级可见性边界集中在 `model::can_view(row, Option<&Viewer>)`；本阶段所有接口以
-  `None` 调用，**不引入伪身份**，下一阶段接 `OptionalViewer`。
+- 资源级可见性边界集中在 `model::can_view(row, Option<&Viewer>)`；`GET /api/markers/{id}`
+  按数据库当前身份构造 `Viewer`（`publicId`/`role`/`deleted`），其余四个公开读接口保持匿名、
+  不加载会话，也不伪造身份。
 
 ## 媒体核心（阶段 2 / 3 共用）
 
@@ -123,24 +147,24 @@ HTTP。头像与点位图片写入的 HTTP 路由、`OptionalViewer` 尚未接�
 - **权限**：`root`（`UPLOAD_DIR`）必须由服务运行用户独占写权限，其他本地用户不可写，
   以免放入可执行内容或替换目录。核心不引入 `unsafe`。
 
-## 受控媒体业务（阶段 2 头像 / 阶段 3 图片）
+## 受控媒体业务（头像已接 HTTP，点位图片待阶段 3）
 
 `MediaService`（`src/media/service.rs`）构造只依赖 `PgPool` + `ImageStore` +
 `MarkerCache`；**身份由调用方以可信 `Viewer` / 用户名 / 用户 ID 传入**，本层不解析会话、
 不信任请求字段，只做资源级授权与一致性校验，并复用 `markers::model::can_view`。
 
-可供后续 HTTP 接入的方法：
+可供 HTTP 层调用的方法（✅ 已挂载路由，⏳ 阶段 3 待接线）：
 
-| 方法 | 对应接口 | 要点 |
-| --- | --- | --- |
-| `avatar_url_by_public_id(public_id)` | `GET /api/users/{publicId}/avatar` | 非删除用户且存储值为合法 `/uploads/avatars/*` 才返回 URL，否则 `None`（404） |
-| `avatar_url_by_user_id(user_id)` | `GET /api/me/avatar` | 同上 |
-| `upload_avatar(user_id, expected_row_version, caller_public_id, bytes)` | `POST /api/me/avatar` | 保存后以 `id + deleted=false + row_version` 条件更新 `avatar_url` 与 `row_version`，**不覆盖资料其他列**；返回 `Updated`/`NotFound`/`VersionConflict` |
-| `open_uploads(directory, filename, viewer)` | `GET /uploads/{directory}/{filename}` | 授权后返回流式 `OpenedImage`，不整张读入内存；非法/不存在/不可见一律 404 |
-| `submit_marker_image(id, viewer, username, public_id, bytes)` | `POST /api/markers/{id}/image` | 可见性检查在解码前；落盘后事务内重锁点位复检，插入 `PENDING` 提案，点位不变，返回原 `MarkerRow` |
-| `list_pending_images(viewer)` | `GET /api/admin/markers/pending-images` | 8 字段、`createdAt DESC` |
-| `approve_image_proposal(id, viewer, reviewer)` / `reject_image_proposal(...)` | 管理员图片审批 | 一次性、同事务 |
-| `cleanup_missing_images(viewer)` | `POST /api/admin/markers/cleanup-missing-images` | `{checked,cleared,message}` |
+| 方法 | 对应接口 | 状态 | 要点 |
+| --- | --- | --- | --- |
+| `avatar_url_by_public_id(public_id)` | `GET /api/users/{publicId}/avatar` | ✅ | 非删除用户且存储值为合法 `/uploads/avatars/*` 才返回 URL，否则 `None`（404） |
+| `avatar_url_by_user_id(user_id)` | `GET /api/me/avatar` | ✅ | 同上 |
+| `upload_avatar(user_id, expected_row_version, caller_public_id, bytes)` | `POST /api/me/avatar` | ✅ | 保存后以 `id + deleted=false + row_version` 条件更新 `avatar_url` 与 `row_version`，**不覆盖资料其他列**；返回 `Updated`/`NotFound`/`VersionConflict` |
+| `open_uploads(directory, filename, viewer)` | `GET /uploads/avatars|markers/{filename}` | ✅ | 授权后返回流式 `OpenedImage`，不整张读入内存；非法/不存在/不可见一律 404 |
+| `submit_marker_image(id, viewer, username, public_id, bytes)` | `POST /api/markers/{id}/image` | ⏳ | 可见性检查在解码前；落盘后事务内重锁点位复检，插入 `PENDING` 提案，点位不变，返回原 `MarkerRow` |
+| `list_pending_images(viewer)` | `GET /api/admin/markers/pending-images` | ⏳ | 8 字段、`createdAt DESC` |
+| `approve_image_proposal(id, viewer, reviewer)` / `reject_image_proposal(...)` | 管理员图片审批 | ⏳ | 一次性、同事务 |
+| `cleanup_missing_images(viewer)` | `POST /api/admin/markers/cleanup-missing-images` | ⏳ | `{checked,cleared,message}` |
 
 - 错误类型 `MediaServiceError` 提供 `status()` 与 `message()`（如 `图片提案不存在`、
   `关联点位不存在`、`该提案已处理`），HTTP 层据此选择响应形状；管理员与二次验证由 HTTP
@@ -203,7 +227,8 @@ cargo run --manifest-path backend-rust/Cargo.toml
 | --- | --- | --- |
 | `DATABASE_URL` / `REDIS_URL` | 必填 | 仅校验格式，不打印 |
 | `SERVER_HOST` / `SERVER_PORT` | `127.0.0.1` / `18081` | HTTP 监听 |
-| `UPLOAD_DIR` | `uploads` | 上传目录（后续图片业务使用） |
+| `UPLOAD_DIR` | `uploads` | 上传根目录；启动时创建并 canonicalize（`--migrate` 不初始化） |
+| `MEDIA_MAX_CONCURRENCY` | `1` | 图片 CPU 处理并发许可数，必须为正值；无许可立即返回 503 |
 | `CORS_ALLOWED_ORIGINS` | 空 | 逗号分隔的凭据白名单；每项须为 `http`/`https` 源，拒绝 `*`、`null`、路径、查询、片段与用户名密码；空表示不放行跨域 |
 | `WRITE_ALLOWED_ORIGINS` | 回落到 CORS 白名单 | 写请求 Origin 白名单（含同源站点也需显式列入） |
 | `TRUSTED_PROXIES` | 空 | 可信代理 IP 列表；仅这些连接才读取 `X-Forwarded-For` |
@@ -269,13 +294,14 @@ Redis 缓存独立于 Java 的 `cache:marker:*` 命名空间，只存 ID 与缓�
 
 ## 测试
 
-`tests/integration.rs`、`tests/markers_read.rs` 与 `tests/auth_integration.rs` 使用标准
-Rust 测试与 `tower::ServiceExt::oneshot`（认证用例另有真实 HTTP 观察），不启动常驻外部
-HTTP 服务器。每个用例从测试管理员连接创建 UUID 命名的临时库、应用迁移、构造 Router 并
-断言；无论成功失败都会删除自己的临时库。服务不可用时测试直接失败，不做静默跳过。只允许
-连接回环地址上的合成测试服务。
+`tests/integration.rs`、`tests/markers_read.rs`、`tests/auth_integration.rs` 与
+`tests/media_http.rs` 使用标准 Rust 测试与 `tower::ServiceExt::oneshot`（认证用例另有真实
+HTTP 观察），不启动常驻外部 HTTP 服务器。每个用例从测试管理员连接创建 UUID 命名的临时库、
+应用迁移、构造 Router 并断言；无论成功失败都会删除自己的临时库。服务不可用时测试直接失败，
+不做静默跳过。只允许连接回环地址上的合成测试服务；需要上传根的基础测试各自使用
+`tempfile::TempDir` 并保持生命周期，不写真实 `uploads/`，也不遗留全局临时目录。
 
-`tests/auth_integration.rs` 覆盖全部 11 路由与关键边界：Java 合成 BCrypt 向量、
+`tests/auth_integration.rs` 覆盖 11 条认证/用户路由与关键边界：Java 合成 BCrypt 向量、
 历史明文升级与哈希字面量拒绝、重复历史账号不授权、登录后 Cookie 稳定、失败登录保留会话、
 **旧快照 CAS 不能删除已推进的新版本**、**改密 pending 窗口内 /me 为 503/推进后 200（绝不 401）**、
 改密转换状态（begin/AlreadyPending/409/cancel/退出后不复活/过期 pending 不阻止失效）、
@@ -284,6 +310,20 @@ HTTP 服务器。每个用例从测试管理员连接创建 UUID 命名的临时
 并发注册唯一性、限流与**坏/受限 Redis 的 503（含 logout DEL 失败不声称成功）**、
 可信代理与 IP 伪造、写来源校验（same-site 仍校验 Referer、非法 FetchMetadata 拒绝）、
 原生 App 无浏览器头放行、资料 null/空串、管理员分页/搜索/软删除形状、JSON 媒体类型与 413。
+
+`tests/media_http.rs` 覆盖头像 3 路由、受控 `/uploads` 与私有点位 detail：Cookie 登录后
+属主/管理员可见私有待审、匿名与他人 404；头像完整上传 → `/api/me/avatar` → 公共 ID 头像 →
+`/uploads/avatars/*` 全链路（MIME、`Cache-Control`、`nosniff`、`Content-Length`、7 字段
+`UserResponse`）；无图/已删/非法引用 404；未登录 401 与写来源拒绝；multipart 覆盖
+缺 `file`/空文件/重复 `file`/无效图/超 5 MiB/整个请求超 8 MiB（含无 `Content-Length` 尾随
+未知字段与已知 `Content-Length` 提前拒绝）均为契约形状 413，>2 MiB 且 <5 MiB 合法输入通过
+（证明 Axum 默认 2 MiB 已被 8 MiB 覆盖）；`/uploads/markers` 的匿名/属主/管理员/他人访问矩阵；
+avatars 与匿名 markers 读取在 Redis 不可用时仍可读（不加载会话）。另含：**已允许 Origin 的
+已知 `Content-Length` 超限 413 与流式 multipart 超限 413 都带
+`Access-Control-Allow-Origin`/`Credentials` 与 `Vary`，非白名单 Origin 不发 allow-origin**；
+**不读 body 的 `GET /health/live` 带超限 `Content-Length` 仍 413**；JSON 提取器超限为结构化
+`{"code":413,"message":"上传文件过大，请选择 5MB 以内的图片"}`、读取中途出错为 400
+`请求体读取失败`。
 
 每个用例使用 UUID 命名临时库与随机 Redis 命名空间，不 `FLUSHALL`、不 `KEYS`，
 只连接回环地址上的合成测试服务；失败不做静默跳过。
@@ -296,10 +336,23 @@ pwsh backend-rust/scripts/check-rust.ps1
 cargo test --manifest-path backend-rust/Cargo.toml
 ```
 
-可用 `TEST_DATABASE_URL` / `TEST_REDIS_URL` 覆盖测试地址，但必须指向回环地址。
-`.sqlx` 离线元数据由 `cargo sqlx prepare`（SQLx CLI 0.9.0）生成并由脚本校验；
-`SQLX_OFFLINE=true` 时无需数据库即可编译。脚本默认以 `RUST_TEST_THREADS=4` 限制测试并发，
-避免 1 GB 测试 PG 在并行建库时 OOM；调用前设置正整数可覆盖。
+可用 `TEST_DATABASE_URL` / `TEST_REDIS_URL` 覆盖测试地址，但脚本在**执行任何 `database create`
+或 `migrate` 之前**先校验：
+
+- scheme：PostgreSQL 仅 `postgres`/`postgresql`，Redis 仅 `redis`/`rediss`；
+- 拒绝任何 query 或 fragment（SQLx 的 `host`/`hostaddr`/`dbname` 覆盖参数在这里被直接拒绝），
+  并拒绝数据库路径中的 `%`/`\` 等编码或非法字节；
+- 主机只接受 `127.0.0.1`/`::1`/`localhost`（或 `IPAddress.TryParse` 后静态
+  `IPAddress.IsLoopback` 为真），按字符串前缀“`127.`”授权被移除；`127.example.invalid`
+  之类外网 DNS 名会被拒绝；
+- 迁移目标库名只允许完整 `lycoris_rust` 或 `^lycoris_test_[A-Za-z0-9_]+$`；`restore_review`/
+  `contract_review` 等父级/持有库被拒绝。
+
+错误信息不回显连接串或密码。`.sqlx` 离线元数据由 `cargo sqlx prepare`（SQLx CLI 0.9.0）生成
+并由脚本校验；`SQLX_OFFLINE=true` 时无需数据库即可编译。脚本在未显式设置 `RUST_TEST_THREADS`
+时默认 4，避免 1 GB 测试 PG 在并行建库时 OOM；显式正整数会覆盖该默认值。请勿在多个工作树
+同时运行整套门禁，避免共享测试 PG OOM。正常 UUID 临时子库由各用例自行创建与清理，脚本不按
+前缀枚举或批量删除。
 
 ## 连接与数据目录
 
@@ -324,12 +377,11 @@ cargo test --manifest-path backend-rust/Cargo.toml
 
 ## 边界与后续
 
-- 本轮不实现头像上传/读取（3 路由）与点位图片写入的新 HTTP 接线；`/uploads/*`、头像与
-  图片提案的 HTTP 授权、二次验证、缓存头与响应形状由后续接口实现。媒体核心与
-  `MediaService` 业务已就绪但尚未挂载路由，本层不宣称已完成 HTTP 接线。
-- `OptionalUser` 提取器已就绪，供阶段 3 点位相关接口调用；`OptionalViewer` 尚未接通。
+- 阶段 2 头像 3 路由与受控 `/uploads/avatars|markers` 已接入 HTTP；`GET /api/markers/{id}`
+  已按数据库身份构造真实 `Viewer`。阶段 3 的点位图片提案提交/审批与失效引用清理
+  **尚未挂载 HTTP 路由**，`MediaService` 核心已就绪，不宣称阶段 3 完成。
+- `OptionalUser` 提取器已用于私有点位 detail 与 `markers` 图片读取；`avatars` 读取不加载会话。
 - 固定查询使用 SQLx 编译期宏（`queries/*.sql` + `.sqlx` 离线元数据），用户值全部 bind；
-  仅临时测试库名等真正动态 SQL 使用运行期 `AssertSqlSafe`。`.sqlx` 已在本工作树生成，
-  合并后已与其它工作树的查询统一再 `sqlx prepare`。
+  仅临时测试库名等真正动态 SQL 使用运行期 `AssertSqlSafe`。`.sqlx` 已在本工作树生成并校验。
 - 不包含应用容器，不接入生产，不保存真实数据；不操作 `lycoris-restore-review` 容器。
 - 认证最终形态（CSRF、多因素等）另案重设计，本轮不引入 JWT/OAuth。

@@ -15,8 +15,10 @@ name = "lycoris-backend"
 path = "src/main.rs"
 
 [dependencies]
-axum = "0.8.9"
+axum = { version = "0.8.9", features = ["multipart"] }
 bytes = "1"
+# 复用 tower-http/axum body limit 的 `LengthLimitError` 类型，沿 source 链识别真实超限。
+http-body-util = "0.1.5"
 image = { version = "0.25.10", default-features = false, features = [
     "gif",
     "jpeg",
@@ -44,6 +46,9 @@ tokio = { version = "1.53.1", features = [
 ] }
 tower = { version = "0.5.3", features = ["util"] }
 tower-http = { version = "0.7.1", features = ["cors", "limit", "timeout"] }
+# 阶段 2 头像/阶段 3 图片上传：multipart 读取与文件流式响应体。
+# axum `multipart` 提供 multer 解析；`tokio-util::io::ReaderStream` 包装文件句柄。
+tokio-util = { version = "0.7.19", features = ["io"] }
 fred = { version = "10.1.0", features = ["i-scripts"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
@@ -63,3 +68,5 @@ bcrypt = "0.19.3"
 [dev-dependencies]
 # 仅测试：解码 Java 生成的合成 BCrypt 向量（password 列 base64）。
 base64 = "0.22.1"
+# 仅测试：构造中途出错的请求体流，验证 JSON 读取失败为 400 而非 413。
+futures-util = "0.3"

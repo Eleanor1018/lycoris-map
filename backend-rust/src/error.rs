@@ -183,6 +183,8 @@ pub enum AppError {
     Config(#[from] crate::config::ConfigError),
     #[error("迁移校验失败: {0}")]
     Migration(#[from] crate::migrate::MigrationError),
+    #[error("媒体存储初始化失败: {0}")]
+    Media(#[from] crate::media::MediaError),
     #[error("数据库连接或查询失败")]
     Database(#[from] sqlx::Error),
     #[error("Redis 连接或命令失败")]

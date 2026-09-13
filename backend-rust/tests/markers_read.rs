@@ -146,17 +146,37 @@ async fn insert_translation(
     .expect("插入译文失败");
 }
 
+/// 测试用 Router 包装：持有临时上传根目录，读到结束即自动清理，不写真实 `uploads/`。
+struct TestApp {
+    router: Router,
+    _upload: tempfile::TempDir,
+}
+
+impl std::ops::Deref for TestApp {
+    type Target = Router;
+
+    fn deref(&self) -> &Self::Target {
+        &self.router
+    }
+}
+
 fn app_with(
     pool: PgPool,
     redis: Client,
     db_url: &str,
     namespace: &str,
     cache_enabled: bool,
-) -> Router {
+) -> TestApp {
     let mut config = Config::new(db_url, test_redis_url());
     config.marker_cache_namespace = namespace.to_string();
     config.marker_cache_enabled = cache_enabled;
-    build_router(AppState::new(pool, redis, config))
+    let upload = tempfile::TempDir::new().expect("创建临时上传目录失败");
+    config.upload_dir = upload.path().to_path_buf();
+    let router = build_router(AppState::new(pool, redis, config).expect("构造 AppState 失败"));
+    TestApp {
+        router,
+        _upload: upload,
+    }
 }
 
 fn parse(body: &[u8]) -> Value {

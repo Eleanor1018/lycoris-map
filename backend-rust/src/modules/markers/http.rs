@@ -13,9 +13,10 @@ use axum::routing::get;
 use serde::Deserialize;
 
 use crate::app::AppState;
+use crate::auth::OptionalUser;
 use crate::error::{ApiError, ErrorShape};
 use crate::modules::markers::localization;
-use crate::modules::markers::model::MarkerDto;
+use crate::modules::markers::model::{MarkerDto, Viewer};
 
 const DEFAULT_NEARBY_RADIUS: i32 = 1000;
 const DEFAULT_NEARBY_CATEGORY: &str = "accessible_toilet";
@@ -146,9 +147,20 @@ async fn detail(
     Path(id): Path<i64>,
     headers: HeaderMap,
     Query(params): Query<LangOnly>,
+    user: OptionalUser,
 ) -> Response {
     let lang = localization::for_read(params.lang.as_deref(), &headers);
-    match state.markers.detail(id, None, lang).await {
+    // 按当前数据库身份构造真实 Viewer：属主/管理员可见私有待审，其他匿名 404。
+    let identity = user.0;
+    let public_id = identity
+        .as_ref()
+        .map(|identity| identity.user.public_id.to_string());
+    let viewer = identity.as_ref().map(|identity| Viewer {
+        public_id: public_id.as_deref(),
+        role: identity.user.role.as_str(),
+        deleted: identity.user.deleted,
+    });
+    match state.markers.detail(id, viewer.as_ref(), lang).await {
         Ok(Some(marker)) => json_marker(&marker),
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(error) => error_response(error),

@@ -1,7 +1,10 @@
-//! HTTP 路由。`auth` 为 AuthController 对应接口，`admin` 为管理员接口。
+//! HTTP 路由。`auth` 为 AuthController 对应接口，`admin` 为管理员接口，
+//! `avatar` 为头像接口，`uploads` 为受控图片读取。
 
 pub mod admin;
 pub mod auth;
+pub mod avatar;
+pub mod uploads;
 
 use std::net::{IpAddr, SocketAddr};
 

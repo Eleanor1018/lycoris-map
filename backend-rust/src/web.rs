@@ -17,9 +17,11 @@ use cookie::Cookie;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
+use tokio_util::io::ReaderStream;
 
 use crate::config::Config;
 use crate::error::{ApiReply, ApiResponse};
+use crate::media::OpenedImage;
 
 /// JSON 请求体上限（远小于全局 8 MiB；认证请求体本就很小）。
 const JSON_BODY_LIMIT: usize = 64 * 1024;
@@ -80,7 +82,7 @@ pub fn empty(status: StatusCode) -> Response {
 }
 
 /// 自定义 JSON 提取器：按媒体类型（分号前）精确判断，`application/json` 或 `+json`
-/// 后缀才接受，`application/jsonp` 之类一律 415；解析失败 400；超限 413。
+/// 后缀才接受，`application/jsonp` 之类一律 415；解析失败/请求体读取失败 400；真实超限 413。
 /// 以贴近 Java `@RequestBody` 行为，而不是 Axum 默认的 415/422。
 pub struct JsonBody<T>(pub T);
 
@@ -104,14 +106,34 @@ where
             ));
         }
 
-        let bytes = axum::body::to_bytes(req.into_body(), JSON_BODY_LIMIT)
-            .await
-            .map_err(|_| text(StatusCode::PAYLOAD_TOO_LARGE, "请求体过大"))?;
+        // 只有真正的 `LengthLimitError`（含嵌套）才是 413，且与本轮统一 413 契约复用同一文案；
+        // 截断/网络读取失败是 400，不把损坏的请求体误报为超限。
+        let bytes = match axum::body::to_bytes(req.into_body(), JSON_BODY_LIMIT).await {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                if is_length_limit_error(&error) {
+                    return Err(crate::multipart::payload_too_large_response());
+                }
+                return Err(text(StatusCode::BAD_REQUEST, "请求体读取失败"));
+            }
+        };
         match serde_json::from_slice::<T>(&bytes) {
             Ok(value) => Ok(JsonBody(value)),
             Err(_) => Err(text(StatusCode::BAD_REQUEST, "请求参数不合法")),
         }
     }
+}
+
+/// 沿整条 `source()` 链判断是否为 body 长度超限。
+///
+/// tower-http / axum 的 `Limited` 内部产生 `http_body_util::LengthLimitError`，可能被
+/// `Box<dyn Error>`、`axum::Error`、`multer::Error` 等多层包裹；仅检查单层 type 会漏判，
+/// 因此这里递归遍历 source 链，不依赖错误字符串。JSON 提取器与 multipart 共用。
+pub fn is_length_limit_error(error: &(dyn std::error::Error + 'static)) -> bool {
+    if error.is::<http_body_util::LengthLimitError>() {
+        return true;
+    }
+    error.source().is_some_and(is_length_limit_error)
 }
 
 /// 媒体类型按 `;` 前的主类型判断；接受 `application/json` 与 `*/*+json`，
@@ -195,4 +217,27 @@ pub fn to_json<T: Serialize>(value: &T) -> Value {
 /// 便于在 handler 中构造空体 `Body`。
 pub fn empty_body() -> Body {
     Body::empty()
+}
+
+/// 以流式响应发送已打开的图片文件。
+///
+/// 使用 `ReaderStream` 包装文件句柄作为 `Body`，**不整张读入内存**；`Content-Length`
+/// 取文件句柄 metadata，并设置 `Content-Type`、`X-Content-Type-Options: nosniff` 与调用方
+/// 指定的 `Cache-Control`。打开之后的流错误由连接层传播，不在此预先假定完整成功。
+pub fn stream_image(opened: OpenedImage, cache_control: &'static str) -> Response {
+    let OpenedImage {
+        file,
+        content_type,
+        len,
+    } = opened;
+    let body = Body::from_stream(ReaderStream::new(file));
+    let builder = Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::CONTENT_LENGTH, len.to_string())
+        .header(header::CACHE_CONTROL, cache_control)
+        .header("x-content-type-options", "nosniff");
+    builder
+        .body(body)
+        .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }

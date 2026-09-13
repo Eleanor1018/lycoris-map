@@ -21,6 +21,8 @@ use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::timeout::TimeoutLayer;
 
 use crate::config::{Config, REQUEST_BODY_LIMIT_BYTES};
+use crate::error::AppError;
+use crate::media::{ImageStore, MediaService};
 use crate::modules::markers::cache::MarkerCache;
 use crate::modules::markers::repository::MarkerRepository;
 use crate::modules::markers::service::MarkerService;
@@ -44,17 +46,27 @@ pub struct AppState {
     pub session: SessionStore,
     pub passwords: PasswordHasher,
     pub rate_limiter: RegisterRateLimiter,
+    /// 图片存储核心（头像/点位图片共用）。
+    pub images: ImageStore,
+    /// 媒体业务编排（头像、受控 `/uploads` 读取、点位图片提案）。
+    pub media: MediaService,
 }
 
 impl AppState {
-    pub fn new(db: PgPool, redis: Client, config: Config) -> Self {
+    /// 构造共享状态。
+    ///
+    /// 图片存储根目录在启动时创建并 canonicalize；失败返回明确错误，
+    /// **不** `unwrap`/`panic`。`main` 在 `--migrate` 路径不会构造 `AppState`，
+    /// 因此迁移不会初始化上传路径。
+    pub fn new(db: PgPool, redis: Client, config: Config) -> Result<Self, AppError> {
+        let cache = MarkerCache::new(
+            redis.clone(),
+            config.marker_cache_enabled,
+            config.marker_cache_namespace.clone(),
+        );
         let markers = MarkerService::new(
             MarkerRepository::new(db.clone()),
-            MarkerCache::new(
-                redis.clone(),
-                config.marker_cache_enabled,
-                config.marker_cache_namespace.clone(),
-            ),
+            cache.clone(),
             config.availability_zone,
         );
         let session = SessionStore::new(
@@ -74,7 +86,9 @@ impl AppState {
             config.register_rate_limit_window,
             config.redis_command_timeout,
         );
-        Self {
+        let images = ImageStore::new(&config.upload_dir, config.media_max_concurrency)?;
+        let media = MediaService::new(db.clone(), images.clone(), cache);
+        Ok(Self {
             db,
             redis,
             config: Arc::new(config),
@@ -82,7 +96,9 @@ impl AppState {
             session,
             passwords,
             rate_limiter,
-        }
+            images,
+            media,
+        })
     }
 }
 
@@ -101,6 +117,14 @@ pub fn build_router(state: AppState) -> Router {
         .route(
             "/api/me",
             get(routes::auth::me).patch(routes::auth::update_me),
+        )
+        .route(
+            "/api/me/avatar",
+            get(routes::avatar::me_avatar).post(routes::avatar::upload_avatar),
+        )
+        .route(
+            "/api/users/{public_id}/avatar",
+            get(routes::avatar::user_avatar),
         )
         .route(
             "/api/me/password",
@@ -125,19 +149,40 @@ pub fn build_router(state: AppState) -> Router {
             "/api/admin/users/{id}/restore",
             axum::routing::post(routes::admin::restore_user),
         )
+        // 阶段 2：受控 `/uploads` 读取。目录白名单拆成显式路由：
+        // `avatars` 不加载会话（匿名可读，保持 Java 语义）；`markers` 接 `OptionalUser`。
+        .route(
+            "/uploads/avatars/{filename}",
+            get(routes::uploads::serve_avatar),
+        )
+        .route(
+            "/uploads/markers/{filename}",
+            get(routes::uploads::serve_marker),
+        )
         // `route_layer` 在路由匹配后执行，因此能读到 `MatchedPath` 路由模板。
         .route_layer(middleware::from_fn(log_requests))
-        // 写请求来源校验对所有路由（含 login/register/logout）生效。
+        // 写请求来源校验对所有路由（含 login/register/logout 与 multipart）生效。
         .layer(middleware::from_fn_with_state(
             origin_state,
             enforce_write_origin,
         ))
-        .layer(cors)
+        // multipart 上传显式覆盖 Axum 默认 2 MiB 为 8 MiB。
+        .layer(axum::extract::DefaultBodyLimit::max(
+            REQUEST_BODY_LIMIT_BYTES,
+        ))
+        // tower-http 标准全局请求体上限 8 MiB：已知 Content-Length 超限直接 413，
+        // 未知长度的流式 body 由 `Limited` 在读取时抛 `LengthLimitError`（沿 source 链识别）。
         .layer(RequestBodyLimitLayer::new(REQUEST_BODY_LIMIT_BYTES))
         .layer(TimeoutLayer::with_status_code(
             StatusCode::REQUEST_TIMEOUT,
             request_timeout,
         ))
+        // 把 tower-http 的空体/文本 413 统一为 GlobalExceptionHandler 形状；JSON 提取器自己的
+        // 结构化 413（application/json）原样保留，避免把损坏请求体误报为“图片太大”。
+        .layer(middleware::from_fn(normalize_payload_too_large))
+        // CORS 为最外层：限流/标准化后的 413 与其它响应都由它统一补齐
+        // Access-Control-Allow-Origin/Credentials 与 Vary；非白名单不发 allow-origin。
+        .layer(cors)
         .with_state(state)
 }
 
@@ -158,6 +203,27 @@ fn build_cors(origins: &[axum::http::HeaderValue]) -> CorsLayer {
             HeaderName::from_static("x-app-language"),
         ])
         .allow_origin(AllowOrigin::list(origins.to_vec()))
+}
+
+/// 把 tower-http 全局请求体上限产生的 413（空体/文本）统一为 `GlobalExceptionHandler` 的
+/// `ApiResponse{code:413,message:"上传文件过大，请选择 5MB 以内的图片",data:null}`。
+///
+/// 已是 `application/json` 的响应（如 JSON 提取器自己的 `请求体过大`）原样返回，
+/// 不退化为空体、不覆盖其内容相关头；跨域头由更外层的 CORS 统一补齐。
+async fn normalize_payload_too_large(request: Request, next: Next) -> Response {
+    let response = next.run(request).await;
+    if response.status() != StatusCode::PAYLOAD_TOO_LARGE {
+        return response;
+    }
+    let already_json = response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.starts_with("application/json"));
+    if already_json {
+        return response;
+    }
+    crate::multipart::payload_too_large_response()
 }
 
 /// 访问日志：只记录路由模板、方法、状态与耗时，不记录带查询串的完整 URI。

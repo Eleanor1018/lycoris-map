@@ -45,8 +45,11 @@ async fn migrates_baseline_and_passes_health_checks() {
     assert_eq!(applied, 1, "基线应只包含一条迁移");
 
     let redis = connect_redis().await;
-    let config = Config::new(temp.url(), test_redis_url());
-    let router = build_router(AppState::new(pool.clone(), redis, config));
+    let mut config = Config::new(temp.url(), test_redis_url());
+    let _upload = tempfile::TempDir::new().expect("创建临时上传目录失败");
+    config.upload_dir = _upload.path().to_path_buf();
+    let router =
+        build_router(AppState::new(pool.clone(), redis, config).expect("构造 AppState 失败"));
 
     let live = router
         .clone()
@@ -88,8 +91,10 @@ async fn ready_reports_503_when_database_unavailable() {
         .expect("构造坏 PG 连接池失败");
 
     let redis = connect_redis().await;
-    let config = Config::new(UNREACHABLE_PG_URL, test_redis_url());
-    let router = build_router(AppState::new(bad_db, redis, config));
+    let mut config = Config::new(UNREACHABLE_PG_URL, test_redis_url());
+    let _upload = tempfile::TempDir::new().expect("创建临时上传目录失败");
+    config.upload_dir = _upload.path().to_path_buf();
+    let router = build_router(AppState::new(bad_db, redis, config).expect("构造 AppState 失败"));
 
     let response = router
         .oneshot(
@@ -114,8 +119,11 @@ async fn ready_reports_503_when_redis_unavailable() {
     migrate::run(&pool).await.expect("执行基线迁移失败");
 
     let redis = unreachable_redis();
-    let config = Config::new(temp.url(), UNREACHABLE_REDIS_URL);
-    let router = build_router(AppState::new(pool.clone(), redis, config));
+    let mut config = Config::new(temp.url(), UNREACHABLE_REDIS_URL);
+    let _upload = tempfile::TempDir::new().expect("创建临时上传目录失败");
+    config.upload_dir = _upload.path().to_path_buf();
+    let router =
+        build_router(AppState::new(pool.clone(), redis, config).expect("构造 AppState 失败"));
 
     let response = router
         .oneshot(

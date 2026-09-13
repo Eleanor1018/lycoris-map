@@ -48,9 +48,11 @@
 
 阶段 2 新增直接依赖（已编译、已写入 `Cargo.lock`）：`cookie 0.18.2`、`bcrypt 0.19.3`；
 `fred 10.1.0` 启用 `i-scripts` feature 以使用 `EVAL`（默认 `i-std` 不含 scripts 接口）。
+媒体与上传另加入 `image 0.25.10`（`default-features=false`，启用 gif/jpeg/png/webp）、
+`tempfile 3.27.0`；本改动新增 `axum` 的 `multipart` feature（传递 `multer 3.1.0`）与
+`tokio-util 0.7.19`（`io` feature，`ReaderStream` 流式响应），均只加不降级已有依赖。
 tower-sessions 0.15.0 经温晓评估后**未采用**：其通用记录保存默认整份覆写，不提供本项目
 所需的字段级原子条件更新；改用范围有限的类型化 Redis 会话模块（见 `auth-design.md`）。
-后续仍待候选：image 0.25.10 等按业务需要逐个加入。
 
 ## 结构差异（生产结构与 Java 实体）
 
@@ -265,8 +267,81 @@ REJECTED 立即隐藏、内容修改读取最新、坏 JSON 与 Redis 故障回�
   （path 取自 `Parts.uri`，timestamp 为当前 UTC 毫秒）；401 与二级密码 403 文本不变，
   点位属主 403 中文纯文本不变。
 
-未完成项：头像 3 路由、点位模块（另一任务，合并后接入 `OptionalUser`）；媒体流式存储由另一
-media 任务负责。本轮未 commit/push。`.sqlx` 已生成但未提交，合并后由温晓统一 `prepare`。
+未完成项（当时）：头像 3 路由、点位模块；媒体流式存储由另一 media 任务负责。其后已在主工作
+树整合并接入头像/受控读取，见下一节。该独立改动未 commit/push。
+
+
+### 阶段 2：认证/用户/头像集成与受控图片读取（2026-09-14，主工作树 `refactor/rust-backend`）
+
+在主工作树整合认证核心、公开点位读取、`ImageStore`/`MediaService` 后，接入头像 HTTP 与
+受控 `/uploads` 读取，并把私有点位 detail 接到真实数据库身份。范围仅 `backend-rust/` 与
+`docs/rust-migration/`，未改 Java/前端/服务器/恢复库/备份，未 commit/push。
+
+- `GET /api/markers/{id}` 接 `OptionalUser`，按当前数据库身份构造真实 `Viewer`
+  （`publicId`/`role`/`deleted`）：属主/管理员可见私有待审，其他匿名 `404`。其余四个公开读接口
+  保持匿名，不加载会话、不伪造身份。
+- 头像 3 路由：`GET /api/me/avatar`（`CurrentUser`）、`GET /api/users/{publicId}/avatar`（匿名）、
+  `POST /api/me/avatar`（`CurrentUser` + 写来源校验 + multipart `file`）。读取只接受合法
+  `/uploads/avatars/*` 引用，用户缺失/已删/无图/非法引用 `404` 空体；成功为流式图片，
+  MIME 按扩展名，`Cache-Control: public, max-age=600`、`X-Content-Type-Options: nosniff`。
+  上传使用 `MediaService.upload_avatar(user.id, user.row_version, user.public_id, bytes)`，
+  `Updated` 后以固定 SQL 回读最新 `UserResponse` 返回 `ApiResponse{code:0}`，不覆盖其它资料列；
+  `NotFound` → `404`、`VersionConflict` → `409 ApiResponse`。PG 提交后回读失败只记录并返回
+  本次已写入结果，绝不谎称上传回滚。
+- 受控读取拆成 `/uploads/avatars/{filename}`（匿名、不加载会话）与
+  `/uploads/markers/{filename}`（接 `OptionalUser`，权限交 `MediaService.open_uploads`）。
+  合法读取用 `tokio_util::io::ReaderStream` 包装 `OpenedImage.file` 作 Body，带
+  `Content-Type`/`Content-Length`/`Cache-Control: no-store`/`nosniff`；非法/缺失/不可见 `404` 空体，
+  不整张读入内存，Open 之后的流错误交连接层传播。
+- `AppState` 统一持有 `ImageStore`/`MediaService`（一个图片 CPU 并发许可，`MEDIA_MAX_CONCURRENCY`
+  默认 1，必须为正值）；启动构造失败返回明确错误而非 `unwrap`/`panic`；`--migrate` 不初始化
+  上传路径。其余认证/点位 state 保持不变。
+- multipart 显式覆盖 Axum 默认 2 MiB 为 8 MiB（`DefaultBodyLimit`）；**恢复 tower-http 全局
+  `RequestBodyLimitLayer` 8 MiB**，对所有接口（含不读 body 的 `GET /health/*`）按已知
+  `Content-Length` 提前 413，未知长度流式 body 在读取时由 `Limited` 抛 `LengthLimitError`。
+  逐块读取文件累计 `<=5 MiB`、不依赖 `Content-Length`；读到 multipart 结束以覆盖无长度尾随
+  字段，未知字段流式丢弃，重复 `file`/缺 `file`/空文件明确 `400`。
+- 超限识别沿整条 `source()` 链检测 `http_body_util::LengthLimitError`（`web::is_length_limit_error`
+  供 JSON 提取器与 multipart 共用），不再依赖 Axum 单层 `status()`，也不靠错误字符串。tower-http
+  全局限制产生的 413 统一为
+  `ApiResponse{code:413,message:"上传文件过大，请选择 5MB 以内的图片",data:null}`；JSON 提取器
+  保持 64 KiB，真实超限为结构化 413 并复用统一文案 `上传文件过大，请选择 5MB 以内的图片`，截断/网络读取失败
+  为 400 `请求体读取失败`，不误报为图片过大。
+- `src/multipart.rs` 只提供读取错误分类，响应形状由调用接口**显式选择**（`ErrorShape` 参数）：
+  头像用 `ApiResponse`，且 `avatar_media_error_response` 对 `Internal` 保持 Java
+  `AuthController.uploadAvatar` 的 `500 "上传失败"`；通用 `media_error_response` 供未来管理员
+  媒体业务仍用一般内部错误，阶段 3 点位图片业务错误用中文纯文本（全局 413 与乐观锁 409 例外
+  仍为 `ApiResponse`），避免未来复用后静默改变点位错误体。
+- CORS 调整为最外层，包住 `normalize_payload_too_large` 与全局请求上限：已允许 Origin 的
+  已知 `Content-Length` 超限 413 与流式 multipart 超限 413 都带
+  `Access-Control-Allow-Origin`/`Credentials` 与 `Vary`；非白名单 Origin 不发 allow-origin。
+- `Config`/Origin/Session 核心逻辑保留；写来源中间件覆盖 multipart；未对 GET 强制身份。
+- `scripts/check-rust.ps1`：在任何 `cargo sqlx database create` / `migrate` 之前先校验
+  scheme（PG 仅 `postgres`/`postgresql`，Redis 仅 `redis`/`rediss`）、主机（仅
+  `127.0.0.1`/`::1`/`localhost` 或静态 `IPAddress.IsLoopback`，移除 `127.` 前缀授权）、
+  拒绝任何 query/fragment（SQLx 的 `host`/`hostaddr`/`dbname` 覆盖参数）与编码/非法库路径，
+  迁移目标只允许完整 `lycoris_rust` 或 `^lycoris_test_[A-Za-z0-9_]+$`（拒绝
+  `restore_review`/`contract_review` 等）；参数错误不回显连接串或密码；未显式设置
+  `RUST_TEST_THREADS` 时默认 4 并提示不要多工作树同时跑门禁；不枚举或批量删除
+  `lycoris_test_*`。
+
+验证（`backend-rust/scripts/check-rust.ps1`，仅回环合成服务，测试并发默认 4）：
+`cargo sqlx prepare --check -- --all-targets`、`SQLX_OFFLINE=true cargo check --all-targets`、
+`cargo fmt --all -- --check`、`cargo clippy --all-targets -- -D warnings`、`cargo test` 全部通过；
+**126 个测试通过、0 失败、0 跳过**（39 单元 + 28 认证 PG/Redis + 9 基础集成 + 17 公开点位 +
+16 图片存储 + 8 媒体业务 + 9 媒体 HTTP）。`.sqlx` 实际以 `cargo sqlx prepare -- --all-targets`
+重新生成并通过 `--check`；本轮未新增 SQL。
+
+脚本拒绝路径另做了**不连接目标**的实跑（仅触发校验即退出）：
+`db.example.com`（非回环）→ 拒绝；`127.0.0.1/restore_review` 与 `contract_review` → 拒绝；
+`?host=evil.example.com`、`?dbname=restore_review`（query 覆盖）→ 拒绝；
+`mysql://`（错误 scheme）→ 拒绝；`127.example.invalid`（前缀伪装）→ 拒绝；
+`lycoris%2Frust`（编码分隔符）→ 拒绝；默认 `lycoris_rust` 正常执行门禁。所有错误信息均不含
+连接串或密码。
+
+未完成项（不声称阶段 3 完成）：点位图片上传 `POST /api/markers/{id}/image`、管理员图片提案
+提交/审批与 `cleanup-missing-images` 的 HTTP 路由尚未挂载，`MediaService` 仅为核心准备；
+点位写入/编辑/审核路由属阶段 3 另案。本改动未 commit/push，由温晓验收。
 
 
 ## 备注
