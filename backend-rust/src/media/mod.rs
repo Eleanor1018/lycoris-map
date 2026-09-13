@@ -1,9 +1,13 @@
-//! 图片存储与读取核心（阶段 2 头像、阶段 3 点位图片共用）。
+//! 图片存储与读取核心，以及阶段 2/3 的媒体业务编排。
 //!
-//! 本模块只负责磁盘媒体本身：校验、解码重编码、原子落盘、安全读取、存在性检查，
-//! 以及清理调用方明确指出的孤立新文件。它**不做身份或权限判断**，也不解析 URL、
-//! 不注册 HTTP 路由——可见性（例如私有 `markers` 图片仅属主/管理员可见）由上层
-//! 路由与服务决定。
+//! 拆分为两层：
+//!
+//! - [`storage`]（私有实现，经本模块重导出）：图片校验、解码重编码、原子落盘、安全
+//!   读取、存在性检查与孤立新文件清理。它只处理磁盘媒体本身，**不做身份或权限判断**，
+//!   也不解析 URL、不注册 HTTP 路由。
+//! - [`service::MediaService`]：头像引用/条件更新、受控 `/uploads` 读取授权、点位图片
+//!   提案提交与管理端审批/清理。身份由调用方以可信 [`modules::markers::model::Viewer`]
+//!   传入，资源级可见性复用 `markers::model::can_view`，不另立身份系统。
 //!
 //! 关键边界：
 //!
@@ -34,7 +38,15 @@
 
 mod storage;
 
+pub mod model;
+pub mod repository;
+pub mod service;
+
+pub use model::{CleanupResult, PendingImageItem};
+pub use repository::MediaRepository;
+pub use service::{AvatarUpdateOutcome, MediaService, MediaServiceError};
 pub use storage::{
     DECODE_MAX_ALLOC_BYTES, DEFAULT_CONCURRENCY, ImageBytes, ImageStore, MAX_DIMENSION, MAX_PIXELS,
     MAX_READ_BYTES, MAX_UPLOAD_BYTES, MediaDirectory, MediaError, OpenedImage, StoredImage,
+    parse_media_url,
 };

@@ -3,8 +3,10 @@
 Lycoris Rust 后端（Axum + SQLx）工作目录。当前处于**阶段 1：骨架与公开读接口**：
 可编译运行的 lib + bin、配置、健康检查、迁移基线、集成测试，以及**公开点位读取**
 （`/api/markers/public`、`/search`、`/nearby`、`/viewport`、`/{id}`，含本地化与
-Redis 查询缓存）均已就绪；写入与认证接口尚未实现，也不接管生产流量。生产仍由
-`backend/` 的 Spring Boot 服务承担。
+Redis 查询缓存）均已就绪。媒体侧另有**未挂载路由**的 `MediaService`（头像条件更新、
+受控 `/uploads` 读取、图片提案提交/审批、失效图片清理，见下文），依赖可信身份由未来
+HTTP 层传入，因此暂不接线 HTTP。写入路由、认证接口与 `OptionalViewer` 尚未接通，也不
+接管生产流量；生产仍由 `backend/` 的 Spring Boot 服务承担。
 
 ## 目录
 
@@ -17,7 +19,7 @@ Redis 查询缓存）均已就绪；写入与认证接口尚未实现，也不�
 | `src/app.rs` | `AppState` / Router、`/health/live`、`/health/ready`、中间件 |
 | `src/config.rs` | 环境变量配置，非法值报可读错误且不回显连接串 |
 | `src/error.rs` | 四类响应体与错误类型（不统一包裹） |
-| `src/media/` | 图片存储与读取核心（`mod.rs` + `storage.rs`，头像/点位图片共用） |
+| `src/media/` | 媒体核心与业务：`storage.rs`（存储/读取）、`model.rs`（行/DTO）、`repository.rs`（固定 SQL）、`service.rs`（`MediaService`）、`sql/*.sql`（头像/提案/清理固定语句） |
 | `src/migrate.rs` | 内嵌迁移、`--migrate` 执行与启动只读校验 |
 | `src/modules/markers/` | 公开点位读取：`model`（行/DTO）、`repository`（`sql/*.sql` + `query_file_as!`）、`localization`（语言/哈希/纯函数）、`cache`（Redis ID 缓存）、`service`、`http`（薄 handler） |
 | `migrations/0001_baseline.sql` | 从 `docs/rust-migration/schema-baseline.sql` 精确派生 |
@@ -25,6 +27,7 @@ Redis 查询缓存）均已就绪；写入与认证接口尚未实现，也不�
 | `tests/integration.rs` | 基础工程真实 PG / Redis 集成测试（临时建库并清理） |
 | `tests/markers_read.rs` | 公开点位读取真实 PG / Redis 集成测试 |
 | `tests/media.rs` | 媒体核心集成测试（合成图与真实临时目录，无需 PG/Redis） |
+| `tests/media_business.rs` | 媒体业务真实 PG / Redis / 临时文件集成测试（头像、访问矩阵、提案、清理） |
 | `tests/common/mod.rs` | 集成测试共享工具（临时库、回环校验、请求辅助） |
 | `scripts/check-rust.ps1` | 迁移合成开发库、校验离线元数据、离线构建并跑 fmt / clippy / test |
 | `compose.test.yml` | 隔离测试依赖：PostgreSQL 18.6 + PostGIS 3.6.4、Redis 8.10.1 |
@@ -136,6 +139,48 @@ Redis 缓存独立于 Java 的 `cache:marker:*` 命名空间，只存 ID 与缓�
 - **权限**：`root`（`UPLOAD_DIR`）必须由服务运行用户独占写权限，其他本地用户不可写，
   以免放入可执行内容或替换目录。核心不引入 `unsafe`。
 
+## 受控媒体业务（阶段 2 头像 / 阶段 3 图片）
+
+`MediaService`（`src/media/service.rs`）构造只依赖 `PgPool` + `ImageStore` +
+`MarkerCache`；**身份由调用方以可信 `Viewer` / 用户名 / 用户 ID 传入**，本层不解析会话、
+不信任请求字段，只做资源级授权与一致性校验，并复用 `markers::model::can_view`。
+
+可供后续 HTTP 接入的方法：
+
+| 方法 | 对应接口 | 要点 |
+| --- | --- | --- |
+| `avatar_url_by_public_id(public_id)` | `GET /api/users/{publicId}/avatar` | 非删除用户且存储值为合法 `/uploads/avatars/*` 才返回 URL，否则 `None`（404） |
+| `avatar_url_by_user_id(user_id)` | `GET /api/me/avatar` | 同上 |
+| `upload_avatar(user_id, expected_row_version, caller_public_id, bytes)` | `POST /api/me/avatar` | 保存后以 `id + deleted=false + row_version` 条件更新 `avatar_url` 与 `row_version`，**不覆盖资料其他列**；返回 `Updated`/`NotFound`/`VersionConflict` |
+| `open_uploads(directory, filename, viewer)` | `GET /uploads/{directory}/{filename}` | 授权后返回流式 `OpenedImage`，不整张读入内存；非法/不存在/不可见一律 404 |
+| `submit_marker_image(id, viewer, username, public_id, bytes)` | `POST /api/markers/{id}/image` | 可见性检查在解码前；落盘后事务内重锁点位复检，插入 `PENDING` 提案，点位不变，返回原 `MarkerRow` |
+| `list_pending_images(viewer)` | `GET /api/admin/markers/pending-images` | 8 字段、`createdAt DESC` |
+| `approve_image_proposal(id, viewer, reviewer)` / `reject_image_proposal(...)` | 管理员图片审批 | 一次性、同事务 |
+| `cleanup_missing_images(viewer)` | `POST /api/admin/markers/cleanup-missing-images` | `{checked,cleared,message}` |
+
+- 错误类型 `MediaServiceError` 提供 `status()` 与 `message()`（如 `图片提案不存在`、
+  `关联点位不存在`、`该提案已处理`），HTTP 层据此选择响应形状；管理员与二次验证由 HTTP
+  层负责，本层只校验管理员角色。文件过大有显式 `PayloadTooLarge` 分支：`status()` 为 413、
+  `message()` 为 `上传文件过大，请选择 5MB 以内的图片`、`is_payload_too_large()` 为真，HTTP
+  用枚举/方法分支而非字符串匹配。解码失败等输入问题是 400，编码失败是 500。
+- 日志只记录受控信息：数据库错误记录 `context` + SQLSTATE/约束名，Redis 记录 `error_kind`，
+  I/O 记录 `io_kind`；不输出底层完整错误、参数、图片 URL 或用户字段。
+- `/uploads` 授权：`avatars` 匿名可读；`markers` 先看直接引用点位是否 `can_view`，否则
+  要求 viewer 存在且图片提案 `INNER JOIN` 仍存在的点位，再满足管理员 / 点位属主 /
+  （提案作者且可见）。**提案状态不参与判断**；已删除 viewer 只能与匿名同权（不得凭旧
+  ADMIN/属主/提案作者身份读取私有图片）；关联点位被删除后历史提案不授权任何人（含管理员）。
+- 审批在同一事务内锁提案（`PENDING`）→ 锁并更新点位 `mark_image` 与 `version` → 写提案
+  状态/审核人/时间后提交；图片提案没有基准版本列，不伪造 base version。提交成功后以
+  500ms 超时尽力失效点位缓存，Redis 故障或超时只记录受控日志，不反转已提交结果。
+- 清理只检查 `/uploads/markers/` 引用：存在的普通文件保留；缺失或非普通文件才以
+  `id/version/mark_image` 同时匹配条件清空并 `version++`，因此并发换上的新图不会被旧
+  检查清掉；非法路径拒绝访问、权限/临时 I/O 异常保守保留 URL；**不删除任何文件**，也不
+  扫描整个上传目录。每个引用独立事务、提交后立即失效缓存，因此循环中途失败时已提交的
+  清理保留且已失效缓存，未提交部分不生效，**不假称全量回滚**。
+- 文件生命周期：落盘成功才允许写数据库引用；数据库写入失败或结果不确定时保留本次新建
+  的孤立文件，且**不自动删除旧头像文件**（Java 本就保留）。跨 DB+FS 的原子性不在本轮
+  承诺内；待有引用审计后再设计孤立文件清理。
+
 ## 迁移边界（重要）
 
 - `migrations/0001_baseline.sql` 只用于**空库初始化**，与
@@ -186,7 +231,7 @@ cargo test --manifest-path backend-rust/Cargo.toml
 - 不包含应用容器，不接入生产，不保存真实数据；只使用合成测试服务。
 - 不操作 `lycoris-restore-review` 容器（温晓的私有恢复验收环境）。
 - 认证暂留既有语义，`tower-sessions` 不降级，适配设计由温晓在后续阶段确定。
-- 本阶段只交付公开点位读取；写接口、认证与 `OptionalViewer` 未实现，`isActive` 读取
+- 本阶段只交付公开点位读取；写路由、认证与 `OptionalViewer` 未实现，`isActive` 读取
   计算不回写数据库、不推进 `version`。
-- 媒体核心已就绪但尚未挂载路由：`/uploads/*` 与头像上传/读取的授权、缓存头与响应
-  形状由后续接口实现；核心不宣称已完成图片授权。
+- 媒体核心与 `MediaService` 业务已就绪但尚未挂载路由：`/uploads/*`、头像与图片提案的
+  HTTP 授权、二次验证、缓存头与响应形状由后续接口实现；核心不宣称已完成 HTTP 接线。

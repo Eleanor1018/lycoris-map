@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users\nSET avatar_url = $1,\n    row_version = row_version + 1\nWHERE id = $2\n  AND deleted = false\n  AND row_version = $3\nRETURNING avatar_url, row_version\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "avatar_url",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "avatar_url"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "row_version",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "row_version"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "3b24e2243f994c2774a4d1aa10e0038866e23a73cf2345365773e5a80da21ed1"
+}

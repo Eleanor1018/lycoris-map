@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO marker_image_proposals\n    (marker_id, marker_title, proposer_username, proposer_public_id, image_url, status, created_at)\nVALUES ($1, $2, $3, $4, $5, 'PENDING', now())\nRETURNING id\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "marker_image_proposals",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1958200e74fbb69d205069c8cdb6a43141ecb7026ff4d66c868b70fb01d598a6"
+}

@@ -1,0 +1,136 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n    id, marker_id, marker_title, proposer_username, proposer_public_id,\n    image_url, status, reviewed_by, reviewed_at, created_at\nFROM marker_image_proposals\nWHERE id = $1\nFOR UPDATE\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "marker_image_proposals",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "marker_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "marker_image_proposals",
+            "name": "marker_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "marker_title",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "marker_image_proposals",
+            "name": "marker_title"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "proposer_username",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "marker_image_proposals",
+            "name": "proposer_username"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "proposer_public_id",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "marker_image_proposals",
+            "name": "proposer_public_id"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "image_url",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "marker_image_proposals",
+            "name": "image_url"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "status",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "marker_image_proposals",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "reviewed_by",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "marker_image_proposals",
+            "name": "reviewed_by"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "reviewed_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "marker_image_proposals",
+            "name": "reviewed_at"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "marker_image_proposals",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "2b815c1fb9af7f64f615de42a1c535263e1c1c8653ef7ba906aef7b4b584159d"
+}

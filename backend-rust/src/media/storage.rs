@@ -367,6 +367,18 @@ fn content_type(filename: &str) -> Option<&'static str> {
     }
 }
 
+/// 解析对外媒体 URL：仅接受 `/uploads/{avatars|markers}/{合法文件名}`。
+///
+/// 目录不在白名单、文件名含路径分隔符/穿越片段/不在图片后缀白名单时返回 `None`。
+/// 供业务层在打开文件或信任存储值前，先做与存储核心一致的安全校验。
+pub fn parse_media_url(url: &str) -> Option<(MediaDirectory, &str)> {
+    let rest = url.strip_prefix("/uploads/")?;
+    let (directory, filename) = rest.split_once('/')?;
+    let directory = MediaDirectory::parse(directory)?;
+    validate_filename(filename).ok()?;
+    Some((directory, filename))
+}
+
 /// 解析 root 内的普通文件路径。
 ///
 /// 不合法（越界、符号链接、非普通文件、缺失）返回 `Ok(None)`；目录/文件名校验
