@@ -27,6 +27,50 @@ pub const DEFAULT_MARKER_CACHE_NAMESPACE: &str = "lycoris:rust:marker";
 /// 图片自身的 5 MiB 校验在后续上传业务中实现。
 pub const REQUEST_BODY_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 
+/// 默认会话 Cookie 名。批量并行验收可用 `SESSION_COOKIE_NAME` 覆盖为独立名，
+/// 避免与 Java 的 `LYCORIS_SESSION` 混用。
+pub const DEFAULT_SESSION_COOKIE_NAME: &str = "LYCORIS_SESSION";
+/// 默认会话 Redis 命名空间（与 Java Spring Session 的 `lycoris:session` 隔离）。
+pub const DEFAULT_SESSION_NAMESPACE: &str = "lycoris:rust:session:v1";
+/// 默认注册限流命名空间。
+pub const DEFAULT_RATE_LIMIT_NAMESPACE: &str = "lycoris:rust:ratelimit:v1";
+/// 默认会话有效期 30 天。
+pub const DEFAULT_SESSION_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+/// 管理员二次验证有效期 30 分钟。
+pub const DEFAULT_SECOND_FACTOR_TTL: Duration = Duration::from_secs(30 * 60);
+/// 注册限流默认 5 次 / 600 秒。
+pub const DEFAULT_REGISTER_RATE_LIMIT_MAX: u32 = 5;
+pub const DEFAULT_REGISTER_RATE_LIMIT_WINDOW: Duration = Duration::from_secs(600);
+/// BCrypt 默认工作因子，对齐 Java `BCryptPasswordEncoder` 默认值 10。
+pub const DEFAULT_BCRYPT_COST: u32 = 10;
+/// 管理员重置用户密码时的默认值（与 Java `admin.default-user-password` 一致）。
+pub const DEFAULT_ADMIN_USER_PASSWORD: &str = "Lycoris123!";
+
+/// 会话/ Cookie 时长上限（10 年），避免 TTL 转 i64 时溢出或误配置成天文数字。
+pub const MAX_SESSION_TTL_SECONDS: u64 = 10 * 365 * 24 * 60 * 60;
+/// 二次验证时长上限（1 天）。
+pub const MAX_SECOND_FACTOR_TTL_SECONDS: u64 = 24 * 60 * 60;
+/// 单条 Redis 命令超时上限（10 秒）。
+pub const MAX_REDIS_COMMAND_TIMEOUT_SECONDS: u64 = 10;
+
+/// Cookie `SameSite` 策略；解析时大小写不敏感，非法值回落 `Lax`。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SameSitePolicy {
+    Lax,
+    Strict,
+    None,
+}
+
+impl SameSitePolicy {
+    pub fn to_cookie(self) -> cookie::SameSite {
+        match self {
+            SameSitePolicy::Lax => cookie::SameSite::Lax,
+            SameSitePolicy::Strict => cookie::SameSite::Strict,
+            SameSitePolicy::None => cookie::SameSite::None,
+        }
+    }
+}
+
 /// 运行配置。刻意不实现 `Debug`，避免连接串或密码出现在日志中。
 #[derive(Clone)]
 pub struct Config {
@@ -36,6 +80,8 @@ pub struct Config {
     pub server_port: u16,
     pub upload_dir: PathBuf,
     pub cors_allowed_origins: Vec<HeaderValue>,
+    /// 写请求 Origin 白名单（与 CORS 分开实施）。未配置时回落到 CORS 白名单。
+    pub write_allowed_origins: Vec<HeaderValue>,
     pub db_max_connections: u32,
     pub db_acquire_timeout: Duration,
     pub db_max_lifetime: Duration,
@@ -44,6 +90,27 @@ pub struct Config {
     pub availability_zone: Tz,
     pub marker_cache_enabled: bool,
     pub marker_cache_namespace: String,
+    // —— 阶段 2：会话 ——
+    pub session_cookie_name: String,
+    pub session_cookie_secure: bool,
+    pub session_cookie_domain: Option<String>,
+    pub session_cookie_same_site: SameSitePolicy,
+    pub session_cookie_max_age: Duration,
+    pub session_ttl: Duration,
+    pub second_factor_ttl: Duration,
+    pub session_namespace: String,
+    pub rate_limit_namespace: String,
+    /// 单条 Redis 命令超时；依赖卡住时受保护操作返回 503，而不是拖到全局请求超时。
+    pub redis_command_timeout: Duration,
+    // —— 阶段 2：注册限流与代理 ——
+    pub trusted_proxies: Vec<IpAddr>,
+    pub register_rate_limit_max: u32,
+    pub register_rate_limit_window: Duration,
+    // —— 阶段 2：密码与管理员 ——
+    pub bcrypt_cost: u32,
+    pub admin_second_factor_enabled: bool,
+    pub admin_second_password_hash: Option<String>,
+    pub admin_default_user_password: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -56,6 +123,9 @@ pub enum ConfigError {
 
 impl Config {
     /// 测试或嵌入式使用的显式构造，不读取环境变量。
+    ///
+    /// 安全相关字段给出与生产默认一致的值；测试可在构造后按需覆写公开字段
+    /// （例如独立 Cookie 名与随机 Redis 命名空间）。
     pub fn new(database_url: impl Into<String>, redis_url: impl Into<String>) -> Self {
         Self {
             database_url: database_url.into(),
@@ -64,6 +134,7 @@ impl Config {
             server_port: DEFAULT_SERVER_PORT,
             upload_dir: PathBuf::from("uploads"),
             cors_allowed_origins: Vec::new(),
+            write_allowed_origins: Vec::new(),
             db_max_connections: 10,
             db_acquire_timeout: Duration::from_secs(30),
             db_max_lifetime: Duration::from_secs(1800),
@@ -72,6 +143,23 @@ impl Config {
             availability_zone: DEFAULT_AVAILABILITY_ZONE,
             marker_cache_enabled: true,
             marker_cache_namespace: DEFAULT_MARKER_CACHE_NAMESPACE.to_string(),
+            session_cookie_name: DEFAULT_SESSION_COOKIE_NAME.to_string(),
+            session_cookie_secure: false,
+            session_cookie_domain: None,
+            session_cookie_same_site: SameSitePolicy::Lax,
+            session_cookie_max_age: DEFAULT_SESSION_TTL,
+            session_ttl: DEFAULT_SESSION_TTL,
+            second_factor_ttl: DEFAULT_SECOND_FACTOR_TTL,
+            session_namespace: DEFAULT_SESSION_NAMESPACE.to_string(),
+            rate_limit_namespace: DEFAULT_RATE_LIMIT_NAMESPACE.to_string(),
+            redis_command_timeout: Duration::from_secs(2),
+            trusted_proxies: Vec::new(),
+            register_rate_limit_max: DEFAULT_REGISTER_RATE_LIMIT_MAX,
+            register_rate_limit_window: DEFAULT_REGISTER_RATE_LIMIT_WINDOW,
+            bcrypt_cost: DEFAULT_BCRYPT_COST,
+            admin_second_factor_enabled: true,
+            admin_second_password_hash: None,
+            admin_default_user_password: DEFAULT_ADMIN_USER_PASSWORD.to_string(),
         }
     }
 
@@ -102,6 +190,25 @@ impl Config {
                 .map_err(|_| ConfigError::Invalid("APP_AVAILABILITY_ZONE"))?,
             None => DEFAULT_AVAILABILITY_ZONE,
         };
+        // 写请求来源白名单独立配置；未配置时回落到 CORS 白名单（两者语义不同，见 auth-design）。
+        let write_allowed_origins = match optional("WRITE_ALLOWED_ORIGINS") {
+            Some(raw) => parse_origins(&raw)?,
+            None => cors_allowed_origins.clone(),
+        };
+
+        let admin_second_password_hash = optional("ADMIN_SECOND_PASSWORD_HASH").map(|hash| {
+            // 二级密码必须是 BCrypt 编码串；纯文本配置在启动时即拒绝，避免误配置。
+            let hash = hash.trim().to_string();
+            if looks_like_bcrypt(&hash) {
+                Ok(hash)
+            } else {
+                Err(ConfigError::Invalid("ADMIN_SECOND_PASSWORD_HASH"))
+            }
+        });
+        let admin_second_password_hash = match admin_second_password_hash {
+            Some(result) => Some(result?),
+            None => None,
+        };
 
         Ok(Self {
             database_url,
@@ -110,6 +217,7 @@ impl Config {
             server_port,
             upload_dir,
             cors_allowed_origins,
+            write_allowed_origins,
             // SQLx 连接池 0 连接会导致 panic，必须为正值。
             db_max_connections: non_zero(
                 "DB_MAX_CONNECTIONS",
@@ -123,6 +231,55 @@ impl Config {
             marker_cache_enabled: parse_or("MARKER_CACHE_REDIS_ENABLED", true)?,
             marker_cache_namespace: optional("MARKER_CACHE_NAMESPACE")
                 .unwrap_or_else(|| DEFAULT_MARKER_CACHE_NAMESPACE.to_string()),
+            session_cookie_name: validated_cookie_name(
+                &optional("SESSION_COOKIE_NAME")
+                    .unwrap_or_else(|| DEFAULT_SESSION_COOKIE_NAME.to_string()),
+            )?,
+            session_cookie_secure: parse_bool("SESSION_COOKIE_SECURE", false)?,
+            session_cookie_domain: optional("SESSION_COOKIE_DOMAIN")
+                .map(|value| validated_cookie_domain(&value))
+                .transpose()?,
+            session_cookie_same_site: parse_same_site(&optional("SESSION_COOKIE_SAME_SITE"))?,
+            session_cookie_max_age: bounded_seconds(
+                "SESSION_COOKIE_MAX_AGE_SECONDS",
+                30 * 24 * 60 * 60,
+                MAX_SESSION_TTL_SECONDS,
+            )?,
+            session_ttl: bounded_seconds(
+                "SESSION_TTL_SECONDS",
+                30 * 24 * 60 * 60,
+                MAX_SESSION_TTL_SECONDS,
+            )?,
+            second_factor_ttl: bounded_seconds(
+                "SECOND_FACTOR_TTL_SECONDS",
+                30 * 60,
+                MAX_SECOND_FACTOR_TTL_SECONDS,
+            )?,
+            session_namespace: non_empty(
+                "SESSION_NAMESPACE",
+                optional("SESSION_NAMESPACE").unwrap_or_else(|| DEFAULT_SESSION_NAMESPACE.into()),
+            )?,
+            rate_limit_namespace: non_empty(
+                "RATE_LIMIT_NAMESPACE",
+                optional("RATE_LIMIT_NAMESPACE")
+                    .unwrap_or_else(|| DEFAULT_RATE_LIMIT_NAMESPACE.into()),
+            )?,
+            redis_command_timeout: bounded_seconds(
+                "REDIS_COMMAND_TIMEOUT_SECONDS",
+                2,
+                MAX_REDIS_COMMAND_TIMEOUT_SECONDS,
+            )?,
+            trusted_proxies: parse_ip_list(&optional("TRUSTED_PROXIES").unwrap_or_default())?,
+            register_rate_limit_max: non_zero(
+                "REGISTER_RATE_LIMIT_MAX",
+                parse_or("REGISTER_RATE_LIMIT_MAX", DEFAULT_REGISTER_RATE_LIMIT_MAX)?,
+            )?,
+            register_rate_limit_window: seconds("REGISTER_RATE_LIMIT_WINDOW_SECONDS", 600)?,
+            bcrypt_cost: non_zero("BCRYPT_COST", parse_or("BCRYPT_COST", DEFAULT_BCRYPT_COST)?)?,
+            admin_second_factor_enabled: parse_bool("ADMIN_SECOND_FACTOR_ENABLED", true)?,
+            admin_second_password_hash,
+            admin_default_user_password: optional("ADMIN_DEFAULT_USER_PASSWORD")
+                .unwrap_or_else(|| DEFAULT_ADMIN_USER_PASSWORD.to_string()),
         })
     }
 }
@@ -171,6 +328,67 @@ fn seconds(key: &'static str, default_secs: u64) -> Result<Duration, ConfigError
     Ok(Duration::from_secs(secs))
 }
 
+/// 正且不超过上限的秒数，避免 TTL 溢出或以荒谬值运行。
+fn bounded_seconds(
+    key: &'static str,
+    default_secs: u64,
+    max_secs: u64,
+) -> Result<Duration, ConfigError> {
+    let secs: u64 = parse_or(key, default_secs)?;
+    if secs == 0 || secs > max_secs {
+        return Err(ConfigError::Invalid(key));
+    }
+    Ok(Duration::from_secs(secs))
+}
+
+/// Cookie 名必须是合法的 RFC 6265 token，避免运行期才产生非法响应头。
+fn validated_cookie_name(raw: &str) -> Result<String, ConfigError> {
+    let key = "SESSION_COOKIE_NAME";
+    let name = raw.trim();
+    if name.is_empty() || !name.bytes().all(is_cookie_token_byte) {
+        return Err(ConfigError::Invalid(key));
+    }
+    Ok(name.to_string())
+}
+
+/// Cookie 域不能包含控制字符或分隔符，避免响应头注入或非法字节。
+fn validated_cookie_domain(raw: &str) -> Result<String, ConfigError> {
+    let key = "SESSION_COOKIE_DOMAIN";
+    let domain = raw.trim();
+    if domain.is_empty() {
+        return Err(ConfigError::Invalid(key));
+    }
+    if domain
+        .chars()
+        .any(|c| c.is_control() || c.is_whitespace() || matches!(c, ';' | ',' | '='))
+    {
+        return Err(ConfigError::Invalid(key));
+    }
+    Ok(domain.to_string())
+}
+
+/// RFC 6265 `cookie-octet`/token 允许的字符集。
+fn is_cookie_token_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric()
+        || matches!(
+            byte,
+            b'!' | b'#'
+                | b'$'
+                | b'%'
+                | b'&'
+                | b'\''
+                | b'*'
+                | b'+'
+                | b'-'
+                | b'.'
+                | b'^'
+                | b'_'
+                | b'`'
+                | b'|'
+                | b'~'
+        )
+}
+
 /// 解析逗号分隔的 CORS 凭据白名单。
 ///
 /// 每项必须是 `http`/`https` 源，且不含路径、查询、片段或用户名密码；
@@ -215,9 +433,62 @@ fn parse_origins(raw: &str) -> Result<Vec<HeaderValue>, ConfigError> {
     Ok(origins)
 }
 
+/// 是否是 Java 侧认可的 BCrypt 编码前缀（`$2a$`/`$2b$`/`$2y$`）。
+fn looks_like_bcrypt(value: &str) -> bool {
+    value.starts_with("$2a$") || value.starts_with("$2b$") || value.starts_with("$2y$")
+}
+
+fn parse_bool(key: &'static str, default: bool) -> Result<bool, ConfigError> {
+    match optional(key) {
+        Some(value) => match value.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => Ok(true),
+            "0" | "false" | "no" | "off" => Ok(false),
+            _ => Err(ConfigError::Invalid(key)),
+        },
+        None => Ok(default),
+    }
+}
+
+/// `SameSite` 大小写不敏感；非法值回落 `Lax`（与 Java `SessionCookieConfig` 一致）。
+fn parse_same_site(raw: &Option<String>) -> Result<SameSitePolicy, ConfigError> {
+    let Some(value) = raw else {
+        return Ok(SameSitePolicy::Lax);
+    };
+    Ok(match value.trim().to_ascii_lowercase().as_str() {
+        "strict" => SameSitePolicy::Strict,
+        "none" => SameSitePolicy::None,
+        _ => SameSitePolicy::Lax,
+    })
+}
+
+/// 逗号分隔的 IP 列表；每项必须是合法 `IpAddr`，拒绝主机名（避免把不可信来源当代理）。
+fn parse_ip_list(raw: &str) -> Result<Vec<IpAddr>, ConfigError> {
+    let key = "TRUSTED_PROXIES";
+    let mut out = Vec::new();
+    for part in raw.split(',') {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        out.push(IpAddr::from_str(part).map_err(|_| ConfigError::Invalid(key))?);
+    }
+    Ok(out)
+}
+
+fn non_empty(key: &'static str, value: String) -> Result<String, ConfigError> {
+    let value = value.trim().to_string();
+    if value.is_empty() {
+        Err(ConfigError::Invalid(key))
+    } else {
+        Ok(value)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ConfigError, non_zero, parse_origins};
+    use super::{
+        ConfigError, non_zero, parse_origins, validated_cookie_domain, validated_cookie_name,
+    };
 
     #[test]
     fn origins_accept_http_and_normalize() {
@@ -244,6 +515,40 @@ mod tests {
         }
         assert!(parse_origins("").unwrap().is_empty());
         assert!(parse_origins("  ,  ").unwrap().is_empty());
+    }
+
+    #[test]
+    fn cookie_name_must_be_rfc6265_token() {
+        assert_eq!(
+            validated_cookie_name("LYCORIS_SESSION").unwrap(),
+            "LYCORIS_SESSION"
+        );
+        assert_eq!(
+            validated_cookie_name(" lycoris-rust_session.v1 ").unwrap(),
+            "lycoris-rust_session.v1"
+        );
+        for bad in ["", "   ", "bad name", "bad;name", "bad\nname", "sess=ion"] {
+            assert!(validated_cookie_name(bad).is_err(), "{bad:?} 应被拒绝");
+        }
+    }
+
+    #[test]
+    fn cookie_domain_rejects_control_and_separators() {
+        assert_eq!(
+            validated_cookie_domain("example.com").unwrap(),
+            "example.com"
+        );
+        for bad in [
+            "",
+            " ",
+            "exa mple.com",
+            "example.com;path=/",
+            "a,b",
+            "a=b",
+            "x\ty",
+        ] {
+            assert!(validated_cookie_domain(bad).is_err(), "{bad:?} 应被拒绝");
+        }
     }
 
     #[test]

@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users\nSET password = $1, session_version = session_version + 1, row_version = row_version + 1\nWHERE id = $2 AND deleted = false AND password = $3 AND row_version = $4 AND session_version = $5\nRETURNING session_version, row_version\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "session_version",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "session_version"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "row_version",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "row_version"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Int4",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "50880b4e8c04a541425f276f8a8f28e62e9af4bfcdd51a611aee53399f68bb7b"
+}

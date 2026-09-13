@@ -24,6 +24,11 @@ use crate::config::{Config, REQUEST_BODY_LIMIT_BYTES};
 use crate::modules::markers::cache::MarkerCache;
 use crate::modules::markers::repository::MarkerRepository;
 use crate::modules::markers::service::MarkerService;
+use crate::origin::enforce_write_origin;
+use crate::password::PasswordHasher;
+use crate::ratelimit::RegisterRateLimiter;
+use crate::routes;
+use crate::session::SessionStore;
 
 /// `/health/ready` 单项依赖检查的超时；保证依赖卡住时可靠返回 503，
 /// 而不会被全局请求超时先截断为 408。
@@ -36,6 +41,9 @@ pub struct AppState {
     pub redis: Client,
     pub config: Arc<Config>,
     pub markers: MarkerService,
+    pub session: SessionStore,
+    pub passwords: PasswordHasher,
+    pub rate_limiter: RegisterRateLimiter,
 }
 
 impl AppState {
@@ -49,11 +57,31 @@ impl AppState {
             ),
             config.availability_zone,
         );
+        let session = SessionStore::new(
+            redis.clone(),
+            config.session_namespace.clone(),
+            config.session_ttl,
+            config.redis_command_timeout,
+        );
+        let parallelism = std::thread::available_parallelism()
+            .map(|value| value.get())
+            .unwrap_or(4);
+        let passwords = PasswordHasher::new(config.bcrypt_cost, parallelism);
+        let rate_limiter = RegisterRateLimiter::new(
+            redis.clone(),
+            config.rate_limit_namespace.clone(),
+            config.register_rate_limit_max,
+            config.register_rate_limit_window,
+            config.redis_command_timeout,
+        );
         Self {
             db,
             redis,
             config: Arc::new(config),
             markers,
+            session,
+            passwords,
+            rate_limiter,
         }
     }
 }
@@ -62,12 +90,48 @@ impl AppState {
 pub fn build_router(state: AppState) -> Router {
     let cors = build_cors(&state.config.cors_allowed_origins);
     let request_timeout = state.config.request_timeout;
+    let origin_state = state.clone();
     Router::new()
         .route("/health/live", get(health_live))
         .route("/health/ready", get(health_ready))
         .merge(crate::modules::markers::http::router())
+        // 阶段 2：AuthController（9 个中的 6 个非头像路由）
+        .route("/api/login", axum::routing::post(routes::auth::login))
+        .route("/api/register", axum::routing::post(routes::auth::register))
+        .route(
+            "/api/me",
+            get(routes::auth::me).patch(routes::auth::update_me),
+        )
+        .route(
+            "/api/me/password",
+            axum::routing::post(routes::auth::change_password),
+        )
+        .route("/api/logout", axum::routing::post(routes::auth::logout))
+        // 阶段 2：AdminAuthController + AdminUserController（5 个）
+        .route(
+            "/api/admin/verify",
+            axum::routing::post(routes::admin::verify),
+        )
+        .route("/api/admin/users", get(routes::admin::list_users))
+        .route(
+            "/api/admin/users/{id}/reset-password",
+            axum::routing::post(routes::admin::reset_password),
+        )
+        .route(
+            "/api/admin/users/{id}",
+            axum::routing::delete(routes::admin::delete_user),
+        )
+        .route(
+            "/api/admin/users/{id}/restore",
+            axum::routing::post(routes::admin::restore_user),
+        )
         // `route_layer` 在路由匹配后执行，因此能读到 `MatchedPath` 路由模板。
         .route_layer(middleware::from_fn(log_requests))
+        // 写请求来源校验对所有路由（含 login/register/logout）生效。
+        .layer(middleware::from_fn_with_state(
+            origin_state,
+            enforce_write_origin,
+        ))
         .layer(cors)
         .layer(RequestBodyLimitLayer::new(REQUEST_BODY_LIMIT_BYTES))
         .layer(TimeoutLayer::with_status_code(

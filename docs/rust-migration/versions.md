@@ -46,7 +46,11 @@
 （0.9 已把 TLS feature 从 `rustls` 更名为 `tls-rustls`，按官方清单修正）。
 `sha2 0.10.9` 仍作为其他依赖的传递版本存在，直接依赖使用 0.11.0。
 
-后续阶段候选（未编译，暂不引入）：tower-sessions 0.15.0、bcrypt 0.19.3、image 0.25.10、chrono-tz、sha2 等按业务需要逐个加入。本轮认证不降级 `tower-sessions`，其具体适配设计由温晓在下一阶段确定。
+阶段 2 新增直接依赖（已编译、已写入 `Cargo.lock`）：`cookie 0.18.2`、`bcrypt 0.19.3`；
+`fred 10.1.0` 启用 `i-scripts` feature 以使用 `EVAL`（默认 `i-std` 不含 scripts 接口）。
+tower-sessions 0.15.0 经温晓评估后**未采用**：其通用记录保存默认整份覆写，不提供本项目
+所需的字段级原子条件更新；改用范围有限的类型化 Redis 会话模块（见 `auth-design.md`）。
+后续仍待候选：image 0.25.10 等按业务需要逐个加入。
 
 ## 结构差异（生产结构与 Java 实体）
 
@@ -186,6 +190,83 @@ powershell -NoProfile -File backend-rust/scripts/check-rust.ps1
 同距、半径边界与夹取、日期变更线、极区；视口非法边界与类别白名单；缓存命中后转私有或
 REJECTED 立即隐藏、内容修改读取最新、坏 JSON 与 Redis 故障回源、失效后新点位出现；读取
 不修改 `version`/`is_active`/`category`/`updated_at`。
+
+### 阶段 2：认证与用户核心（2026-09-14，`work/rust-auth-20260914`）
+
+在隔离工作树实现第一项独立改动：保留 Cookie + 账号 + 密码 + 管理员二次验证体验，
+11 个认证/用户路由（不含 3 个头像路由与点位模块）。设计与边界见 `auth-design.md`。
+
+- 会话：`cookie 0.18.2` 解析/生成 Cookie，`uuid 1.26.1` 生成 64 ASCII 不透明标识，
+  key 为标识的 SHA-256；Redis 哈希仅存 `userId`/`sessionVersion`/`role`/`secondAt`。
+  五类原子操作全部用 Lua：创建（确认不存在 + TTL + 替换删除旧 key）、读取续期、
+  删除、二次验证写入/清除、版本推进；所有字段更新校验 key 存在与身份一致。
+- 密码：`bcrypt 0.19.3` 默认 cost 10，`spawn_blocking` 持有 `OwnedSemaphorePermit`
+  直到任务真正结束；先检查 UTF-8 ≤ 72 字节再调用普通 `hash/verify`，不使用
+  `non_truncating_*`。历史明文仅在无 `$2a$/$2b$/$2y$` 与 `{}` 前缀时按明文比较，
+  成功后 `UPDATE ... WHERE password=$expected AND row_version=$expected` 条件升级。
+- 提取器：`OptionalUser`/`CurrentUser`/`AdminUser`/`VerifiedAdmin`；每请求从 PG 重新加载
+  `deleted`/`sessionVersion`/当前角色，权限只看当前 DB，角色变化清除二次验证。
+- 注册：事务级 `pg_advisory_xact_lock` 下重新检查用户名与规范化邮箱后插入；历史库
+  存在未删除重复账号，本轮**不加唯一索引、不自动清理账号**（临时例外，见 `auth-design.md`）。
+- 写来源：对含 login/register/logout 的所有非安全方法统一校验 `Origin`/`Sec-Fetch-Site`/
+  `Referer`；无浏览器头的原生 App 请求放行。注册限流用 Redis 原子 INCR + TTL，
+  仅显式可信代理才信 `X-Forwarded-For`；Redis 故障按 503，不无上限放行。
+- 数据访问：固定查询使用 SQLx 编译期宏 `query_file_as!`/`query_file_scalar!`/`query_file!`
+  与 `queries/*.sql`，`.sqlx` 离线元数据已在本工作树生成，可用 `SQLX_OFFLINE=true` 构建；
+  所有业务参数 bind，只有临时测试库名等真正动态 SQL 才用运行期 `AssertSqlSafe`。
+
+验证（`backend-rust/scripts/check-rust.ps1`，仅回环合成服务）：
+
+- `cargo fmt --all -- --check`：通过。
+- `cargo clippy --all-targets -- -D warnings`：通过，无警告。
+- `cargo sqlx prepare --check -- --all-targets`：通过（`.sqlx` 与实际查询一致）。
+- 以 `SQLX_OFFLINE=true` 执行 `cargo test`：**59 个测试通过**（22 单元 + 28 认证集成 +
+  9 阶段 1 集成）。
+  认证集成覆盖：Java 合成 BCrypt 向量（ASCII/Unicode/内嵌 NUL/71/72 字节）、明文升级与
+  哈希字面量拒绝、重复历史账号不授权、Cookie 稳定、失败登录保留会话、退出与二次验证
+  CAS 竞争不复活、改密当前保留其它失效、重置/删除/恢复会话失效、角色降级不越权并清二次、
+  二次验证过期、10 并发注册唯一、限流 429 与坏 Redis 503、可信代理与 XFF 伪造、
+  写来源跨站拒绝与原生 App 放行、资料 null/空串、管理员分页/搜索/软删除形状。
+- Java 合成向量（温晓提供，password 列 base64 UTF-8；cost 4 仅测试）已全部转为版本化
+  单元/集成测试；Rust 生成的 `$2b$` 哈希沿用 Java `BCryptPasswordEncoder` 支持的格式前缀，
+  但 Web 端回退识别的实机回归留待切换前专项执行（本轮未运行 Java）。
+
+温晓复审返工（同轮完成）：
+
+- 身份加载改为**按读取快照 CAS 失效**：版本失配先有界重读 Redis 等待并发推进落地，
+  再以 key 存在且 userId/版本/观测角色一致为条件删除；CAS 输给并发则重读新状态。
+  新增仓储级真实 Redis 测试证明旧快照不能删已推进的新版本，HTTP 验证改密期间并发 `/me`
+  仍是当前会话、其它会话失效。
+- 角色变化同步的 Redis 错误不再被忽略（返回 503），CAS 竞争有界重读、logout 后匿名；
+  本次返回的 `second_at` 在角色变化时清空；二次验证要求 `elapsed ∈ 0..=TTL`，未来值拒绝。
+- 固定查询改为 `query_file_*` 宏 + `queries/*.sql` + `.sqlx`，移除 `format!`+`AssertSqlSafe`
+  的列拼接；新增 `SQLX_OFFLINE=true` 构建与 `prepare --check`。
+- Session/限流 Redis 命令统一短超时（`REDIS_COMMAND_TIMEOUT_SECONDS`，≤10s），坏/受限
+  Redis 均以真实 Redis 测试验证 503（含 ACL 拒绝 DEL 的 logout 回归）；TTL 换算用饱和转换
+  且配置限制上限。
+- 配置启动即校验 Cookie 名（RFC 6265 token）与 domain（无控制字符/分隔符）、命名空间非空；
+  `Identity`/`UserRow` Debug 脱敏，含密码的请求 DTO 不再派生 Debug。
+- logout 的 DEL 失败返回 503，不声称退出成功、不清 Cookie；注册与登录一致，携带请求旧标识
+  原子轮换会话。
+- Origin 校验：cross-site 拒绝、合法 FetchMetadata 仍校验 Referer、非法值不当可信；
+  移除无必要的 `Headers` 包装；JSON 媒体类型精确判断（拒绝 `application/jsonp`），
+  超限返回 413。
+- 复审二：以**短期 Redis 转换标记**替代“几个 sleep 推断无并发改密”。改密写 PG 前在当前会话
+  以预期 userId/version/role 标记随机 nonce + 60s 有界 `pendingUntil`（Redis 不可用不写 PG；
+  已有转换 409）；PG 提交后同 nonce 原子推进 sessionVersion、清 secondAt 与 pending；
+  PG 明确冲突按 nonce 清 pending，结果不确定任其过期。版本失配遇有效 pending 时有界重读，
+  仍未结束返回 503，绝不 401 或删除；失效 Lua 检查“无有效 pending”且检查与删除原子。
+  新增确定性窗口测试：begin→PG提交→等待超过原 18ms→/me 为 503（非 401/DEL）→complete→
+  同 Cookie 200；旧设备 401；begin→退出→complete 不复活；PG 冲突 cancel；过期 pending 不阻止失效。
+  `VerifiedAdmin` 的 `now-at` 与 `as_millis as i64` 改为 checked/saturating，未来/极值一律拒绝。
+- 复审二：修正错误入口契约。真实 Java 对“已认证但角色不足”走 Spring Boot 默认错误分派，
+  返回 `{timestamp,status:403,error:"Forbidden",path}` JSON（原契约误记为空体）。已更新
+  `api-contract.md`/`api-contract.json`，并让 `AdminUser`/`VerifiedAdmin` 缺角色时返回该 JSON
+  （path 取自 `Parts.uri`，timestamp 为当前 UTC 毫秒）；401 与二级密码 403 文本不变，
+  点位属主 403 中文纯文本不变。
+
+未完成项：头像 3 路由、点位模块（另一任务，合并后接入 `OptionalUser`）；媒体流式存储由另一
+media 任务负责。本轮未 commit/push。`.sqlx` 已生成但未提交，合并后由温晓统一 `prepare`。
 
 
 ## 备注

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users\nSET password = $1, row_version = row_version + 1\nWHERE id = $2 AND deleted = false AND password = $3 AND row_version = $4\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Int4",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "96060e13f135d87a08044aae5626f73c62640e53a391735db219300cd77ea5e1"
+}

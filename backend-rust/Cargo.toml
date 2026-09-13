@@ -44,7 +44,7 @@ tokio = { version = "1.53.1", features = [
 ] }
 tower = { version = "0.5.3", features = ["util"] }
 tower-http = { version = "0.7.1", features = ["cors", "limit", "timeout"] }
-fred = "10.1.0"
+fred = { version = "10.1.0", features = ["i-scripts"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 thiserror = "2.0.20"
@@ -55,3 +55,11 @@ sha2 = "0.11.0"
 tempfile = "3.27.0"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+# 阶段 2 认证：Cookie 解析/生成、历史 BCrypt 兼容。
+# 均为温晓锁定的候选版本，仅加入不降级已有依赖。
+cookie = "0.18.2"
+bcrypt = "0.19.3"
+
+[dev-dependencies]
+# 仅测试：解码 Java 生成的合成 BCrypt 向量（password 列 base64）。
+base64 = "0.22.1"

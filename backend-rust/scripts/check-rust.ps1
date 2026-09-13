@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# Lycoris Rust backend local checks (phase 1: public marker reads).
+# Lycoris Rust backend local checks (public marker reads + phase 2 auth/users).
 #
 # Sets synthetic test service URLs for this script process only, then:
 #   1. migrates the synthetic development database used for compile-time SQLx metadata;
@@ -32,6 +32,14 @@ if (-not $env:TEST_REDIS_URL) {
 # tests create their own UUID databases from the same loopback server.
 $env:DATABASE_URL = $env:TEST_DATABASE_URL
 $env:REDIS_URL = $env:TEST_REDIS_URL
+
+# 默认将测试并发限制为 4，避免 1 GB 测试 PG 在并行建库/迁移时 OOM；
+# 调用方已显式设置正整数时尊重该覆盖值。
+$testThreads = 0
+$hasTestThreads = [int]::TryParse($env:RUST_TEST_THREADS, [ref]$testThreads)
+if (-not $hasTestThreads -or $testThreads -le 0) {
+    $env:RUST_TEST_THREADS = "4"
+}
 
 function Assert-SqlxCli {
     $version = (cargo sqlx --version) 2>&1

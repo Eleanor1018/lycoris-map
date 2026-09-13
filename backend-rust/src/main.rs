@@ -4,6 +4,7 @@
 //!
 //! 普通启动只校验迁移已应用；`--migrate` 对空库执行 SQLx 迁移后退出。
 
+use std::net::SocketAddr;
 use std::process::ExitCode;
 
 use fred::clients::Client;
@@ -61,9 +62,13 @@ async fn run() -> Result<(), AppError> {
         config.server_host,
         config.server_port
     );
-    axum::serve(listener, router)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    // 提供 `ConnectInfo<SocketAddr>`，注册限流据此取得真实连接 IP。
+    axum::serve(
+        listener,
+        router.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
 
     tracing::info!("收到关闭信号，释放连接");
     let _ = redis.quit().await;

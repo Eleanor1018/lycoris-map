@@ -27,7 +27,7 @@
 
 ### 1.3 响应体与错误体格式（四类，需分别保留）
 
-1. **认证入口拦截（SecurityConfig authenticationEntryPoint）**：HTTP `401`，`Content-Type: application/json; charset=UTF-8`，体固定为 `{"message":"Spring Security Error"}`。所有被 Spring Security 拦截的未认证请求都用这个形状，与业务 `ApiResponse` 不同。未认证时 Spring Security 返回此体；已认证但角色不足（如非管理员访问 `/api/admin/**`）返回 **403 空体**。
+1. **认证入口拦截（SecurityConfig authenticationEntryPoint）**：HTTP `401`，`Content-Type: application/json; charset=UTF-8`，体固定为 `{"message":"Spring Security Error"}`。所有被 Spring Security 拦截的未认证请求都用这个形状，与业务 `ApiResponse` 不同。已认证但角色不足（如非管理员访问 `/api/admin/**`）由 Spring Boot 默认错误分派处理，返回 **403 JSON**：`{"timestamp":"...ISO-8601...","status":403,"error":"Forbidden","path":"<请求 path>"}`（**不是空体**；此项已由真实 Java 运行验证）。管理员二次验证失败的 `403` 仍是中文纯文本，不受此形状影响。
 2. **`ApiResponse` JSON**：形状为 `{"code":<int>,"message":"...","data":<值或null>}`，成功为 `{"code":0,"message":"ok","data":...}`。使用者**仅为 AuthController** 的全部 JSON 处理器（登录/注册/me/资料/改密/退出）与 `GlobalExceptionHandler`（409、413），不是“认证/用户相关接口”的统称。`code` 与 HTTP 状态码不总一致（登录 401/`code 4001`、注册 400/`code 4002` 等）。
 3. **纯文本 `String` 响应体（非 JSON）**：MarkerController、AdminMarkerController、AdminAuthController、AdminUserController、UploadController 的错误体，以及点位/提案操作成功时的空体；二次验证失败体也是中文纯文本（如 `需要二级密码`）。**注意**：字符串响应经 `StringHttpMessageConverter` 输出，其 charset 行为未在本次源码盘点中运行确认，属待验证项，不应假定与 `ApiResponse` 的 UTF-8 完全一致。
 4. **普通 JSON（非 `ApiResponse`）**：AdminUserController 的成功体（`{"message":...}`、分页 `{"page","size","totalPages","totalElements","items"}`）、AdminMarkerController 的 `pending-edits`/`pending-images` 列表与 `cleanup-missing-images` 结果 `{"checked","cleared","message"}`，均为普通 Map/List JSON，没有 `code/message/data` 包装。

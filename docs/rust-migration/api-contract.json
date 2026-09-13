@@ -10,7 +10,13 @@
       "kind": "spring-security",
       "contentType": "application/json; charset=UTF-8",
       "shape": "{\"message\":\"Spring Security Error\"}",
-      "usedBy": "SecurityConfig authenticationEntryPoint: HTTP 401 for unauthenticated requests; authenticated callers lacking ROLE_ADMIN get HTTP 403 with an empty body"
+      "usedBy": "SecurityConfig authenticationEntryPoint: HTTP 401 for unauthenticated requests"
+    },
+    {
+      "kind": "spring-boot-error",
+      "contentType": "application/json",
+      "shape": "{\"timestamp\":ISO-8601-with-millis-and-+00:00,\"status\":403,\"error\":\"Forbidden\",\"path\":request-path}",
+      "usedBy": "Authenticated callers lacking ROLE_ADMIN (e.g. non-admin on /api/admin/**) are rejected by the servlet/Spring Boot default error dispatch, not by a controller. This is a JSON body, NOT an empty body. Runtime-verified against Java on GET /api/admin/users. Second-factor 403s remain plain text and are unaffected."
     },
     {
       "kind": "ApiResponse",
@@ -269,7 +275,7 @@
       "success": "200 JSON array of all MapMarker rows.",
       "errors": [
         "401 JSON {\"message\":\"Spring Security Error\"} when not authenticated",
-        "403 empty body from Spring Security when authenticated but not ROLE_ADMIN"
+        "403 Spring Boot default error JSON {timestamp,status,error,path} when authenticated but not ROLE_ADMIN"
       ],
       "notes": "Admin diagnostic. Does NOT require the admin second factor (unlike /api/admin/**)."
     },
@@ -646,7 +652,7 @@
         "400 text \"缺少二级密码\" when passcode is null/blank",
         "403 text \"二级密码错误\" when passcode does not match the configured bcrypt hash",
         "401 JSON {\"message\":\"Spring Security Error\"} when not authenticated",
-        "403 empty body from Spring Security when not ROLE_ADMIN"
+        "403 Spring Boot default error JSON {timestamp,status,error,path} when authenticated but not ROLE_ADMIN"
       ],
       "notes": "Second factor is a passcode compared with BCrypt, not a separate-device MFA."
     },

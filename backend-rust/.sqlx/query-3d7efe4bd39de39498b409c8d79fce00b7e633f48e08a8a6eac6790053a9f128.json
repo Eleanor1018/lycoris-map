@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users\nSET deleted = true, deleted_at = now(), session_version = session_version + 1,\n    row_version = row_version + 1\nWHERE id = $1 AND deleted = false AND row_version = $2\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3d7efe4bd39de39498b409c8d79fce00b7e633f48e08a8a6eac6790053a9f128"
+}
