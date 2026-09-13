@@ -343,6 +343,96 @@ REJECTED 立即隐藏、内容修改读取最新、坏 JSON 与 Redis 故障回�
 提交/审批与 `cleanup-missing-images` 的 HTTP 路由尚未挂载，`MediaService` 仅为核心准备；
 点位写入/编辑/审核路由属阶段 3 另案。本改动未 commit/push，由温晓验收。
 
+### 阶段 3：点位写入、审核与收藏事务核心（2026-09-14）
+
+本改动在已验收的阶段 1 上实现阶段 3 点位业务数据库核心，供下一项 HTTP 接入直接调用。
+范围仅 `backend-rust/` 与本文件；未改主工作树、其它工作树、Java 与前端，未访问服务器或
+`lycoris-restore-review`/备份，未 commit/push。未新增 crate，未加表、未改结构/默认、未生成
+生产迁移，也未开启 PostGIS 查询。
+
+结构（只新增必要文件，另加小而合理的读取复用）：
+
+- `src/modules/markers/write_model.rs`：显式身份 `Actor { public_id, username, is_admin }`、
+  复用 `Viewer` 的可见性、`MarkerCreateRequest`/`MarkerUpdateRequest`、提案行
+  `EditProposalRow` 与响应 `EditProposalDto`、局部 `WriteError`。
+- `src/modules/markers/write.rs`：`MarkerWriteService` 事务核心。固定 SQL 全部经
+  `sql/*.sql` + `query_file!`/`query_file_as!` 编译期校验并生成 `.sqlx` 元数据；无 ORM、
+  无 `AssertSqlSafe`、无拼接固定 SQL。无需结果集的 INSERT/DELETE/UPDATE 用
+  `query_file!(...).execute()`，不为通过编译而 `RETURNING` 主键再 `fetch_all`；需要返回最新
+  行的语句保留 `RETURNING` + `fetch_one`。
+- 写入相关 `.sql`：`insert_marker`、`find_by_client_request`、`lock_marker[_share|_key_share]`、
+  `update_marker_fields`、`insert_favorite`/`delete_favorite`/`find_favorite_ids`、
+  `delete_favorites_by_marker`/`delete_translations_by_marker`/`delete_marker`、
+  `find_by_user_public_id`/`find_by_ids_any_visibility`/`find_all`/`list_pending_markers`、
+  `insert_edit_proposal`/`lock_edit_proposal`/`list_pending_edits`/`update_proposal_status`、
+  `find_translation_for_language`/`upsert_translation_manual`。
+- `service.rs` 新增 `MarkerService::localize(rows, lang)`，写接口返回最新 `MarkerRow` 后直接
+  复用现有本地化，不复制一套 localization，也不回写读取期 `isActive`。
+- `mod.rs` 导出 `write` / `write_model`；`repository.rs`、`http.rs` 未改。
+
+契约与事务要点：
+
+- 创建：顺序沿用 Java——先做最小必填字段（`lat/lng/category/title` 不能 null）与
+  `clientRequestId` 归一/长度检查，再按 owner+key 读回已有点位；命中重放时不校验也不采纳重试
+  载荷里的坐标/类别/开放时段（已有 key 携带非法 category 或单边开放时间仍返回同一 ID 且不改
+  原点位）。仅首次创建做完整校验：`lat/lng` 有限且范围，`category` 归一（legacy→
+  `self_definition`，未知 400），`title` 必填，`clientRequestId` trim、空白→null、≤64
+  （UTF-16，Java `String.length()`）。DB `varchar` 字段（`title` 120、`category` 64、
+  `username`/`user_public_id` 64、`mark_image` 512）按 PostgreSQL `char_length` 字符数校验。
+  默认 `is_public=true`、`is_active=true`、`PENDING`、`version=0`。
+  `(user_public_id, client_request_id)` 唯一约束处理并发重放：仅该约束 `23505` 才回读并返回
+  同一 ID；其它数据库错误一律内部错误，不当幂等命中；无 key 不去重。
+- 收藏：事务内 `FOR KEY SHARE` 锁点位并验 `can_view` 后 `INSERT ... ON CONFLICT DO NOTHING`；
+  取消收藏不要求点位存在。删除点位在 `FOR UPDATE` 后同事务删收藏/译文/点位，历史提案留存。
+- 普通 PATCH 只记录 `base_marker_version`、完整提案字段与 `proposer_is_owner` 并返回未修改
+  点位；`FOR SHARE` 锁定保证记录版本与文本基线一致；不可见 404。
+- `resolveEditText` 对齐 Java：无文本字段不改语言；目标语言无有效译文时必须同时给标题与
+  描述（空描述允许）；原文/人工译文共用 `marker.version`，原文变更使旧译文按 `source_hash`
+  失效但不删除，`origin=MANUAL` 保留。
+- 编辑审核固定顺序 proposal→marker：锁提案、`PENDING` 检查、锁点位、`base_marker_version`
+  核对、更新点位/译文/提案状态与审核人时间后提交。NULL/旧版本 409 且仍 `PENDING`，重复处理
+  400，两管理员竞争仅一人成功；直接管理员 approve/reject/PATCH 也推进 `version`。
+- 缓存：`MarkerCache::invalidate` 增加与读路径一致的 500ms 超时（超时映射 Fred
+  `ErrorKind::Timeout`），禁用时立即返回；提交成功后才失效，`Generation` 首次从 0→1。
+  失效失败只做受控日志（不含 SQL/参数），绝不把已提交写入报告为失败。
+
+核心 API（供下一次 HTTP 接入）：
+
+- 用户：`create_marker`、`add_favorite`/`remove_favorite`、`delete_owned_marker`、
+  `create_edit_proposal`、`list_created`、`favorite_ids`、`favorite_markers`。
+- 管理员：`pending_markers`、`pending_edit_proposals`、`approve_marker`/`reject_marker`、
+  `approve_edit_proposal`/`reject_edit_proposal`、`admin_update_marker`、`admin_delete_marker`、
+  `list_all_markers`。所有管理员入口均检查 `Actor.is_admin`（二次验证留待 HTTP 层
+  `VerifiedAdmin`，不在 `Actor` 上伪造）。
+- 均接受显式 `request_language`（handler 由显式 `language` 字段/请求语言解析后传入），
+  返回数据库最新 `MarkerRow` 或提案行，由 `MarkerService::localize` 生成响应。
+
+验证记录（2026-09-14，本机，仅回环合成服务）：
+
+```
+powershell -NoProfile -File backend-rust/scripts/check-rust.ps1
+```
+
+结果：SQLx CLI 0.9.0 校验通过；合成开发库迁移成功；`cargo sqlx prepare --check` 通过；
+`SQLX_OFFLINE=true cargo check --all-targets` 成功；`cargo fmt --all -- --check` 通过；
+`cargo clippy --all-targets -- -D warnings` 零警告；`cargo test` **57** 个测试全部通过
+（14 单元 + 9 基础集成 + 17 公开点位读取 + 17 写入/审核真实 PG/Redis 集成）。
+
+写入集成覆盖：并发同 key 重放返回同 ID、字段/范围/长度/开放时间校验与 trim；已有 key 重放
+先做最小必填检查与 key 归一，随后直接读回原点位（携带非法 category/单边开放时段也不被拒绝、
+不改动原点位），缺必填仍 400；收藏幂等与 `owner/private/pending` 可见性；收藏与删除竞争无孤儿
+收藏；非属主删除 403；删除级联收藏/译文且历史提案留存；普通 PATCH 只提案不改点位（含 base
+版本、`proposer_is_owner`、无有效译文时必须标题+描述）；管理员待审列表与直接 approve/reject
+推进版本；双管理员并发审核一次性；两个同基准提案（一原文一译文）竞争仅一个成功、另一个 409；
+NULL/过期基准 409 且仍 `PENDING`；原文与译文编辑共用同一 `version`、过期 hash 回退且
+`origin=MANUAL` 保留；测试库触发器强制译文写入失败后 marker 与 proposal 全部回滚；创建/收藏/
+管理员读取的可见性与权限；缓存首次失效 0→1、幂等重放不改代次、Redis 不可用/禁用时写入仍提交
+且耗时有界。
+
+未完成（明确不在本次范围，交下一次 HTTP 接入）：所有点位与管理员 HTTP 路由、认证/会话、
+`AppState`/config 装配、二次验证 `VerifiedAdmin`、图片上传/图片提案/cleanup；本次未写任何
+绕过 HTTP 认证的假路由来声称全接口完成。
+
 
 ## 备注
 

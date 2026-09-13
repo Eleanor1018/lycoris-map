@@ -119,12 +119,26 @@ impl MarkerCache {
     }
 
     /// 提交后失效（供阶段 3 写接口调用）：原子 `INCR` generation。缺失时从 `0` 提升为
-    /// `1`，之后每次调用都继续递增，命名空间必然变化。禁用缓存时无需访问 Redis。
+    /// `1`，之后每次调用都继续递增，命名空间必然变化。禁用缓存时立即返回、不访问 Redis。
+    ///
+    /// 与读路径相同的 500ms 边界：超时映射为 Fred `ErrorKind::Timeout`。缓存失效失败只作为
+    /// 受控日志处理，调用方不得因此把已提交的写入报告为失败。
     pub async fn invalidate(&self) -> Result<i64, fred::error::Error> {
         if !self.enabled {
             return Ok(0);
         }
-        self.redis.incr(self.generation_key()).await
+        match timeout(
+            REDIS_COMMAND_TIMEOUT,
+            self.redis.incr(self.generation_key()),
+        )
+        .await
+        {
+            Ok(result) => result,
+            Err(_elapsed) => Err(fred::error::Error::new(
+                fred::error::ErrorKind::Timeout,
+                "marker cache invalidate timed out",
+            )),
+        }
     }
 
     /// `nearby` 缓存 key，包含全部影响结果的参数与 generation。

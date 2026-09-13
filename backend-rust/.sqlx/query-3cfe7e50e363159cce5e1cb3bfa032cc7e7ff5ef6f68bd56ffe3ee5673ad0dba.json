@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO map_marker_translations (\n    marker_id, language, title, description, source_hash, origin, updated_at)\nVALUES ($1, $2, $3, $4, $5, 'MANUAL', now())\nON CONFLICT (marker_id, language)\nDO UPDATE SET\n    title = EXCLUDED.title,\n    description = EXCLUDED.description,\n    source_hash = EXCLUDED.source_hash,\n    origin = 'MANUAL',\n    updated_at = now()\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Varchar",
+        "Varchar",
+        "Text",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3cfe7e50e363159cce5e1cb3bfa032cc7e7ff5ef6f68bd56ffe3ee5673ad0dba"
+}

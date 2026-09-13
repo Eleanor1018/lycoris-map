@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO marker_favorites (user_public_id, marker_id, created_at)\nVALUES ($1, $2, now())\nON CONFLICT (user_public_id, marker_id) DO NOTHING\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "42e146fa88b2ead3e7fedfc303088d4667b4669fed10a5d3e4d1eeb5eef00a1c"
+}

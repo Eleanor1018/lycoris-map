@@ -256,6 +256,18 @@ impl MarkerService {
             .next())
     }
 
+    /// 供写入核心复用：把最新 `MarkerRow` 批量本地化为响应 DTO（含读取期类别归一与 `isActive`）。
+    ///
+    /// 写接口（创建/审核/管理员编辑）应返回数据库最新行后调用此方法，不得在此回写数据库或
+    /// 把按时间计算的 `isActive` 持久化。
+    pub async fn localize(
+        &self,
+        rows: Vec<MarkerRow>,
+        lang: &'static str,
+    ) -> Result<Vec<MarkerDto>, ApiError> {
+        self.localize_rows(rows, lang).await
+    }
+
     /// 批量本地化：一次加载所有译文，避免 N+1。
     async fn localize_rows(
         &self,
