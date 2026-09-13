@@ -1,0 +1,6 @@
+# 精确固定 Rust 工具链版本，保证本地与 CI 构建一致。
+# 不修改用户默认 toolchain，只在本目录生效。
+[toolchain]
+channel = "1.98.1"
+components = ["rustfmt", "clippy"]
+profile = "minimal"
