@@ -30,4 +30,4 @@ Web 和 App 共用一套 Spring Boot 后端，账号、点位和审核逻辑统�
 
 ## 后端重构规划
 
-[Rust 后端重构计划](rust-backend-plan.md) 记录 Axum + SQLx 的架构、最新稳定版本策略、认证演进、注释与代码质量要求，以及温晓指导、苏瑶执行、温晓验收的协作方式。当前阶段仅更新规划文档并准备重构分支，上述 Spring Boot 架构仍是现有实现。
+[Rust 后端重构计划](rust-backend-plan.md) 记录 Axum + SQLx 的架构、最新稳定版本策略、认证演进、注释与代码质量要求，以及温晓指导、苏瑶执行、温晓验收的协作方式。当前在 `refactor/rust-backend` 实施至阶段 3，[执行记录](rust-migration/execution.md) 跟踪验收结果；上述 Spring Boot 服务仍承担生产请求。
