@@ -27,3 +27,7 @@ Web 和 App 共用一套 Spring Boot 后端，账号、点位和审核逻辑统�
 - **内置文档** 分别位于 `frontend/src/docs/` 和 `mobile/src/docs/`，修改时同步两端内容与图片。
 
 依赖安装和启动步骤见 [README](../README.md#克隆与初始化)；数据库变更见[迁移说明](../backend/deploy/migrations/README.md)。
+
+## 后端重构规划
+
+[Rust 后端重构计划](rust-backend-plan.md) 记录 Axum + SQLx 的架构、最新稳定版本策略、认证演进、注释与代码质量要求，以及温晓指导、苏瑶执行、温晓验收的协作方式。当前阶段仅更新规划文档并准备重构分支，上述 Spring Boot 架构仍是现有实现。
