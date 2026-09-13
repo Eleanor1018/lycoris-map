@@ -1,4 +1,4 @@
-# Lycoris Rust 重构计划 v0.2：技术栈与架构
+# Lycoris Rust 重构计划 v0.3：技术栈与架构
 
 日期：2026-09-14。状态：Nora 已授权按本计划实施到阶段 3。温晓负责设计、指导和验收，苏瑶负责实现、测试与返工；每个验收完成的改动提交 commit，每个阶段完成后推送到 `refactor/rust-backend`。阶段 4 发布与阶段 5 空间查询优化留待后续。实施记录见 [执行与验收记录](rust-migration/execution.md)。
 
@@ -27,13 +27,13 @@
 
 | 部分 | 选择与状态 | 在 Lycoris 中的职责 |
 | --- | --- | --- |
-| 语言与运行时 | 实施时最新 Rust stable 与 Tokio；采用工具链支持的最新稳定 Edition | 异步网络与数据库访问；验证后固定工具链版本 |
-| HTTP | 实施时最新稳定 Axum、Tower / tower-http | 路由、参数提取、请求限制、超时、CORS、请求日志 |
-| PostgreSQL 访问 | 实施时最新稳定 SQLx，PgPool | 所有 PostgreSQL 业务查询、写入、事务、结果映射 |
-| 数据库 | 升级到实施时通过验证的最新稳定 PostgreSQL | 保留现有用户、点位、译文、审核、收藏数据 |
+| 语言与运行时 | Rust 1.98.1、Edition 2024、Tokio 1.53.1，已通过本地运行验证 | 异步网络与数据库访问；工具链已固定 |
+| HTTP | Axum 0.8.9、Tower 0.5.3 / tower-http 0.7.1 | 路由、参数提取、请求限制、超时、CORS、请求日志 |
+| PostgreSQL 访问 | SQLx 0.9.0，PgPool；匹配 SQLx CLI 0.9.0 | 所有 PostgreSQL 业务查询、写入、事务、结果映射 |
+| 数据库 | PostgreSQL 18.6，隔离恢复与兼容验证已通过；生产升级留在阶段 4 | 保留现有用户、点位、译文、审核、收藏数据 |
 | 数据库迁移 | 与 SQLx 匹配的 CLI + 版本化 SQL 文件 | 空库初始化、已有数据库接管、后续结构变更 |
-| Redis | 实施时最新稳定 Redis；Fred 作为客户端候选 | 会话存储、查询缓存、原子限流计数 |
-| 登录会话 | 兼容阶段候选：tower-sessions + Redis 存储适配器 | Cookie 中保存不透明会话 ID；最终机制留待认证专项设计 |
+| Redis | Redis 8.10.1、Fred 10.1.0，已通过隔离运行验证 | 会话存储、查询缓存、原子限流计数 |
+| 登录会话 | cookie 0.18.2 + 明确类型的 Redis SessionStore 与原子 Lua 操作 | 不透明会话 ID、快照 CAS、退出防回写、改密转换；最终机制留待认证重设计 |
 | 业务授权 | 自有 CurrentUser 提取器、权限函数与服务层校验 | 用户角色、点位可见性、所有权、管理员二次验证 |
 | 密码 | 兼容阶段采用最新稳定 bcrypt 实现 | 验证现有密码哈希，保持 Java 回退兼容；后续策略单独设计 |
 | 数据与错误 | serde / serde_json；thiserror | 请求、响应、数据库行的明确类型；内部错误分类 |
@@ -45,15 +45,15 @@ Axum 原生使用 Tower 的中间件体系，适合按需组合。SQLx 提供 Po
 
 ### 最新稳定版本优先，验证后锁定
 
-上表尚未在本项目编译运行。每个实施阶段开始时核对官方最新稳定版本、发布说明、最低 Rust 版本与组件兼容要求，记录查询日期、来源、候选版本、最终版本和验证结果。Rust 的 stable / beta / nightly 发布渠道有明确区分，本项目默认选择 stable。[Rust 发布渠道](https://doc.rust-lang.org/book/appendix-07-nightly-rust.html)。
+上表已按 2026-09-14 的官方稳定版本核对并在本项目编译运行；完整来源、镜像 digest、验证结果与新增依赖见 [版本记录](rust-migration/versions.md)，阶段验收以 [执行记录](rust-migration/execution.md) 为准。后续升级仍核对发布说明、最低 Rust 版本与组件兼容要求。Rust 的 stable / beta / nightly 发布渠道有明确区分，本项目采用 stable。[Rust 发布渠道](https://doc.rust-lang.org/book/appendix-07-nightly-rust.html)。
 
 通过编译、启动、关键接口、真实 PG / Redis、会话和恢复验证后，固定 `rust-toolchain.toml`，提交 `Cargo.lock`，让 SQLx CLI 与库版本匹配，只启用实际需要的 feature。数据库与容器运行组件记录精确版本；容器镜像同时记录 digest，确保构建和回退可复现。
 
 运行中的服务不自动跟随 `latest` 标签变化。后续新稳定版按同样流程升级。若最新组合确实无法运行，苏瑶提交失败证据、替代方案及影响，由温晓评估最小必要的版本回退，并记录原因、影响范围和恢复升级的条件。
 
-v0.1 调研发现：`tower-sessions-redis-store 0.16.0` 依赖 `tower-sessions-core ^0.14.0` 和 `fred ^10.0`，而 `tower-sessions 0.15.0` 使用 core 0.15。根据新的版本要求，取消把 0.14.x 作为优先方案；实施时先查找最新稳定会话库的兼容存储适配器，必要时评估一个范围明确的存储适配实现。旧组合仅作为出现实际阻碍后的备选，具体会话组件仍受后续认证设计约束。[Redis 适配器依赖](https://docs.rs/crate/tower-sessions-redis-store/0.16.0)、[tower-sessions 依赖](https://docs.rs/crate/tower-sessions/0.15.0)。
+早期会话候选存在 core / Redis 适配器版本不匹配；实施已选择范围明确的 `SessionStore`，直接用 Fred 执行经过测试的原子操作。它只管理本项目的身份、版本与二次验证状态，普通请求不把整份会话回写。改密采用带期限与随机 nonce 的转换标记，使数据库提交和 Redis 版本更新之间的并发读取不会误删当前会话；细节及故障语义见 [认证设计](rust-migration/auth-design.md)。这仍是本轮兼容方案，后续认证重设计单独推进。
 
-建议缓存与限流也使用 Fred，使 Redis 客户端保持一致；仍分别封装三种用途。Fred 支持异步连接、重连和 Lua 脚本。[Fred 官方文档](https://docs.rs/fred/latest/fred/)。
+会话、缓存与限流统一使用 Fred，并分别封装职责及命名空间。Fred 支持异步连接、重连和 Lua 脚本。[Fred 官方文档](https://docs.rs/fred/latest/fred/)。
 
 v0.1 调研时的 bcrypt 候选版本 0.19.3 已高于已知非 ASCII 哈希解析 panic 问题的修复版本 0.19.2。该记录用于说明已知兼容检查项，实施时重新选择最新稳定修复版本，最终以锁定依赖后的检查结果为准。[bcrypt 文档](https://docs.rs/bcrypt/latest/bcrypt/)、[对应 RustSec 公告](https://rustsec.org/advisories/RUSTSEC-2026-0199)。
 
