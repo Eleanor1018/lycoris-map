@@ -1,0 +1,289 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n    id, version, lat, lng, category, title, description, source_language,\n    is_public, username, user_public_id, client_request_id, is_active,\n    open_time_start, open_time_end, review_status, last_edited_by,\n    last_edited_by_public_id, last_edited_by_owner, mark_image, created_at, updated_at\nFROM map_markers m\nWHERE m.is_public = true\n  AND m.review_status = 'APPROVED'\n  AND m.category::text = $4::text\n  AND (\n    $5::boolean = false\n    OR m.lat NOT BETWEEN -90 AND 90\n    OR m.lng NOT BETWEEN -180 AND 180\n    OR (\n      m.lat BETWEEN $6::double precision AND $7::double precision\n      AND (\n        $10::boolean = true\n        OR ($8::double precision <= $9::double precision\n            AND m.lng BETWEEN $8::double precision AND $9::double precision)\n        OR ($8::double precision > $9::double precision\n            AND (m.lng >= $8::double precision OR m.lng <= $9::double precision))\n      )\n    )\n  )\n  AND (\n    6371000 * 2 * asin(sqrt(\n      power(sin(radians((m.lat - $1::double precision) / 2)), 2)\n      + cos(radians($1::double precision)) * cos(radians(m.lat))\n      * power(sin(radians((m.lng - $2::double precision) / 2)), 2)\n    ))\n  ) <= $3::double precision\nORDER BY (\n    6371000 * 2 * asin(sqrt(\n      power(sin(radians((m.lat - $1::double precision) / 2)), 2)\n      + cos(radians($1::double precision)) * cos(radians(m.lat))\n      * power(sin(radians((m.lng - $2::double precision) / 2)), 2)\n    ))\n  ) ASC,\n  m.id ASC\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "version",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "version"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "lat",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "lat"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "lng",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "lng"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "category",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "category"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "title",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "source_language",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "source_language"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "is_public",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "is_public"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "username",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "user_public_id",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "user_public_id"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "client_request_id",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "client_request_id"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "is_active",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "is_active"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "open_time_start",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "open_time_start"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "open_time_end",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "open_time_end"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "review_status",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "review_status"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "last_edited_by",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "last_edited_by"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "last_edited_by_public_id",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "last_edited_by_public_id"
+          }
+        }
+      },
+      {
+        "ordinal": 18,
+        "name": "last_edited_by_owner",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "last_edited_by_owner"
+          }
+        }
+      },
+      {
+        "ordinal": 19,
+        "name": "mark_image",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "mark_image"
+          }
+        }
+      },
+      {
+        "ordinal": 20,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Float8",
+        "Float8",
+        "Float8",
+        "Text",
+        "Bool",
+        "Float8",
+        "Float8",
+        "Float8",
+        "Float8",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "6b61550dd6d678b3d5402261bfe29db68998da1d94deb037e8bbe61c787895de"
+}

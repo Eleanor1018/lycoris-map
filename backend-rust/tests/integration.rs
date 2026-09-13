@@ -1,196 +1,23 @@
-//! 真实 PG / Redis 集成测试（阶段 1）。
+//! 真实 PG / Redis 集成测试（阶段 1 基础工程）。
 //!
-//! 每个用例从测试管理员连接创建 UUID 命名的临时库，应用基线迁移，构造 Router，
-//! 用 `tower::ServiceExt::oneshot` 直接调用（不启动外部 HTTP 服务器），退出时删除
-//! 自己的临时库；即使断言失败，`TempDatabase` 的 `Drop` 也会清理并输出受控提示。
-//!
-//! 测试只允许连接回环地址上的合成测试服务；服务不可用时直接失败，不做静默跳过。
-//! 故障用例通过指向未监听端口或未初始化的客户端来模拟，不停止共享服务。
+//! 共享工具见 `tests/common/mod.rs`。每个用例创建并清理自己的 UUID 临时库；
+//! 服务不可用时直接失败，不做静默跳过。
 
-use std::net::IpAddr;
-use std::str::FromStr;
+mod common;
+
 use std::time::Duration;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use fred::interfaces::ClientLike;
-use fred::types::config::ServerConfig;
+use common::{
+    BASELINE_TABLES, TempDatabase, UNREACHABLE_PG_URL, UNREACHABLE_REDIS_URL, connect_redis,
+    test_redis_url, unreachable_redis,
+};
 use lycoris_backend::app::{AppState, build_router};
 use lycoris_backend::config::Config;
 use lycoris_backend::migrate::{self, MigrationError};
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use sqlx::{ConnectOptions, PgPool};
+use sqlx::postgres::PgPoolOptions;
 use tower::ServiceExt;
-
-const DEFAULT_TEST_DATABASE_URL: &str =
-    "postgres://lycoris:lycoris_local_test@127.0.0.1:55432/lycoris_rust";
-const DEFAULT_TEST_REDIS_URL: &str = "redis://127.0.0.1:56379";
-/// 指向未监听端口的坏依赖地址，用于就绪故障用例（不依赖任何真实服务）。
-const UNREACHABLE_PG_URL: &str = "postgres://lycoris:lycoris_local_test@127.0.0.1:1/lycoris_rust";
-const UNREACHABLE_REDIS_URL: &str = "redis://127.0.0.1:1";
-
-const BASELINE_TABLES: [&str; 6] = [
-    "map_markers",
-    "map_marker_translations",
-    "marker_edit_proposals",
-    "marker_favorites",
-    "marker_image_proposals",
-    "users",
-];
-
-fn test_database_url() -> String {
-    std::env::var("TEST_DATABASE_URL").unwrap_or_else(|_| DEFAULT_TEST_DATABASE_URL.to_string())
-}
-
-fn test_redis_url() -> String {
-    std::env::var("TEST_REDIS_URL").unwrap_or_else(|_| DEFAULT_TEST_REDIS_URL.to_string())
-}
-
-/// 精确判断主机是否为回环地址（不匹配用户名/查询里出现的 "localhost" 等子串）。
-fn host_is_loopback(host: &str) -> bool {
-    host.eq_ignore_ascii_case("localhost")
-        || host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback())
-}
-
-fn assert_pg_loopback(options: &PgConnectOptions) {
-    assert!(
-        host_is_loopback(options.get_host()),
-        "测试 PostgreSQL 必须位于回环地址"
-    );
-}
-
-fn assert_redis_loopback(config: &fred::types::config::Config) {
-    let host = match &config.server {
-        ServerConfig::Centralized { server } => server.host.to_string(),
-        ServerConfig::Clustered { hosts, .. } | ServerConfig::Sentinel { hosts, .. } => hosts
-            .first()
-            .map(|server| server.host.to_string())
-            .unwrap_or_default(),
-    };
-    assert!(host_is_loopback(&host), "测试 Redis 必须位于回环地址");
-}
-
-/// 通过独立线程 + 新运行时清理，避免在 tokio 运行时线程内 `block_on`。
-struct TempDatabase {
-    admin_options: PgConnectOptions,
-    name: String,
-    url: String,
-}
-
-impl TempDatabase {
-    async fn create() -> Self {
-        let admin_url = test_database_url();
-        let admin_options =
-            PgConnectOptions::from_str(&admin_url).expect("TEST_DATABASE_URL 格式非法");
-        assert_pg_loopback(&admin_options);
-        let name = format!("lycoris_test_{}", uuid::Uuid::new_v4().simple());
-
-        let admin = PgPoolOptions::new()
-            .max_connections(1)
-            .connect_with(admin_options.clone())
-            .await
-            .expect("无法连接测试 PostgreSQL，请先启动隔离测试服务");
-        // 库名来自 UUID（仅十六进制），已审计无注入风险，故显式声明为安全 SQL。
-        sqlx::query(sqlx::AssertSqlSafe(format!("CREATE DATABASE \"{name}\"")))
-            .execute(&admin)
-            .await
-            .expect("创建临时测试库失败");
-        admin.close().await;
-
-        let url = self::temp_url(&admin_options, &name);
-        Self {
-            admin_options,
-            name,
-            url,
-        }
-    }
-
-    fn url(&self) -> &str {
-        &self.url
-    }
-
-    fn options(&self) -> PgConnectOptions {
-        self.admin_options.clone().database(&self.name)
-    }
-
-    async fn connect_pool(&self) -> PgPool {
-        PgPoolOptions::new()
-            .max_connections(5)
-            .connect_with(self.options())
-            .await
-            .expect("连接临时测试库失败")
-    }
-}
-
-/// 用 PgConnectOptions 构造临时库连接串（不做手写字符串切分）。
-fn temp_url(admin_options: &PgConnectOptions, database: &str) -> String {
-    admin_options
-        .clone()
-        .database(database)
-        .to_url_lossy()
-        .to_string()
-}
-
-impl Drop for TempDatabase {
-    fn drop(&mut self) {
-        let admin_options = self.admin_options.clone();
-        let name = self.name.clone();
-        let _ = std::thread::spawn(move || {
-            let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-            else {
-                eprintln!("[warn] 清理临时测试库 {name} 失败: 无法创建运行时");
-                return;
-            };
-            runtime.block_on(async move {
-                match PgPoolOptions::new()
-                    .max_connections(1)
-                    .connect_with(admin_options)
-                    .await
-                {
-                    Ok(admin) => {
-                        // 库名来自 UUID，已审计无注入风险。
-                        let sql = format!("DROP DATABASE IF EXISTS \"{name}\" WITH (FORCE)");
-                        if let Err(error) =
-                            sqlx::query(sqlx::AssertSqlSafe(sql)).execute(&admin).await
-                        {
-                            eprintln!("[warn] 清理临时测试库 {name} 失败: {error}");
-                        }
-                        admin.close().await;
-                    }
-                    Err(error) => {
-                        eprintln!("[warn] 清理临时测试库 {name} 失败: {error}");
-                    }
-                }
-            });
-        })
-        .join();
-    }
-}
-
-async fn connect_redis() -> fred::clients::Client {
-    let url = test_redis_url();
-    let config = fred::types::config::Config::from_url(&url).expect("测试 Redis URL 格式非法");
-    assert_redis_loopback(&config);
-    let client = fred::types::Builder::from_config(config)
-        .build()
-        .expect("构建测试 Redis 客户端失败");
-    client
-        .init()
-        .await
-        .expect("无法连接测试 Redis，请先启动隔离测试服务");
-    client
-}
-
-/// 指向未监听端口且未初始化的客户端；`PING` 会失败或超时，用于就绪故障用例。
-fn unreachable_redis() -> fred::clients::Client {
-    let config =
-        fred::types::config::Config::from_url(UNREACHABLE_REDIS_URL).expect("测试 URL 格式非法");
-    fred::types::Builder::from_config(config)
-        .build()
-        .expect("构建测试 Redis 客户端失败")
-}
 
 #[tokio::test]
 async fn migrates_baseline_and_passes_health_checks() {

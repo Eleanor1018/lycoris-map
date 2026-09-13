@@ -22,6 +22,9 @@ use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::timeout::TimeoutLayer;
 
 use crate::config::{Config, REQUEST_BODY_LIMIT_BYTES};
+use crate::modules::markers::cache::MarkerCache;
+use crate::modules::markers::repository::MarkerRepository;
+use crate::modules::markers::service::MarkerService;
 
 /// `/health/ready` 单项依赖检查的超时；保证依赖卡住时可靠返回 503，
 /// 而不会被全局请求超时先截断为 408。
@@ -33,14 +36,25 @@ pub struct AppState {
     pub db: PgPool,
     pub redis: Client,
     pub config: Arc<Config>,
+    pub markers: MarkerService,
 }
 
 impl AppState {
     pub fn new(db: PgPool, redis: Client, config: Config) -> Self {
+        let markers = MarkerService::new(
+            MarkerRepository::new(db.clone()),
+            MarkerCache::new(
+                redis.clone(),
+                config.marker_cache_enabled,
+                config.marker_cache_namespace.clone(),
+            ),
+            config.availability_zone,
+        );
         Self {
             db,
             redis,
             config: Arc::new(config),
+            markers,
         }
     }
 }
@@ -52,6 +66,7 @@ pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/health/live", get(health_live))
         .route("/health/ready", get(health_ready))
+        .merge(crate::modules::markers::http::router())
         // `route_layer` 在路由匹配后执行，因此能读到 `MatchedPath` 路由模板。
         .route_layer(middleware::from_fn(log_requests))
         .layer(cors)

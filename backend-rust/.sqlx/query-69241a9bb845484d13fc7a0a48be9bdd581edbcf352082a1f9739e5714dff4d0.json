@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT marker_id, language, title, description, source_hash\nFROM map_marker_translations\nWHERE marker_id = ANY($1::int8[])\n  AND language = $2\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "marker_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "map_marker_translations",
+            "name": "marker_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "language",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "map_marker_translations",
+            "name": "language"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "map_marker_translations",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "map_marker_translations",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "source_hash",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "map_marker_translations",
+            "name": "source_hash"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8Array",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "69241a9bb845484d13fc7a0a48be9bdd581edbcf352082a1f9739e5714dff4d0"
+}

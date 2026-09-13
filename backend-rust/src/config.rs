@@ -12,9 +12,16 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use axum::http::{HeaderValue, Uri};
+use chrono_tz::Tz;
 
 /// 默认 HTTP 监听端口，与 Java 的 18080 区分。
 pub const DEFAULT_SERVER_PORT: u16 = 18081;
+
+/// 默认点位可用性时区（与 Java `app.availability-zone` 一致）。
+pub const DEFAULT_AVAILABILITY_ZONE: Tz = chrono_tz::Asia::Shanghai;
+
+/// 默认查询缓存命名空间（Rust 独立，不复用 Java 的 `cache:marker:*`）。
+pub const DEFAULT_MARKER_CACHE_NAMESPACE: &str = "lycoris:rust:marker";
 
 /// 默认请求体总上限（8 MiB）；后续 multipart 上传将显式覆盖 Axum 默认的 2 MiB，
 /// 图片自身的 5 MiB 校验在后续上传业务中实现。
@@ -34,6 +41,9 @@ pub struct Config {
     pub db_max_lifetime: Duration,
     pub db_idle_timeout: Duration,
     pub request_timeout: Duration,
+    pub availability_zone: Tz,
+    pub marker_cache_enabled: bool,
+    pub marker_cache_namespace: String,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -59,6 +69,9 @@ impl Config {
             db_max_lifetime: Duration::from_secs(1800),
             db_idle_timeout: Duration::from_secs(600),
             request_timeout: Duration::from_secs(30),
+            availability_zone: DEFAULT_AVAILABILITY_ZONE,
+            marker_cache_enabled: true,
+            marker_cache_namespace: DEFAULT_MARKER_CACHE_NAMESPACE.to_string(),
         }
     }
 
@@ -84,6 +97,11 @@ impl Config {
             .unwrap_or_else(|| PathBuf::from("uploads"));
         let cors_allowed_origins =
             parse_origins(&optional("CORS_ALLOWED_ORIGINS").unwrap_or_default())?;
+        let availability_zone = match optional("APP_AVAILABILITY_ZONE") {
+            Some(value) => Tz::from_str(value.trim())
+                .map_err(|_| ConfigError::Invalid("APP_AVAILABILITY_ZONE"))?,
+            None => DEFAULT_AVAILABILITY_ZONE,
+        };
 
         Ok(Self {
             database_url,
@@ -101,6 +119,10 @@ impl Config {
             db_max_lifetime: seconds("DB_MAX_LIFETIME_SECONDS", 1800)?,
             db_idle_timeout: seconds("DB_IDLE_TIMEOUT_SECONDS", 600)?,
             request_timeout: seconds("REQUEST_TIMEOUT_SECONDS", 30)?,
+            availability_zone,
+            marker_cache_enabled: parse_or("MARKER_CACHE_REDIS_ENABLED", true)?,
+            marker_cache_namespace: optional("MARKER_CACHE_NAMESPACE")
+                .unwrap_or_else(|| DEFAULT_MARKER_CACHE_NAMESPACE.to_string()),
         })
     }
 }

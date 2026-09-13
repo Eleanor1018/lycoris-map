@@ -108,6 +108,85 @@ python backend-rust/scripts/check-services.py --start \
 对空库需显式运行 `lycoris-backend --migrate`。已有生产库的接管尚未自动化，初始建表不得重复
 用于已有库，接管验证留待后续阶段专项进行。
 
+### 阶段 1：公开点位读取（2026-09-14）
+
+本改动为阶段 1 第二项独立改动：所有公开点位读取（匿名），沿用已验收基础工程与锁定依赖，
+未新增 crate。范围仅 `backend-rust/` 与本文件；未访问服务器、`lycoris-restore-review`
+或任何备份，未 commit / push。
+
+结构与契约：
+
+- 新增 `src/modules/markers/`：`model`（`MarkerRow` 数据库行与 `MarkerDto` 响应 DTO 分离）、
+  `repository`（`sql/*.sql` + `query_file_as!` 固定 SQL）、`localization`（语言协商、类别、
+  开放时间纯函数与源文本哈希）、`cache`（Redis 命名空间缓存）、`service`（可见性、去重、
+  批量译文、缓存回源）、`http`（薄 handler 与路由）。
+- 5 条匿名路由：`GET /api/markers/public`、`/search`、`/nearby`、`/viewport`、`/{id}`。
+  响应字段与 Java `MapMarker` 一致（23 项，camelCase）；成功带
+  `Vary: Accept-Language, X-App-Language`；错误为中文纯文本；详情不可见返回 404 空体。
+- 可见性 `is_public AND review_status='APPROVED'`，不筛 `is_active`；资源级判定集中在
+  `can_view(row, Option<&Viewer>)`，本阶段全部以 `None` 调用，未引入伪身份，留待下一阶段
+  接 `OptionalViewer`。
+- 语言优先级与哈希逐字节对照 Java：显式 `lang` > 非空 `Accept-Language`（不支持/非法直接
+  `zh`，不回退 `X-App-Language`）> `X-App-Language` > `zh`；SHA-256 紧凑 UTF-8 JSON
+  `[规范化语言,title或"",description或""]`，非 ASCII 不转义、控制字符小写 `\uXXXX`。
+  既有 Java/Python 向量在本机 Rust 单元测试与真实接口测试中均通过。
+- 类别 4 类；`safe_place`/`dangerous_place` 写/查询归一为 `self_definition`，未知查询 400，
+  读取未知归一为 `self_definition`。`isActive` 按 `Asia/Shanghai`（`APP_AVAILABILITY_ZONE`
+  可配）读取时计算，`start=end` 全天、跨午夜、单边/非法回退数据库值，不回写、不推进 `version`。
+- 搜索合并原文/类别/经纬度文本（保留 `%`/`_` 通配）、有效译文与可解析坐标（容差 `0.00015`）
+  并去重；缺失 `q` 为 400，仅显式空串/空白 `q` 返回 `[]`。邻近沿用有包围盒的 Haversine
+  （6 371 000 m，非 PostGIS），默认半径 1000（夹取 1..50000）、默认类别 `accessible_toilet`，
+  距离升序、同距按 ID 稳定；极区与日期变更线均有真实测试。视口拒绝反向 min/max 与越界，
+  `categories` 白名单。
+- Redis 查询缓存使用独立 Rust 命名空间（默认 `lycoris:rust:marker`），只存 ID 与缓存版本，
+  `nearby` 12s / `viewport` 10s；命中后回 PG 校验可见性并读取最新内容，Redis 故障/超时/坏
+  JSON 回源，每条命令 500ms 超时；失效用永不过期的 generation key 原子 `INCR`，不
+  `FLUSHALL`/`KEYS`。缓存 key 中经纬度按 `f64::to_bits` 精确保留请求值，不因截断共享结果。
+- `migrations/0001_baseline.sql` 未改动。`.sqlx/` 离线元数据由 SQLx CLI 0.9.0 生成；
+  `scripts/check-rust.ps1` 迁移合成开发库（`lycoris_rust`）后执行
+  `cargo sqlx prepare --check -- --all-targets` 与 `SQLX_OFFLINE=true cargo check --all-targets`，
+  再跑 fmt / clippy / test；集成测试仍各自创建 UUID 临时库，未污染开发库。
+
+温晓审查后的返工（2026-09-14，同一改动内）：
+
+- generation 缺省为 `0` 且**不再自动过期**（每命名空间一个键），首次 `INCR` 即从 0→1 真正
+  切换命名空间，之后每次失效继续递增；禁用缓存时 `invalidate` 不访问 Redis。测试预热缓存后
+  两次 `invalidate` 结果分别为 1、2 且新增点位立即出现，并定向 `DEL` 自己的 generation 键
+  （不使用 `KEYS`/`FLUSHALL`）。
+- 缓存 key 经纬度改为 `f64::to_bits` 十六进制精确编码，新增“仅差小数第 5 位”的半径 1m 邻近与
+  窄视口真实缓存回归，确认不共享结果。
+- Redis generation/read/write 均带 500ms 命令超时；新增未连接与已断开专用客户端的回归，
+  断言回源成功且等待有上限，不关闭共享服务。
+- `translation_is_current` 增加 `row.id == translation.marker_id`，并补相同哈希但来自不同
+  marker 的拒绝测试。
+- `Accept-Language` 按本机 Java 合成探测（`Locale.LanguageRange.parse`）对齐：非法 range
+  （如 `en--x`）、未知参数（`en;garbage`）、重复 q、整项解析错误一律回 `zh`；重复语言范围
+  以首次权重生效；`en;q=0,zh;q=0.5,en;q=1` → `zh`。query `lang` 与 `X-App-Language` 优先级不变。
+- 源文本哈希改用 `serde_json` 三元素字符串数组的紧凑编码，删除手写 JSON 转义；原 Unicode/
+  控制符向量保持不变。
+- HTTP 成功体仍为 23 个 Java `MapMarker` 字段。`GET /api/markers/search` 缺失 `q` 返回 400，
+  仅显式空串/空白返回 `[]`；`GET /api/markers/nearby` 缺失 `lat/lng` 在本实现返回中文文本 400，
+  与 Java 由参数解析前置拦截产生的 Spring 默认 400 JSON 属**解析层错误表现差异**，不伪造
+  timestamp 等框架字段；业务错误、401/403/404 与语言行为保持兼容。邻近不伪造不可达的 PostGIS
+  错误（当前无空间函数调用），底层失败按通用 500 文本返回。
+
+验证记录（2026-09-14，本机，仅回环合成服务）：
+
+```
+powershell -NoProfile -File backend-rust/scripts/check-rust.ps1
+```
+
+结果：SQLx CLI 0.9.0 校验通过；合成开发库迁移成功；`cargo sqlx prepare --check` 通过；
+`SQLX_OFFLINE=true cargo check --all-targets` 成功；`cargo fmt --all -- --check` 通过；
+`cargo clippy --all-targets -- -D warnings` 零警告；`cargo test` 37 个测试全部通过
+（11 个单元 + 9 个基础集成 + 17 个公开点位真实 PG/Redis 集成）。
+
+真实 PG/Redis 覆盖：公开/私有/待审/驳回/关闭但公开；5 路由状态与字段形状；语言优先级、
+坏/非法 header、控制字符源哈希、过期译文回退；搜索原文/译文/坐标与通配；邻近默认值、
+同距、半径边界与夹取、日期变更线、极区；视口非法边界与类别白名单；缓存命中后转私有或
+REJECTED 立即隐藏、内容修改读取最新、坏 JSON 与 Redis 故障回源、失效后新点位出现；读取
+不修改 `version`/`is_active`/`category`/`updated_at`。
+
 
 ## 备注
 

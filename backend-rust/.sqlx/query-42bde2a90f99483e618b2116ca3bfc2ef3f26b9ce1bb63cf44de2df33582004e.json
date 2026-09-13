@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n    t.marker_id, t.language, t.title, t.description, t.source_hash\nFROM map_marker_translations t\nJOIN map_markers m ON m.id = t.marker_id\nWHERE m.is_public = true\n  AND m.review_status = 'APPROVED'\n  AND t.language IN ('en', 'zh')\n  AND (\n    lower(t.title) LIKE lower('%' || $1 || '%')\n    OR lower(t.description) LIKE lower('%' || $1 || '%')\n  )\nORDER BY t.id ASC\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "marker_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "map_marker_translations",
+            "name": "marker_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "language",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "map_marker_translations",
+            "name": "language"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "title",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "map_marker_translations",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "map_marker_translations",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "source_hash",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "map_marker_translations",
+            "name": "source_hash"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "42bde2a90f99483e618b2116ca3bfc2ef3f26b9ce1bb63cf44de2df33582004e"
+}
