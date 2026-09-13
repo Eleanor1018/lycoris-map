@@ -1,0 +1,14 @@
+# Rust 构建产物
+/target/
+**/target/
+
+# 本地环境与覆盖
+.env
+.env.*
+!.env.example
+compose.override.yml
+*.local.yml
+
+# 日志与临时文件
+*.log
+/tmp/
