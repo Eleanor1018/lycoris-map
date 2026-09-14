@@ -76,6 +76,81 @@ class TestSampler(unittest.TestCase):
         if thread_stop is not None:
             self.assertTrue(callable(sampler._stop))
 
+    def test_pg_query_unavailable_without_target(self) -> None:
+        sampler = bench_core.Sampler("dummy")
+        self.assertEqual(sampler._query_pg(), (None, None, None, None))
+        self.assertIsNotNone(sampler.pg_error)
+
+    def test_sample_once_exception_recorded(self) -> None:
+        class Boom(bench_core.Sampler):
+            def _sample_once(self) -> None:
+                raise RuntimeError("boom")
+
+        sampler = Boom("dummy", interval=0.05)
+        sampler.start()
+        time.sleep(0.2)
+        sampler.stop_collect()
+        self.assertTrue(sampler.errors, sampler.errors)
+        self.assertFalse(sampler.is_alive())
+
+    def test_pg_aggregate_none_is_not_zero(self) -> None:
+        sample = bench_core.Sample(pg_total=None)
+        agg = bench_core.aggregate_samples([sample], "pg_total")
+        self.assertIsNone(agg["avg"])
+
+    def test_pg_query_parses_output(self) -> None:
+        sampler = bench_core.Sampler("c", pg_container="pg", pg_database="db", pg_user="u")
+        original = bench_core.common.psql
+        bench_core.common.psql = lambda *a, **k: "10|3|7\n"
+        try:
+            total, active, non_active, cost = sampler._query_pg()
+        finally:
+            bench_core.common.psql = original
+        self.assertEqual((total, active, non_active), (10, 3, 7))
+        self.assertIsInstance(cost, float)
+        self.assertEqual(sampler.pg_failures, 0)
+
+
+class TestSamplingCompleteness(unittest.TestCase):
+    def _full(self, **overrides):
+        base = dict(memory_current=1, cpu_cores=0.1, vm_rss_kb=2, pg_total=5)
+        base.update(overrides)
+        return bench_core.Sample(**base)
+
+    def test_all_container_metrics_missing_fails(self) -> None:
+        samples = [bench_core.Sample(pg_total=5)]
+        with self.assertRaises(bench_core.BenchError):
+            bench_core.sampling_metrics(samples, pg_error=None, pg_failures=0, round_index=0)
+
+    def test_cpu_only_one_raw_reading_fails(self) -> None:
+        samples = [bench_core.Sample(memory_current=1, cpu_cores=None, vm_rss_kb=2, pg_total=5)]
+        with self.assertRaises(bench_core.BenchError):
+            bench_core.sampling_metrics(samples, pg_error=None, pg_failures=0, round_index=0)
+
+    def test_all_pg_missing_fails(self) -> None:
+        samples = [
+            bench_core.Sample(memory_current=1, cpu_cores=0.1, vm_rss_kb=2, pg_total=None)
+        ]
+        with self.assertRaises(bench_core.BenchError):
+            bench_core.sampling_metrics(samples, pg_error="boom", pg_failures=3, round_index=0)
+
+    def test_partial_missing_recorded(self) -> None:
+        samples = [
+            self._full(),
+            bench_core.Sample(memory_current=3, cpu_cores=0.2, vm_rss_kb=4, pg_total=None),
+        ]
+        metrics = bench_core.sampling_metrics(
+            samples, pg_error="one", pg_failures=1, round_index=0
+        )
+        self.assertEqual(metrics["sampleCounts"]["cpu_cores"], 2)
+        self.assertEqual(metrics["sampleCounts"]["vm_rss_kb"], 2)
+        self.assertEqual(metrics["sampleCounts"]["pg_total"], 1)
+        self.assertEqual(metrics["missingCounts"]["pg_total"], 1)
+        self.assertEqual(metrics["pgConnections"]["validSamples"], 1)
+        self.assertEqual(metrics["pgConnections"]["failedSamples"], 1)
+        self.assertTrue(metrics["pgConnections"]["available"])
+        self.assertIn("nonActive", metrics["pgConnections"])
+
 
 class TestLoadBounds(unittest.TestCase):
     def test_rejects_unbounded(self) -> None:
@@ -646,6 +721,29 @@ class TestUidModeCheck(unittest.TestCase):
                 uidcheck._volume("inspect", "some-other-volume")
         finally:
             uidcheck.VOLUME_NAME = original
+
+
+class TestBenchmarkOutRefusal(unittest.TestCase):
+    def _load_module(self):
+        import importlib.util
+
+        script = Path(__file__).resolve().parents[2] / "scripts" / "benchmark-http.py"
+        spec = importlib.util.spec_from_file_location("benchmark_http_mod", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_existing_out_refused_before_run_workers(self) -> None:
+        from unittest import mock
+
+        module = self._load_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "exists.json"
+            out.write_text("{}", encoding="utf-8")
+            with mock.patch.object(module.bench_core, "run_workers") as mocked:
+                rc = module.main(["--backend", "java", "--scenario", "read", "--out", str(out)])
+            self.assertEqual(rc, 1)
+            mocked.assert_not_called()
 
 
 if __name__ == "__main__":

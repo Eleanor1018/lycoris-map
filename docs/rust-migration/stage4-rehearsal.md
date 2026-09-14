@@ -281,7 +281,7 @@
 1. **真实译文新增**：`rust-writes` 增加 `language=en` 译文提案 → 管理员审批 → `GET /api/markers/{id}?lang=en`
    与 `?lang=zh` 分别断言准确 title/description，并记录 translationId/source_hash（只读 DB 证据）；Java(PG18)、
    Java(PG17 back) 均须真实 HTTP 读取同译文与源文。
-2. **收藏显式核验**：收藏从图片上传中拆出为显式操作；Rust、Java(PG18)、Java(PG17 back) 均 `GET /api/me/favorites`
+2. **收藏显式核验**：收藏从图片上传中拆出为显式操作；Rust、Java(PG18)、Java(PG17 back) 均 `GET /api/markers/me/favorites`
    断言含目标 id；并 `GET /api/me` 断言 publicId/avatarUrl 与新建用户一致。
 3. **PG17 back 真实读取**：`db-final-verify` 改为在 Java back 上真实登录 Rust 改密账号、核对用户/点位/译文/收藏/媒体
    后再继续写入；不把 PG18 读取当作 PG17 已读。
@@ -324,22 +324,37 @@ Java back 读写 → 再留 Rust(PG18)；generation 严格递增，不从旧 see
 | db-rollback --recreate | `restoreMode=raw`，指纹一致 |
 | Java 回退库 validate + 读写 | flow java-pg18 OK |
 
-## 未实测 / 阻塞（不得记为通过）
+## 首轮历史未实测 / 阻塞（当时状态，已由后续轮次推进）
 
-- Rust `--check-baseline`/`--adopt-baseline`、Rust release 容器启动、Java↔Rust 同入口切换
-  与 `rust-writes`/`rollback-verify` 阶段：Rust 镜像未交付，`adopt`/`switch --to rust`
-  返回 `blocked(2)`。
-- 完整性能矩阵（idle/warm read/login/upload × 两后端 × 3 轮）：Rust 镜像未交付；本轮只跑了
-  Java read 的 `--quick` smoke（明确非完整结果）。Rust 交付后按同一配置实跑。
-- Java→Rust→Java 的旧 Cookie 失效：Rust 腿待交付；已用 **Java→Java 分代**（g1→g2、g3）
-  在返回 Java 时重放**最初 g1 Cookie** 并严格 401，机制一致。
-- 共享上传卷在 **Linux 上的同属主可写**：已将 Java/Rust 统一 UID/GID 10001，并实测 Java 上传
-  头像后读回；Rust 腿待镜像，届时验证同一卷双向读写（不使用 chmod 777）。
-- Web 真浏览器（lycoris-stage4 / 5198）与 Android emulator 由父级验收，本工具不改动。
+> 以下为**第一轮/第二轮当时**的记录，保留历史与失败证据；当前状态见「完整矩阵实跑」与「补充矩阵计划」。
 
-## 集成接口（Rust 交付后）
+- （历史，已解除）Rust 镜像未交付时：`adopt`/`switch --to rust` 返回 `blocked(2)`。
+  后续 Rust `lycoris-rust-stage4:local` 交付并已完成 `adopt`/`switch --to rust`。
+- （历史）性能矩阵当时未跑，仅 Java read `--quick` smoke；正式性能仍未跑（见下）。
+- （历史）Linux 命名卷同 UID 双向读写当时未测；后续 `uid-check` 已实测通过。
+- （历史）Web/Android 由父级验收；本工具不改动。
+
+## 当前待补（不得记为通过）
+
+- **真实 en 译文/收藏补充矩阵**：首轮 `rust-writes` 实际只验证原文(zh)编辑，未新增 en 译文；
+  补充矩阵（用修正后 `rust-writes` 新建账号/改点/en 译文审批/收藏/媒体，再 Java PG18→PG17 back 读取）
+  **本轮尚未执行**，待 Docker 引擎恢复后运行。
+- **正式性能矩阵**（idle/warm read/login/upload × 两后端 × 3 轮，配对基线快照/恢复）：未执行。
+
+## 路由/路径更正
+
+- 收藏列表 API 正确路径为 `GET /api/markers/me/favorites`（此前文字误写 `/api/me/favorites`，工具已用正确路径）。
+
+## 集成接口（Rust）
 
 - `RUST_REHEARSAL_IMAGE`：非 root，读 `DATABASE_URL`/`REDIS_URL`，`UPLOAD_DIR=/app/uploads`，
   入口支持 `--check-baseline`/`--adopt-baseline`。
 - `switch --to rust --generation N` 写独立命名空间/Cookie，reload 前 `nginx -t`。
 - 步骤退出码：`0` 成功、`1` 失败、`2` 依赖阻塞；报告见 `<work-dir>/reports/`。
+
+## 温晓独立复审：性能采样工具收尾
+
+- 报告路径在负载前检查；PG18 up 的 client backend 总数、active / nonActive 数进入每轮报告，排除采样连接自身。nonActive 包含 idle in transaction，不能解释为全部空闲。
+- RSS、cgroup 内存、CPU 差值、PG 连接数任一零有效样本均拒绝生成成功结论；报告有效/缺失样本数与 PG 采样失败次数。两次串行采样命令各有 15 秒超时，线程退出等待覆盖两次命令。
+- 苏瑶执行 51 项纯 Python 检查全部通过；温晓独立复跑同 51 项通过（5.708 秒），审查工具 diff 通过。离线测试不代表真实负载或 PG 采样已经执行。
+- 当前 Docker 引擎卡在停止状态，补充回退矩阵与正式性能仍未执行。温晓已向 Nora 询问重启 Docker Desktop，因为会短暂中断其他项目容器；收到明确回复前不执行重启。

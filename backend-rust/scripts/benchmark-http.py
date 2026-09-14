@@ -145,8 +145,27 @@ def main(argv: list[str] | None = None) -> int:
             warmup=warmup, duration=duration, concurrency=args.concurrency,
             repeats=repeats, request_timeout=args.request_timeout,
         )
+    except bench_core.BenchError as exc:
+        print(f"[error] {exc}", file=sys.stderr)
+        return 1
+
+    # 报告路径在**任何负载/业务写入之前**确定：显式 --out 已存在即拒绝（不先跑一分钟再失败）。
+    if args.out:
+        if args.out.exists():
+            print(f"[error] 报告 {args.out} 已存在，拒绝覆盖；请换文件名或删除后重试", file=sys.stderr)
+            return 1
+        out = args.out
+    else:
+        base = args.work_dir / "reports" / f"bench-{args.backend}-{args.scenario}.json"
+        out = base
+        index = 2
+        while out.exists():
+            out = base.with_name(f"{base.stem}-{index}{base.suffix}")
+            index += 1
+
+    try:
         guard.assert_http_endpoint(args.entry, name="ENTRY_URL")
-    except (bench_core.BenchError, guard.GuardError) as exc:
+    except guard.GuardError as exc:
         print(f"[error] {exc}", file=sys.stderr)
         return 1
 
@@ -155,6 +174,8 @@ def main(argv: list[str] | None = None) -> int:
     if not pg_user:
         print("[error] 缺少 .env 中的合成 PG 用户；先 render/seed", file=sys.stderr)
         return 1
+    pg_container = common.TABLES["pg18"]["container"]
+    pg_database = common.TABLES["pg18"]["database"]
 
     container = bench_core.BACKEND_CONTAINER[args.backend]
     meta: dict[str, object] = {
@@ -271,6 +292,9 @@ def main(argv: list[str] | None = None) -> int:
                 password=DEFAULT_USER_PASSWORD,
                 request_timeout=args.request_timeout,
                 container=container,
+                pg_container=pg_container,
+                pg_database=pg_database,
+                pg_user=pg_user,
                 round_index=index,
             )
             bench_core.assert_meaningful(result, args.scenario)
@@ -311,14 +335,9 @@ def main(argv: list[str] | None = None) -> int:
         "summary": summary,
         "endingDataset": bench_core.dataset_state(args.work_dir, pg_user),
     }
-    if args.out:
-        out = args.out
-        if out.exists():
-            print(f"[bench] FAIL: 报告 {out} 已存在，拒绝覆盖；请换文件名", file=sys.stderr)
-            return 1
-    else:
+    if not args.out:
+        # 运行期间若同名文件出现，再顺延避免覆盖（显式 --out 已在运行前拒绝）。
         base = args.work_dir / "reports" / f"bench-{args.backend}-{args.scenario}.json"
-        out = base
         index = 2
         while out.exists():
             out = base.with_name(f"{base.stem}-{index}{base.suffix}")

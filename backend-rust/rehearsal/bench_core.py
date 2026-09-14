@@ -185,6 +185,22 @@ class Sample:
     cpu_cores: float | None = None
     vm_rss_kb: int | None = None
     sample_cost_ms: float | None = None
+    pg_total: int | None = None
+    pg_active: int | None = None
+    pg_non_active: int | None = None
+    pg_sample_cost_ms: float | None = None
+
+
+# 只读、仅统计当前合成库的 client backend，排除自身 pg_backend_pid()，区分 active/non_active；
+# 不把背景进程算作应用连接，也不读取凭据。
+# 注意：non_active = state <> 'active'，包含 idle、idle in transaction 等，**不等于**全部 idle。
+PG_QUERY = (
+    "SELECT count(*) FILTER (WHERE pid <> pg_backend_pid()) AS total, "
+    "count(*) FILTER (WHERE pid <> pg_backend_pid() AND state = 'active') AS active, "
+    "count(*) FILTER (WHERE pid <> pg_backend_pid() AND state <> 'active') AS non_active "
+    "FROM pg_stat_activity "
+    "WHERE datname = current_database() AND backend_type = 'client backend';"
+)
 
 
 class Sampler(threading.Thread):
@@ -198,15 +214,54 @@ class Sampler(threading.Thread):
     # exec 命令自身 timeout 15s；join 至少覆盖它，避免返回后仍在写 samples。
     EXEC_TIMEOUT = 15.0
 
-    def __init__(self, container: str, *, interval: float = 1.0):
+    def __init__(
+        self,
+        container: str,
+        *,
+        pg_container: str | None = None,
+        pg_database: str | None = None,
+        pg_user: str | None = None,
+        interval: float = 1.0,
+    ):
         super().__init__(daemon=True)
         self.container = container
+        self.pg_container = pg_container
+        self.pg_database = pg_database
+        self.pg_user = pg_user
         self.interval = interval
         self._stop_event = threading.Event()
         self.samples: list[Sample] = []
         self.stop_failed = False
+        self.attempts = 0
+        self.errors: list[str] = []
+        self.pg_error: str | None = None
+        self.pg_failures = 0
         self._last_cpu_usec: int | None = None
         self._last_cpu_ts: float | None = None
+
+    def _query_pg(self) -> tuple[int | None, int | None, int | None, float | None]:
+        started = time.perf_counter()
+        if not (self.pg_container and self.pg_database and self.pg_user):
+            self.pg_error = "未配置 PG 采样目标"
+            self.pg_failures += 1
+            return None, None, None, None
+        try:
+            raw = common.psql(
+                self.pg_container,
+                self.pg_database,
+                PG_QUERY,
+                user=self.pg_user,
+                check=True,
+                timeout=int(self.EXEC_TIMEOUT),
+            ).strip()
+            total_s, _, rest = raw.partition("|")
+            active_s, _, non_active_s = rest.partition("|")
+            cost = round((time.perf_counter() - started) * 1000, 3)
+            return int(total_s), int(active_s), int(non_active_s), cost
+        except Exception as exc:  # noqa: BLE001 - 采样不可用必须显式记录，不默认为 0
+            self.pg_error = f"{type(exc).__name__}:{exc}"[:200]
+            self.pg_failures += 1
+            return None, None, None, None
 
     def _sample_once(self) -> None:
         started = time.perf_counter()
@@ -240,17 +295,32 @@ class Sampler(threading.Thread):
         if cpu_usec is not None:
             self._last_cpu_usec = cpu_usec
             self._last_cpu_ts = now
+        pg_total, pg_active, pg_non_active, pg_cost = self._query_pg()
         self.samples.append(
-            Sample(mem, cores, vm_rss, round((time.perf_counter() - started) * 1000, 3))
+            Sample(
+                memory_current=mem,
+                cpu_cores=cores,
+                vm_rss_kb=vm_rss,
+                sample_cost_ms=round((time.perf_counter() - started) * 1000, 3),
+                pg_total=pg_total,
+                pg_active=pg_active,
+                pg_non_active=pg_non_active,
+                pg_sample_cost_ms=pg_cost,
+            )
         )
 
     def run(self) -> None:
         while not self._stop_event.wait(self.interval):
-            self._sample_once()
+            self.attempts += 1
+            try:
+                self._sample_once()
+            except Exception as exc:  # noqa: BLE001 - 线程异常必须受控记录，不能静默退出
+                self.errors.append(f"{type(exc).__name__}:{exc}"[:200])
 
     def stop_collect(self) -> list[Sample]:
         self._stop_event.set()
-        deadline = time.monotonic() + self.EXEC_TIMEOUT + 5.0
+        # 两次串行 exec（容器 + pg）各自可达 EXEC_TIMEOUT，join 上限必须覆盖两者。
+        deadline = time.monotonic() + 2 * self.EXEC_TIMEOUT + 5.0
         while self.is_alive() and time.monotonic() < deadline:
             self.join(timeout=0.5)
         if self.is_alive():
@@ -481,6 +551,61 @@ def _percentile(values: list[float], pct: float) -> float | None:
     return ordered[index]
 
 
+CONTAINER_METRICS = ("memory_current", "cpu_cores", "vm_rss_kb")
+METRIC_LABELS = {
+    "memory_current": "cgroup 内存",
+    "cpu_cores": "cpu.stat 差值（需≥2次 usage_usec 原始读数）",
+    "vm_rss_kb": "/proc/1 VmRSS",
+    "pg_total": "PG client backend 连接数",
+}
+
+
+def sampling_metrics(
+    samples: list[Sample], *, pg_error: str | None, pg_failures: int, round_index: int
+) -> dict[str, object]:
+    """核对每个待比较指标有足够有效样本；缺失/部分失败如实记录，零有效则失败。"""
+    if not samples:
+        raise BenchError("未采集到任何样本（拒绝假装已采样）")
+    counts = {
+        attr: sum(1 for s in samples if getattr(s, attr) is not None)
+        for attr in (*CONTAINER_METRICS, "pg_total")
+    }
+    missing = {attr: len(samples) - counts[attr] for attr in counts}
+    for attr in CONTAINER_METRICS:
+        if counts[attr] == 0:
+            raise BenchError(f"指标 {METRIC_LABELS[attr]} 零有效样本，无法比较（拒绝写 null 当成功）")
+    if counts["pg_total"] == 0:
+        raise BenchError(
+            f"PG 连接采样全部失败（{pg_failures} 次）：{pg_error or 'unknown'}"
+        )
+    return {
+        "containerMemoryBytes": aggregate_samples(samples, "memory_current"),
+        "containerCpuCores": aggregate_samples(samples, "cpu_cores"),
+        "processVmRssKb": aggregate_samples(samples, "vm_rss_kb"),
+        "sampleCount": len(samples),
+        "sampleCounts": counts,
+        "missingCounts": missing,
+        "sampleCostMs": aggregate_samples(samples, "sample_cost_ms"),
+        "pgConnections": {
+            "total": aggregate_samples(samples, "pg_total"),
+            "active": aggregate_samples(samples, "pg_active"),
+            "nonActive": aggregate_samples(samples, "pg_non_active"),
+            "available": True,
+            "validSamples": counts["pg_total"],
+            "failedSamples": pg_failures,
+            "method": (
+                "docker exec psql(local socket) 只读 pg_stat_activity；"
+                "backend_type='client backend' 且 datname=current_database()，排除 pg_backend_pid()；"
+                "区分 active 与 nonActive（state<>'active'，含 idle/idle in transaction 等）；"
+                "不含后台进程与凭据"
+            ),
+        },
+        "pgSampleCostMs": aggregate_samples(samples, "pg_sample_cost_ms"),
+        "pgSampleFailures": pg_failures,
+        "samplerErrorCount": 0,
+    }
+
+
 def run_round(
     *,
     scenario: str,
@@ -493,11 +618,19 @@ def run_round(
     password: str,
     request_timeout: float,
     container: str,
+    pg_container: str,
+    pg_database: str,
+    pg_user: str,
     round_index: int,
 ) -> RoundResult:
     from datetime import datetime, timezone
 
-    sampler = Sampler(container)
+    sampler = Sampler(
+        container,
+        pg_container=pg_container,
+        pg_database=pg_database,
+        pg_user=pg_user,
+    )
     sampler.start()
     started = datetime.now(timezone.utc)
     if scenario == "idle":
@@ -519,17 +652,21 @@ def run_round(
     samples = sampler.stop_collect()
     if sampler.stop_failed:
         raise BenchError("采样线程未在超时内停止，禁止进入下一轮")
+    if sampler.errors:
+        raise BenchError(f"采样线程异常：{sampler.errors[:3]}")
     if stuck:
         raise BenchError(f"第 {round_index} 轮有线程未在请求超时内结束：{stuck}")
-    metrics = {
-        "containerMemoryBytes": aggregate_samples(samples, "memory_current"),
-        "containerCpuCores": aggregate_samples(samples, "cpu_cores"),
-        "processVmRssKb": aggregate_samples(samples, "vm_rss_kb"),
-        "sampleCount": len(samples),
-        "sampleCostMs": aggregate_samples(samples, "sample_cost_ms"),
-        "setupMs": _range(stats.setup_samples_ms),
-        "setupNote": "worker 准备（client/512 图像生成/上传前登录）落在测量窗口内；单请求延迟不含登录/生成",
-    }
+    metrics = sampling_metrics(
+        samples,
+        pg_error=sampler.pg_error,
+        pg_failures=sampler.pg_failures,
+        round_index=round_index,
+    )
+    metrics["samplerErrorCount"] = len(sampler.errors)
+    metrics["setupMs"] = _range(stats.setup_samples_ms)
+    metrics["setupNote"] = (
+        "worker 准备（client/512 图像生成/上传前登录）落在测量窗口内；单请求延迟不含登录/生成"
+    )
     return RoundResult(
         round=round_index,
         stats=stats,
