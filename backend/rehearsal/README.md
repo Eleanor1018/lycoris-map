@@ -57,21 +57,21 @@
 
 ```powershell
 $wd = "C:/Users/Nora/AppData/Local/Temp/opencode/rehearsal-pg1711"
-python backend-rust/scripts/check-rehearsal.py --work-dir $wd render --java-jar C:/Users/Nora/lycoris/backend/target/demo-1.0.3.jar
-python backend-rust/scripts/check-rehearsal.py --work-dir $wd guard
-python backend-rust/scripts/check-rehearsal.py --work-dir $wd up-deps          # 构建/启动 pg17.11+3.6.4；校验 resolved config
-python backend-rust/scripts/check-rehearsal.py --work-dir $wd seed --recreate  # 新 runId，清理 flow/marker/cookie 依赖状态
-python backend-rust/scripts/check-rehearsal.py --work-dir $wd switch --to java --db pg17 --generation 1
-python backend-rust/scripts/check-rehearsal.py --work-dir $wd flow --phase java-baseline
-python backend-rust/scripts/check-rehearsal.py --work-dir $wd upgrade --recreate
-python backend-rust/scripts/check-rehearsal.py --work-dir $wd switch --to java --db pg18 --generation 2
-python backend-rust/scripts/check-rehearsal.py --work-dir $wd flow --phase java-pg18
-python backend-rust/scripts/check-rehearsal.py --work-dir $wd db-rollback --recreate
-python backend-rust/scripts/check-rehearsal.py --work-dir $wd switch --to java --db back --generation 3
-python backend-rust/scripts/check-rehearsal.py --work-dir $wd flow --phase java-pg18
-python backend-rust/scripts/check-rehearsal.py --work-dir $wd report-index
+python backend/scripts/check-rehearsal.py --work-dir $wd render --java-jar C:/Users/Nora/lycoris/backend-old/target/demo-1.0.3.jar
+python backend/scripts/check-rehearsal.py --work-dir $wd guard
+python backend/scripts/check-rehearsal.py --work-dir $wd up-deps          # 构建/启动 pg17.11+3.6.4；校验 resolved config
+python backend/scripts/check-rehearsal.py --work-dir $wd seed --recreate  # 新 runId，清理 flow/marker/cookie 依赖状态
+python backend/scripts/check-rehearsal.py --work-dir $wd switch --to java --db pg17 --generation 1
+python backend/scripts/check-rehearsal.py --work-dir $wd flow --phase java-baseline
+python backend/scripts/check-rehearsal.py --work-dir $wd upgrade --recreate
+python backend/scripts/check-rehearsal.py --work-dir $wd switch --to java --db pg18 --generation 2
+python backend/scripts/check-rehearsal.py --work-dir $wd flow --phase java-pg18
+python backend/scripts/check-rehearsal.py --work-dir $wd db-rollback --recreate
+python backend/scripts/check-rehearsal.py --work-dir $wd switch --to java --db back --generation 3
+python backend/scripts/check-rehearsal.py --work-dir $wd flow --phase java-pg18
+python backend/scripts/check-rehearsal.py --work-dir $wd report-index
 # Rust 交付后：adopt / switch --to rust / flow rust-writes / switch java / flow rollback-verify
-python backend-rust/scripts/check-rehearsal.py --work-dir $wd down              # 保留卷
+python backend/scripts/check-rehearsal.py --work-dir $wd down              # 保留卷
 ```
 
 退出码：`0` 成功、`1` 失败、`2` 依赖阻塞。报告在 `<work-dir>/reports/<step>.json`
@@ -83,8 +83,8 @@ python backend-rust/scripts/check-rehearsal.py --work-dir $wd down              
 ## 公平性能（`scripts/benchmark-http.py`）
 
 ```powershell
-python backend-rust/scripts/benchmark-http.py --self-test
-python backend-rust/scripts/benchmark-http.py --backend java --scenario read `
+python backend/scripts/benchmark-http.py --self-test
+python backend/scripts/benchmark-http.py --backend java --scenario read `
     --warmup 10 --duration 20 --concurrency 8 --repeats 3 `
     --cache-state on --assert-single-backend --work-dir $wd
 ```
@@ -111,9 +111,9 @@ python backend-rust/scripts/benchmark-http.py --backend java --scenario read `
 
 ```powershell
 # 完整矩阵（Java/Rust 往返与新增写入验证）完成后，冻结并保存同名 PG18 up 库 + uploads
-python backend-rust/scripts/check-rehearsal.py --work-dir $wd snapshot-baseline --label pairA
+python backend/scripts/check-rehearsal.py --work-dir $wd snapshot-baseline --label pairA
 # 配对测量前恢复：先 freeze + 停两写者，仅恢复既有 up 库与 uploads，再核对指纹/媒体
-python backend-rust/scripts/check-rehearsal.py --work-dir $wd restore-baseline --label pairA
+python backend/scripts/check-rehearsal.py --work-dir $wd restore-baseline --label pairA
 ```
 
 - 快照/恢复只允许 `<work-dir>/artifacts/baseline-<label>*` 与既有 `<work-dir>/uploads`；

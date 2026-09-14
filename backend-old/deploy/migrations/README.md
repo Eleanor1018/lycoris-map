@@ -13,7 +13,7 @@
 
 ### 迁移与索引
 
-在 `backend/` 目录操作，先将数据库备份到仓库外的受控目录，再执行 [2026-09-06-marker-translations.sql](2026-09-06-marker-translations.sql)。连接使用当前环境的 PostgreSQL `PG*` 设置；不要将密码、备份或点位导出文件提交到仓库。将下面的 `<private-directory>` 替换为仓库外的绝对路径。
+在 `backend-old/` 目录操作，先将数据库备份到仓库外的受控目录，再执行 [2026-09-06-marker-translations.sql](2026-09-06-marker-translations.sql)。连接使用当前环境的 PostgreSQL `PG*` 设置；不要将密码、备份或点位导出文件提交到仓库。将下面的 `<private-directory>` 替换为仓库外的绝对路径。
 
 ```sh
 pg_dump --format=custom --file="<private-directory>/before-marker-translations.dump"
@@ -69,7 +69,7 @@ psql -X -v ON_ERROR_STOP=1 -f deploy/migrations/2026-09-06-marker-search-indexes
 
 上线前，Java 67 项测试已通过；离线工具 19 项纯 Python 测试及 7 项隔离 PostgreSQL 16 测试已通过。该组 PostgreSQL 测试涵盖迁移重复执行、保留原文、正常与重复导入、源变化跳过、人工保护、权限重核及删除级联；测试容器已清理。本次真实数据库副本与正式接口验证另见上方生产执行记录。
 
-从 `backend/` 可运行：
+从 `backend-old/` 可运行：
 
 ```sh
 ./mvnw test

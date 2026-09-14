@@ -12,7 +12,7 @@ SSH 已恢复；已创建并验证 `pg_dump` 备份，依次执行版本、语�
 
 ## 准备
 
-需要 Python 3.10+、`psql` 和已执行[双语数据库迁移](../deploy/migrations/README.md)的目标数据库。以下命令从 `backend/` 运行，`<private-directory>` 应替换为仓库外的受控绝对目录。导出文件可能包含用户投稿，不要把它们、数据库备份或连接凭据提交到仓库。
+需要 Python 3.10+、`psql` 和已执行[双语数据库迁移](../deploy/migrations/README.md)的目标数据库。以下命令从 `backend-old/` 运行，`<private-directory>` 应替换为仓库外的受控绝对目录。导出文件可能包含用户投稿，不要把它们、数据库备份或连接凭据提交到仓库。
 
 工具继承当前进程的 PostgreSQL 连接设置，例如 `PGHOST`、`PGPORT`、`PGDATABASE`、`PGUSER`、`PGSSLMODE`，以及保存在仓库外的 `PGPASSFILE`。如使用 `PGPASSWORD`，只在当前受控环境中提供，不写入代码、命令示例或仓库文件。工具不会自行加载 `.env`，`psql` 使用非交互模式，连接凭据须事先配置。`--psql` 可指定 `psql` 可执行文件路径。
 

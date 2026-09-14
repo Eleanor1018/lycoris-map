@@ -1,0 +1,10 @@
+.git
+.idea
+.mvn
+target
+uploads
+*.iml
+.classpath
+.project
+.settings
+README.md

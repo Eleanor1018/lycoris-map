@@ -13,7 +13,7 @@
 # containers; `lycoris-restore-review` and other held databases are never touched.
 #
 # Prerequisite: SQLx CLI must be 0.9.0 (`cargo sqlx --version`).
-# Usage: pwsh backend-rust/scripts/check-rust.ps1
+# Usage: pwsh backend/scripts/check-rust.ps1
 #        Use -SkipTest to run migration, offline metadata and static checks only.
 
 [CmdletBinding()]

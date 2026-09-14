@@ -49,11 +49,11 @@ APK 包含运行所需的 JavaScript 和文档资源，**不需要启动 Metro**
 
 ## 技术栈
 
-开发者快速了解项目：[Rust 后端说明](./backend-rust/README.md)。
+开发者快速了解项目：[Rust 后端说明](./backend/README.md)。
 
 - frontend： React(Typescript)
-- backend-rust：Rust + Axum + SQLx（默认后端；无 ORM）
-- backend：已弃用的 Java / Spring Boot 实现，保留供现有线上与回退参考
+- backend：Rust + Axum + SQLx（默认后端；无 ORM）
+- backend-old：已弃用的 Java / Spring Boot 实现，保留供现有线上与回退参考
 - mobile: React Native（TypeScript，包含 Android / iOS 原生桥接）
 - 数据库：PostgreSQL + PostGIS；Redis 用于会话、缓存与限流
 
@@ -63,14 +63,14 @@ APK 包含运行所需的 JavaScript 和文档资源，**不需要启动 Metro**
 
 ## 克隆与初始化
 
-本仓库已采用单仓库（Monorepo）结构，`backend-rust` / `frontend` / `mobile` 都在同一个仓库中；`backend` 为旧 Java 实现。
+本仓库已采用单仓库（Monorepo）结构，`backend` / `frontend` / `mobile` 都在同一个仓库中；`backend-old` 为旧 Java 实现。
 
 ### 1. 准备环境并获取代码
 
 | 组件 | 本仓库的要求 |
 | --- | --- |
 | JavaScript | Node.js 22（至少 22.12.0）或 Node.js 20（至少 20.19.4），以及随 Node 安装的 npm；同时满足 Vite 7 和 React Native 0.83.1 的要求。 |
-| 后端 | rustup；进入 `backend-rust/` 后按 `rust-toolchain.toml` 使用 Rust 1.98.1。Windows 原生编译需 Visual Studio C++ Build Tools。后端不再要求 JDK/Maven；Android 构建仍需要其 Java 工具链。 |
+| 后端 | rustup；进入 `backend/` 后按 `rust-toolchain.toml` 使用 Rust 1.98.1。Windows 原生编译需 Visual Studio C++ Build Tools。后端不再要求 JDK/Maven；Android 构建仍需要其 Java 工具链。 |
 | 数据库 | 本地 Compose 固定 PostgreSQL 18.6 + PostGIS 3.6.4；附近查询使用 PostGIS 候选筛选与距离计算。 |
 | 缓存与会话 | 本地 Compose 固定 Redis 8.10.1；登录会话需要 Redis。 |
 | Android | Android Studio、Android SDK Platform 36、Build-Tools 36.0.0、NDK 27.1.12297006；模拟器或开启 USB 调试的 Android 设备。 |
@@ -94,20 +94,20 @@ git pull
 
 ### 2. 后端：Rust、数据库与本地启动
 
-**仓库与本地默认后端为 `backend-rust/`（Axum + SQLx）。** `backend/` 的 Java 实现保留供现有线上服务与回退参考，线上 API 本次未切换。
+**仓库与本地默认后端为 `backend/`（Axum + SQLx）。** `backend-old/` 的 Java 实现保留供现有线上服务与回退参考，线上 API 本次未切换。
 
 从仓库根目录启动本地 PostgreSQL / PostGIS 与 Redis（需要 Docker）：
 
 ```bash
-docker compose -f backend-rust/compose.test.yml up -d --wait
+docker compose -f backend/compose.test.yml up -d --wait
 ```
 
-Rust 二进制读取进程环境变量，不自动加载 `.env`。完整变量见 `backend-rust/.env.example`；下面使用 Compose 的空开发库示例，自定义本地数据库或上传目录时设置对应变量。
+Rust 二进制读取进程环境变量，不自动加载 `.env`。完整变量见 `backend/.env.example`；下面使用 Compose 的空开发库示例，自定义本地数据库或上传目录时设置对应变量。
 
 Windows PowerShell：
 
 ```powershell
-cd backend-rust
+cd backend
 $env:DATABASE_URL = 'postgres://lycoris:lycoris_local_test@127.0.0.1:55432/lycoris_rust'
 $env:REDIS_URL = 'redis://127.0.0.1:56379'
 $env:WRITE_ALLOWED_ORIGINS = 'http://localhost:5173,http://127.0.0.1:5173,https://localhost:5173,https://127.0.0.1:5173'
@@ -117,7 +117,7 @@ $env:SQLX_OFFLINE = 'true'
 macOS / Linux：
 
 ```bash
-cd backend-rust
+cd backend
 export DATABASE_URL='postgres://lycoris:lycoris_local_test@127.0.0.1:55432/lycoris_rust'
 export REDIS_URL='redis://127.0.0.1:56379'
 export WRITE_ALLOWED_ORIGINS='http://localhost:5173,http://127.0.0.1:5173,https://localhost:5173,https://127.0.0.1:5173'
@@ -131,11 +131,11 @@ cargo run --locked -- --migrate
 cargo run --locked
 ```
 
-在 `backend-rust/` 内运行 Cargo，使用目录中固定的 Rust 工具链。默认服务地址为 `http://127.0.0.1:8080`，可访问 `/health/ready` 和 `/api/markers/public` 检查服务；新开发库返回空列表正常。普通启动只读校验迁移状态，不自动建表；已有 Java 数据库按 [Rust 基线接管说明](./backend-rust/README.md) 处理。
+在 `backend/` 内运行 Cargo，使用目录中固定的 Rust 工具链。默认服务地址为 `http://127.0.0.1:8080`，可访问 `/health/ready` 和 `/api/markers/public` 检查服务；新开发库返回空列表正常。普通启动只读校验迁移状态，不自动建表；已有 Java 数据库按 [Rust 基线接管说明](./backend/README.md) 处理。
 
 Web 的 `/api` 与 `/uploads` 经 Vite 同源代理访问 Rust。若页面端口或域名改变，需调整 `WRITE_ALLOWED_ORIGINS`；真机联调另需设置 `SERVER_HOST=0.0.0.0` 并使用电脑局域网地址。
 
-Python 开发脚本与根 `docs/` 文档仅保留本地，不随 Git 分发。已有本地 `run-local.py` 仍可读取自己的 `.env` 运行；新拉取仓库使用上面的 Cargo 命令，不需要 Python。详细配置与测试见 [Rust 后端说明](./backend-rust/README.md)。
+Python 开发脚本与根 `docs/` 文档仅保留本地，不随 Git 分发。已有本地 `run-local.py` 仍可读取自己的 `.env` 运行；新拉取仓库使用上面的 Cargo 命令，不需要 Python。详细配置与测试见 [Rust 后端说明](./backend/README.md)。
 
 ### 3. 网页：安装依赖并启动
 

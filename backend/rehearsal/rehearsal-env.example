@@ -31,7 +31,7 @@ REHEARSAL_APP_GID=10001
 
 # 前置依赖（交付后填写；缺失时对应步骤报 blocked，不假称成功）。
 # 温晓在原 Java 未改代码构建的平台无关 JAR：
-JAVA_JAR_PATH=C:/Users/Nora/lycoris/backend/target/demo-1.0.3.jar
+JAVA_JAR_PATH=C:/Users/Nora/lycoris/backend-old/target/demo-1.0.3.jar
 # Linux Rust release 镜像（本任务不构建）：
 RUST_REHEARSAL_IMAGE=
 

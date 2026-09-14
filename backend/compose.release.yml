@@ -10,7 +10,7 @@
 #     接入，仅用于演练，不得当作生产连接方式；
 #   - 绝不连接 lycoris-restore-review、恢复库或任何生产地址。
 #
-# 常用命令（在 backend-rust/ 内）：
+# 常用命令（在 backend/ 内）：
 #   docker compose -f compose.release.yml build app
 #   docker compose -f compose.release.yml run --rm test
 #   docker compose -f compose.release.yml up -d app
