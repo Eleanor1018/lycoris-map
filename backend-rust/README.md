@@ -13,11 +13,13 @@ TCP 验收 **64/64**、覆盖 **43/43** 个接口模板。阶段 4 已实现已�
 `0002_spatial` 生成列/GiST 部分索引与 `nearby:v2` PostGIS 候选查询，并已在重构分支 Linux 发布
 容器跑通全套门禁（fmt / 离线全 targets / clippy / 全部 cargo test）与运行验证。空间迁移后的原
 Java JAR 真实 HTTP 读写与回退、Web/Android 查询复查也已通过。生产切换不在本阶段范围内。
-详细证据与差异见 [执行记录](../docs/rust-migration/execution.md)。生产仍由 `backend/` 的
+详细证据与差异见 `docs/rust-migration/execution.md`（仅本地）。生产仍由 `backend/` 的
 Spring Boot 服务承担。
 
 设计依据：`docs/rust-migration/auth-design.md`、`docs/rust-migration/api-contract.md`。
 本轮保留 Cookie + 账号 + 密码 + 管理员二次验证体验，最终认证重设计另案。
+
+Python 开发/演练脚本与根 `docs/` 文档仅保留本地，不随 Git 分发。下文的历史 Python 验收命令仅适用于仍有这些本地文件的工作区；仓库基础构建、启动与 Rust 测试不依赖它们。
 
 ## 目录
 
@@ -60,7 +62,7 @@ Spring Boot 服务承担。
 | `tests/media_http.rs` | 头像 3 路由、受控 `/uploads`、私有点位 detail、阶段 3 点位图片上传与管理员图片提案/清理的真实 PG / Redis / 临时文件 HTTP 集成测试 |
 | `tests/auth_integration.rs` | 认证/用户真实 PG / Redis 集成测试 |
 | `tests/common/mod.rs` | 集成测试共享工具（临时库、回环校验、请求辅助） |
-| `scripts/run-local.py` | 日常启动入口：加载 `.env`（进程环境优先）、设置 SQLx 离线构建、固定 Cargo 工作目录；维护参数显式传入，不自动迁移 |
+| `scripts/run-local.py` | 仅本地保留的便捷入口：加载 `.env`（进程环境优先）、设置 SQLx 离线构建、固定 Cargo 工作目录；维护参数显式传入，不自动迁移 |
 | `scripts/check-rust.ps1` | 迁移合成开发库、校验离线元数据、离线构建并跑 fmt / clippy / test |
 | `compose.test.yml` | 隔离测试依赖：PostgreSQL 18.6 + PostGIS 3.6.4、Redis 8.10.1 |
 | `scripts/check-services.py` | 启动并校验上述两个容器及精确版本（仅标准库） |
@@ -270,8 +272,7 @@ PATCH 与管理员 PATCH 使用全局 8 MiB（`web::MarkerJsonBody`），因为 
 
 ```powershell
 # 从仓库根目录启动依赖容器（首次或重启后）
-docker compose -f backend-rust/compose.test.yml up -d
-python backend-rust/scripts/check-services.py
+docker compose -f backend-rust/compose.test.yml up -d --wait
 
 # 在 crate 目录运行 Cargo，让 rustup 读取这里固定的工具链
 Set-Location backend-rust
@@ -289,21 +290,20 @@ Remove-Item Env:SQLX_OFFLINE -ErrorAction SilentlyContinue
 cargo sqlx prepare -- --all-targets
 ```
 
-日常启动从仓库根目录执行，首次复制 `.env.example` 为 `.env`（已有配置不要覆盖）：
+日常使用 Cargo 原生启动。在 `backend-rust/` 内先设置 `DATABASE_URL`、`REDIS_URL`、`WRITE_ALLOWED_ORIGINS` 与 `SQLX_OFFLINE=true`，Windows 与 macOS/Linux 的完整示例见 [根 README](../README.md#克隆与初始化)。Rust 二进制只读取进程环境变量，不自动加载 `.env`；完整配置见 `.env.example`。相对 `UPLOAD_DIR` 从当前 crate 目录解析。
 
 ```powershell
-Copy-Item backend-rust/.env.example backend-rust/.env
 # 仅首次初始化空开发库或显式升级时执行：
-python backend-rust/scripts/run-local.py --migrate
+cargo run --locked -- --migrate
 # 平时启动：
-python backend-rust/scripts/run-local.py
+cargo run --locked
 ```
 
-启动器读取 `backend-rust/.env`，已有进程环境变量优先。支持 `KEY=value`、空行、整行注释和包围值的一对引号；不做变量插值、命令替换或行尾注释解析。相对 `UPLOAD_DIR` 从 `backend-rust/` 解析，普通启动不会执行迁移。二进制本身仍只读取环境变量；手动导出 `DATABASE_URL`、`REDIS_URL` 与 `SQLX_OFFLINE=true` 后，也可以在 crate 目录直接执行 `cargo run --locked`。
+已有的本地 `scripts/run-local.py` 保留在磁盘，可继续从仓库根执行 `python backend-rust/scripts/run-local.py`，按原有规则加载自己的 `.env`；该开发工具已被 Git 忽略，新拉取仓库使用上面的原生命令。
 
 默认监听 `http://127.0.0.1:8080`。Vite 默认代理到该地址；`.env.example` 的 `WRITE_ALLOWED_ORIGINS` 允许本机 5173 端口，改变页面来源时应同步调整。Linux 发布/演练 Compose 的显式隔离端口保持原配置，不能用其端口推断日常开发默认值。
 
-同一地址只能运行一个后端实例。若提示监听地址已被占用，先用 `python backend-rust/scripts/run-local.py --healthcheck` 检查是否已有服务，再到启动它的终端按 `Ctrl+C` 停止。Windows 可用 `Get-NetTCPConnection -State Listen -LocalPort 8080` 查看占用者，再用 `Get-Process -Id <OwningProcess>` 确认进程。不要直接按进程名称批量结束服务。也可显式修改 `SERVER_PORT`，并同步调整前端代理目标。
+同一地址只能运行一个后端实例。若提示监听地址已被占用，先在 crate 目录用 `cargo run --locked -- --healthcheck` 检查是否已有服务，再到启动它的终端按 `Ctrl+C` 停止。Windows 可用 `Get-NetTCPConnection -State Listen -LocalPort 8080` 查看占用者，再用 `Get-Process -Id <OwningProcess>` 确认进程。不要直接按进程名称批量结束服务。也可显式修改 `SERVER_PORT`，并同步调整前端代理目标。
 
 普通启动只校验迁移已应用；空库需显式 `cargo run -- --migrate`。健康检查
 `/health/live`、`/health/ready` 行为与阶段 1 相同。已有 Java 库（有业务表、无
@@ -483,7 +483,7 @@ avatars 与匿名 markers 读取在 Redis 不可用时仍可读（不加载会�
 半径恰好边界、近极点旧 bbox 漏点、缓存 v2 隔离）与 `tests/spatial_migration.rs`（0002 生成列与
 索引、legacy 接管→`--migrate`、Java 形状 INSERT/UPDATE/DELETE）。可重复性能/EXPLAIN 工具为
 `scripts/spatial_explain.py`，用法与边界见
-[../docs/rust-migration/stage5-spatial.md](../docs/rust-migration/stage5-spatial.md)；正式大规模
+`docs/rust-migration/stage5-spatial.md`（仅本地）；正式大规模
 测量由温晓在独占窗口执行，本地合成开发库用 `scripts/spatial_run.py`（`DATABASE_URL` 指向
 `lycoris_spatial_dev`，**不迁移共享 `lycoris_rust`**）。
 
@@ -574,7 +574,7 @@ docker compose -f compose.release.yml run --rm test
 docker compose -f compose.release.yml run --rm --entrypoint bash test /app/scripts/test-runner-guards.sh
 ```
 
-### 运行验证
+### 运行验证（本地保留的 Python 演练工具）
 
 ```powershell
 # 端到端：目标校验、运行器边界、就绪/读接口、非 root、只读根、上传卷可写、
@@ -619,9 +619,9 @@ python scripts/test_verify_release_linux.py
 不自动迁移/接管（`--migrate` 仅演练时显式调用，且仅指向 synthetic `lycoris_rust`）；不操作
 `lycoris-restore-review` 或其它 Docker 项目。真实 Linux 构建、**223** 项测试（阶段 5 主分支集成）
 与运行验证证据见
-[版本记录](../docs/rust-migration/versions.md)与
-[stage5-release-linux-evidence.json](../docs/rust-migration/stage5-release-linux-evidence.json)；
-阶段 4 证据 [release-linux-evidence.json](../docs/rust-migration/release-linux-evidence.json) 保留。
+`docs/rust-migration/versions.md`（仅本地）与
+`docs/rust-migration/stage5-release-linux-evidence.json`（仅本地）；
+阶段 4 证据 `docs/rust-migration/release-linux-evidence.json`（仅本地） 保留。
 
 ## 连接与数据目录
 
@@ -637,7 +637,7 @@ python scripts/test_verify_release_linux.py
 ## 迁移边界（重要）
 
 - `migrations/0001_baseline.sql` 只用于**空库初始化**，与
-  [../docs/rust-migration/schema-baseline.sql](../docs/rust-migration/schema-baseline.sql)
+  `docs/rust-migration/schema-baseline.sql`（仅本地）
   逐字一致（6 张表、无数据）；SHA-256 为
   `86f2fc0f8140895f12efbea0b6e39e8ba30dc67f2b786e0cc2d2f8f6dd5daa89`，**不得修改**。
 - `migrations/0002_spatial.sql` 是阶段 5 增量迁移：新增 `location geography(Point,4326)`
@@ -646,7 +646,7 @@ python scripts/test_verify_release_linux.py
   部分索引（异常历史行）。0001 结构不动；生成列由旧 lat/lng 自动同步，Java 回退只写旧列即可。
   该迁移在 SQLx 单事务内执行，`ADD COLUMN ... STORED` 的 ACCESS EXCLUSIVE 持有到 COMMIT，
   读者在整个迁移期间被阻塞，必须在维护窗口执行；磁盘需预留表重写 + 索引 + WAL 余量。
-  详见 [../docs/rust-migration/stage5-spatial.md](../docs/rust-migration/stage5-spatial.md)。
+  详见 `docs/rust-migration/stage5-spatial.md`（仅本地）。
 - 普通启动只做只读校验，确认所需迁移已应用且校验和一致，**不会自动执行 DDL**；
   空库需在 `backend-rust/` 内显式运行 `cargo run --locked -- --migrate`。
 - **禁止把初始建表重复用于已有库**。已有库（有业务表、无 `_sqlx_migrations`）使用

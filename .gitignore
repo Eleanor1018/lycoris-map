@@ -2,3 +2,7 @@
 .vscode/
 ping
 **/.idea/
+
+# 开发文档仅保留本地，不上传仓库
+/docs/
+/doc/

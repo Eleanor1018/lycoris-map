@@ -48,7 +48,7 @@ If this small light helps someone through a difficult night, everything we have 
 
 ## Technology
 
-Developer overview: [Architecture (Chinese)](./docs/architecture.md).
+Developer overview: [Rust backend guide (Chinese)](./backend-rust/README.md).
 
 - `frontend`: React and TypeScript
 - `backend-rust`: Rust, Axum, and SQLx (default backend; no ORM)
@@ -69,7 +69,7 @@ This monorepo contains `backend-rust`, `frontend`, and `mobile`; `backend` holds
 | Component | Repository requirements |
 | --- | --- |
 | JavaScript | Node.js 22, at least 22.12.0, or Node.js 20, at least 20.19.4, with npm. These satisfy both Vite 7 and React Native 0.83.1. |
-| Backend | rustup with Rust 1.98.1 pinned in `backend-rust/rust-toolchain.toml`; Python 3.10+ for the launcher. Native Windows builds require Visual Studio C++ Build Tools. JDK/Maven are no longer backend requirements; Android builds still need their Java toolchain. |
+| Backend | rustup with Rust 1.98.1 pinned in `backend-rust/rust-toolchain.toml`. Native Windows builds require Visual Studio C++ Build Tools. JDK/Maven are no longer backend requirements; Android builds still need their Java toolchain. |
 | Database | Local Compose pins PostgreSQL 18.6 with PostGIS 3.6.4. Nearby queries use PostGIS candidate filtering and distance calculation. |
 | Cache and sessions | Local Compose pins Redis 8.10.1. Login sessions require Redis. |
 | Android | Android Studio, Android SDK Platform 36, Build-Tools 36.0.0, NDK 27.1.12297006, and an emulator or an Android device with USB debugging enabled. |
@@ -93,32 +93,48 @@ Start each section below from the repository root. Keep the backend, web server,
 
 ### 2. Backend: Rust, database, and local startup
 
-**`backend-rust/` (Axum + SQLx) is the repository and local default.** The Java implementation in `backend/` is deprecated for new development. Its source and operations files remain available for the existing production service and rollback reference. This change does not switch the production API.
+**`backend-rust/` (Axum + SQLx) is the repository and local default.** Legacy Java in `backend/` remains available for current production and rollback reference. This change does not switch the production API.
 
-From the repository root, start PostgreSQL / PostGIS and Redis with Docker. Copy the environment template only on first setup; preserve an existing `.env`:
-
-```bash
-docker compose -f backend-rust/compose.test.yml up -d
-python backend-rust/scripts/check-services.py
-cp backend-rust/.env.example backend-rust/.env
-```
-
-On Windows PowerShell, use `Copy-Item backend-rust/.env.example backend-rust/.env` for the initial copy. Use Python 3.10 or later; replace `python` with `python3` on systems that use that executable name.
-
-The template uses the local `lycoris_rust` database on port `55432` and Redis on `56379`. Edit `backend-rust/.env` to select another local database or upload directory. Explicitly migrate a new database once, then start the service:
+Start PostgreSQL / PostGIS and Redis with Docker from the repository root:
 
 ```bash
-python backend-rust/scripts/run-local.py --migrate
-python backend-rust/scripts/run-local.py
+docker compose -f backend-rust/compose.test.yml up -d --wait
 ```
 
-Use only the second command for daily development. The launcher loads `.env`, gives existing process environment variables precedence, and runs `cargo run --locked` in the pinned Rust toolchain directory with SQLx offline metadata enabled by default. The first run downloads and compiles dependencies.
+The Rust binary reads process environment variables; it does not load `.env` automatically. All settings are listed in `backend-rust/.env.example`. These examples use the empty Compose development database; adjust the variables for another local database or upload directory.
 
-The default address is `http://127.0.0.1:8080`. Check `/health/ready` for database and Redis readiness, or `/api/markers/public` for JSON; an empty list is normal for a new database. Normal startup checks migration state without changing the schema. Existing Java databases require the [Rust baseline check and adoption procedure](./backend-rust/README.md) before migration.
+Windows PowerShell:
 
-Web requests to `/api` and `/uploads` use the Vite same-origin proxy. The template's `WRITE_ALLOWED_ORIGINS` allows local port 5173. Add the actual page origin and restart Rust if the Vite port or hostname changes; otherwise browser writes, including login, are rejected. For native clients on physical devices, explicitly set `SERVER_HOST=0.0.0.0` and use the computer's LAN address.
+```powershell
+cd backend-rust
+$env:DATABASE_URL = 'postgres://lycoris:lycoris_local_test@127.0.0.1:55432/lycoris_rust'
+$env:REDIS_URL = 'redis://127.0.0.1:56379'
+$env:WRITE_ALLOWED_ORIGINS = 'http://localhost:5173,http://127.0.0.1:5173,https://localhost:5173,https://127.0.0.1:5173'
+$env:SQLX_OFFLINE = 'true'
+```
 
-See the [Rust backend guide](./backend-rust/README.md) for configuration, tests, and Linux release rehearsal. `compose.test.yml` supplies local development/test dependencies; `compose.release.yml` is a release rehearsal configuration. Neither is a production deployment command.
+macOS / Linux:
+
+```bash
+cd backend-rust
+export DATABASE_URL='postgres://lycoris:lycoris_local_test@127.0.0.1:55432/lycoris_rust'
+export REDIS_URL='redis://127.0.0.1:56379'
+export WRITE_ALLOWED_ORIGINS='http://localhost:5173,http://127.0.0.1:5173,https://localhost:5173,https://127.0.0.1:5173'
+export SQLX_OFFLINE=true
+```
+
+Explicitly migrate a new development database once, then start the service. Use only the last command for daily development:
+
+```bash
+cargo run --locked -- --migrate
+cargo run --locked
+```
+
+Run Cargo inside `backend-rust/` to select the pinned toolchain. The default address is `http://127.0.0.1:8080`; check `/health/ready` and `/api/markers/public`. An empty list is normal for a new database. Normal startup only checks migration state; existing Java databases require the [baseline adoption procedure](./backend-rust/README.md).
+
+Web requests to `/api` and `/uploads` use the Vite same-origin proxy. Update `WRITE_ALLOWED_ORIGINS` when the page port or hostname changes. For physical devices, also set `SERVER_HOST=0.0.0.0` and use the computer's LAN address.
+
+Python development scripts and root `docs/` remain local and are excluded from Git. Existing local copies of `run-local.py` can still load `.env`; a fresh checkout uses the Cargo commands above and does not require Python. See the [Rust backend guide](./backend-rust/README.md) for configuration and tests.
 
 ### 3. Web: install dependencies and start Vite
 
