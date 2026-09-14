@@ -1,0 +1,49 @@
+# [已弃用] 旧 Java 本地调试配置，保留作回退参考；功能与端口保持不变。
+# 默认本地开发请改用 Rust：在仓库根运行 `python backend/scripts/run-local.py`。
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lycoris-backend:local
+    container_name: lycoris-backend-local
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: 8080
+      DB_URL: jdbc:postgresql://host.docker.internal:5432/lycoris
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-asdf1018}
+      SPRING_SESSION_STORE_TYPE: redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      APP_UPLOAD_DIR: /app/uploads
+      APP_CORS_ALLOWED_ORIGINS: http://localhost:5173,https://localhost:5173
+      SESSION_COOKIE_NAME: LYCORIS_SESSION
+      SESSION_COOKIE_SECURE: "false"
+      SESSION_COOKIE_HTTP_ONLY: "true"
+      SESSION_COOKIE_SAME_SITE: lax
+      SESSION_TIMEOUT: 30d
+      SESSION_COOKIE_MAX_AGE: 30d
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    container_name: lycoris-redis-local
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - lycoris-redis-local-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  lycoris-redis-local-data:

@@ -10,7 +10,7 @@
 - 文档：目前编写了**雪雁的HRT指南**；旨在尽量用最简洁的语言、最容易理解的方式，把行之有效的HRT方案和踩过的坑分享给大家
 - 关于：介绍夏水仙的项目理念、背景故事与联系方式，让来到这里的人知道这盏小灯为何被点亮
 
-目前有**网页端**和基于 **React Native** 的**移动端**可供使用。
+目前提供**网页端**；已发布的 React Native 移动端见下方下载信息。旧 App 源码已转为本地保留，后续将进行原生应用重构。
 
 ## Android APK 下载
 
@@ -49,12 +49,12 @@ APK 包含运行所需的 JavaScript 和文档资源，**不需要启动 Metro**
 
 ## 技术栈
 
-开发者快速了解项目：[Rust 后端说明](./backend-rust/README.md)。
+开发者快速了解项目：[Rust 后端说明](./backend/README.md)。
 
 - frontend： React(Typescript)
-- backend-rust：Rust + Axum + SQLx（默认后端；无 ORM）
-- backend：已弃用的 Java / Spring Boot 实现，保留供现有线上与回退参考
-- mobile: React Native（TypeScript，包含 Android / iOS 原生桥接）
+- backend：Rust + Axum + SQLx（默认后端；无 ORM）
+- backend-old：已弃用的 Java / Spring Boot 实现，保留供现有线上与回退参考
+- mobile：旧 React Native 应用，仅本地保留；原生 App 重构待实施
 - 数据库：PostgreSQL + PostGIS；Redis 用于会话、缓存与限流
 
 ## 开源协议
@@ -63,18 +63,16 @@ APK 包含运行所需的 JavaScript 和文档资源，**不需要启动 Metro**
 
 ## 克隆与初始化
 
-本仓库已采用单仓库（Monorepo）结构，`backend-rust` / `frontend` / `mobile` 都在同一个仓库中；`backend` 为旧 Java 实现。
+本仓库已采用单仓库（Monorepo）结构，`backend` / `frontend` 在同一仓库中，`backend-old` 为旧 Java 实现；`mobile/` 仅保留本地并由 Git 忽略。
 
 ### 1. 准备环境并获取代码
 
 | 组件 | 本仓库的要求 |
 | --- | --- |
-| JavaScript | Node.js 22（至少 22.12.0）或 Node.js 20（至少 20.19.4），以及随 Node 安装的 npm；同时满足 Vite 7 和 React Native 0.83.1 的要求。 |
-| 后端 | rustup；进入 `backend-rust/` 后按 `rust-toolchain.toml` 使用 Rust 1.98.1。Windows 原生编译需 Visual Studio C++ Build Tools。后端不再要求 JDK/Maven；Android 构建仍需要其 Java 工具链。 |
+| JavaScript | Node.js 22（至少 22.12.0）或 Node.js 20（至少 20.19.4），以及随 Node 安装的 npm，满足当前网页开发要求。 |
+| 后端 | rustup；进入 `backend/` 后按 `rust-toolchain.toml` 使用 Rust 1.98.1。Windows 原生编译需 Visual Studio C++ Build Tools。后端不再要求 JDK/Maven。 |
 | 数据库 | 本地 Compose 固定 PostgreSQL 18.6 + PostGIS 3.6.4；附近查询使用 PostGIS 候选筛选与距离计算。 |
 | 缓存与会话 | 本地 Compose 固定 Redis 8.10.1；登录会话需要 Redis。 |
-| Android | Android Studio、Android SDK Platform 36、Build-Tools 36.0.0、NDK 27.1.12297006；模拟器或开启 USB 调试的 Android 设备。 |
-| iOS | macOS、完整 Xcode、Ruby/Bundler 与 CocoaPods；详细要求见 [iOS 指南](./mobile/IOS.md)。 |
 
 以下示例获取包含本 README 所述功能的 `refactor/rust-backend` 分支：
 
@@ -90,24 +88,24 @@ git switch refactor/rust-backend
 git pull
 ```
 
-以下各节从仓库根目录开始操作。后端、网页和 Metro 分别保留在独立终端运行。
+以下各节从仓库根目录开始操作。后端和网页分别保留在独立终端运行。
 
 ### 2. 后端：Rust、数据库与本地启动
 
-**仓库与本地默认后端为 `backend-rust/`（Axum + SQLx）。** `backend/` 的 Java 实现保留供现有线上服务与回退参考，线上 API 本次未切换。
+**仓库与本地默认后端为 `backend/`（Axum + SQLx）。** `backend-old/` 的 Java 实现保留供现有线上服务与回退参考，线上 API 本次未切换。
 
 从仓库根目录启动本地 PostgreSQL / PostGIS 与 Redis（需要 Docker）：
 
 ```bash
-docker compose -f backend-rust/compose.test.yml up -d --wait
+docker compose -f backend/compose.test.yml up -d --wait
 ```
 
-Rust 二进制读取进程环境变量，不自动加载 `.env`。完整变量见 `backend-rust/.env.example`；下面使用 Compose 的空开发库示例，自定义本地数据库或上传目录时设置对应变量。
+Rust 二进制读取进程环境变量，不自动加载 `.env`。完整变量见 `backend/.env.example`；下面使用 Compose 的空开发库示例，自定义本地数据库或上传目录时设置对应变量。
 
 Windows PowerShell：
 
 ```powershell
-cd backend-rust
+cd backend
 $env:DATABASE_URL = 'postgres://lycoris:lycoris_local_test@127.0.0.1:55432/lycoris_rust'
 $env:REDIS_URL = 'redis://127.0.0.1:56379'
 $env:WRITE_ALLOWED_ORIGINS = 'http://localhost:5173,http://127.0.0.1:5173,https://localhost:5173,https://127.0.0.1:5173'
@@ -117,7 +115,7 @@ $env:SQLX_OFFLINE = 'true'
 macOS / Linux：
 
 ```bash
-cd backend-rust
+cd backend
 export DATABASE_URL='postgres://lycoris:lycoris_local_test@127.0.0.1:55432/lycoris_rust'
 export REDIS_URL='redis://127.0.0.1:56379'
 export WRITE_ALLOWED_ORIGINS='http://localhost:5173,http://127.0.0.1:5173,https://localhost:5173,https://127.0.0.1:5173'
@@ -131,11 +129,11 @@ cargo run --locked -- --migrate
 cargo run --locked
 ```
 
-在 `backend-rust/` 内运行 Cargo，使用目录中固定的 Rust 工具链。默认服务地址为 `http://127.0.0.1:8080`，可访问 `/health/ready` 和 `/api/markers/public` 检查服务；新开发库返回空列表正常。普通启动只读校验迁移状态，不自动建表；已有 Java 数据库按 [Rust 基线接管说明](./backend-rust/README.md) 处理。
+在 `backend/` 内运行 Cargo，使用目录中固定的 Rust 工具链。默认服务地址为 `http://127.0.0.1:8080`，可访问 `/health/ready` 和 `/api/markers/public` 检查服务；新开发库返回空列表正常。普通启动只读校验迁移状态，不自动建表；已有 Java 数据库按 [Rust 基线接管说明](./backend/README.md) 处理。
 
 Web 的 `/api` 与 `/uploads` 经 Vite 同源代理访问 Rust。若页面端口或域名改变，需调整 `WRITE_ALLOWED_ORIGINS`；真机联调另需设置 `SERVER_HOST=0.0.0.0` 并使用电脑局域网地址。
 
-Python 开发脚本与根 `docs/` 文档仅保留本地，不随 Git 分发。已有本地 `run-local.py` 仍可读取自己的 `.env` 运行；新拉取仓库使用上面的 Cargo 命令，不需要 Python。详细配置与测试见 [Rust 后端说明](./backend-rust/README.md)。
+Python 开发脚本与根 `docs/` 文档仅保留本地，不随 Git 分发。已有本地 `run-local.py` 仍可读取自己的 `.env` 运行；新拉取仓库使用上面的 Cargo 命令，不需要 Python。详细配置与测试见 [Rust 后端说明](./backend/README.md)。
 
 ### 3. 网页：安装依赖并启动
 
@@ -164,53 +162,8 @@ npm run lint
 
 静态产物在 `frontend/dist/`。部署静态网页时配置 `VITE_API_BASE_URL` 为目标 API；开发服务器的代理不会随静态产物发布。
 
-### 4. Mobile：安装依赖并启动 Android / iOS
+### 4. App：准备原生重构
 
-在新的终端，从仓库根目录安装移动端锁定的 JavaScript 依赖：
+旧 React Native 应用完整保留在本机 `mobile/`，整个目录已由 Git 忽略，新拉取仓库不包含它。旧开发说明可在本机 `mobile/README.md` 与 `mobile/IOS.md` 查阅。
 
-```bash
-cd mobile
-npm ci
-```
-
-**Android：** 在 Android Studio 的 SDK Manager 安装上述 SDK/NDK，配置 `ANDROID_HOME` 或本机 `android/local.properties` 的 `sdk.dir`，然后启动模拟器或连接调试设备。
-
-```bash
-cp .env.mobile.example .env.mobile
-```
-
-编辑 `mobile/.env.mobile`：Android 模拟器访问电脑上的后端可使用 `LY_API_BASE_URL=http://10.0.2.2:8080`；真机需改为手机可访问的电脑局域网地址。未使用的底图 key 留空即可。此配置编译进原生应用，修改后需要重新安装应用。
-
-在 `mobile/` 启动 Metro：
-
-```bash
-npm start
-```
-
-另开终端，在 `mobile/` 安装并运行 Android 应用：
-
-```bash
-npm run android
-```
-
-**iOS（仅 macOS）：** 在 Mac 上重新运行 `npm ci`，安装完整 Xcode 和 Ruby/Bundler，再安装仓库 Gemfile 与 Pods 依赖：
-
-```bash
-bundle install
-cd ios
-bundle exec pod install
-cd ..
-npm start
-```
-
-另开终端，在 `mobile/` 执行 `npm run ios`。iOS 开发版默认从 Metro 主机推导后端的 8080 端口；自定义 Debug/Release 地址使用 `ios/RuntimeConfig.local.json`，不读取 Android 的 `.env.mobile`。Xcode、模拟器、真机网络、权限、签名和 Archive 的完整步骤见 [mobile/IOS.md](./mobile/IOS.md)。
-
-移动端检查：
-
-```bash
-npm test -- --runInBand
-npx tsc --noEmit
-npm run lint
-```
-
-更多移动端配置见 [mobile/README.md](./mobile/README.md)。本地开发步骤与上方可直接安装的测试 APK 独立；后续更新包应沿用本次 Release 的包名和签名。
+接下来将重构为原生应用；本次仅整理仓库，尚未创建新的原生 App 工程。上方已发布 APK 的下载信息保留为旧版本参考。

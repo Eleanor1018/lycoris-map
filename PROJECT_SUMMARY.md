@@ -1,4 +1,4 @@
-# Lycoris 项目总览（2026-09-14）
+# Lycoris 项目总览（2026-09-15）
 
 Lycoris 是提供无障碍与友好设施信息的地图协作平台。核心能力包括点位发现、附近查询、图片预览、收藏、导航跳转、投稿、编辑提案、图片提案与管理员审核。
 
@@ -7,11 +7,11 @@ Lycoris 是提供无障碍与友好设施信息的地图协作平台。核心能
 | 目录 | 当前职责 |
 | --- | --- |
 | `frontend/` | React + TypeScript + Vite + MUI + Leaflet 网页 |
-| `mobile/` | React Native Android / iOS 应用，包含原生桥接与 WebView 地图 |
-| `backend-rust/` | **默认后端**：Rust + Axum + SQLx；无 ORM，按业务划分模块的单体服务 |
-| `backend/` | 已弃用的 Java / Spring Boot 实现；保留供现有线上服务和回退参考 |
+| `mobile/` | 旧 React Native 应用，仅保留本地并由 Git 忽略；后续重构为原生 App |
+| `backend/` | **默认后端**：Rust + Axum + SQLx；无 ORM，按业务划分模块的单体服务 |
+| `backend-old/` | 已弃用的 Java / Spring Boot 实现；保留供现有线上服务和回退参考 |
 
-数据库使用 PostgreSQL + PostGIS；Redis 保存会话、缓存与限流状态。版本由 Rust 工具链文件、Cargo.lock 与 Compose 镜像固定，详见 [Rust 后端说明](backend-rust/README.md)。
+数据库使用 PostgreSQL + PostGIS；Redis 保存会话、缓存与限流状态。版本由 Rust 工具链文件、Cargo.lock 与 Compose 镜像固定，详见 [Rust 后端说明](backend/README.md)。
 
 ## 业务与认证
 
@@ -24,7 +24,7 @@ Rust 保留 Cookie、账号密码与管理员二次验证体验，通过类型�
 后端默认地址为 `http://127.0.0.1:8080`，Web 默认经 Vite 代理到该地址。按根 README 设置进程环境变量后执行：
 
 ```bash
-cd backend-rust
+cd backend
 cargo run --locked
 ```
 
@@ -39,3 +39,5 @@ cargo run --locked
 架构见 `docs/architecture.md`（仅本地），开发计划与历史验收见 `docs/rust-backend-plan.md`（仅本地） 和 `docs/rust-migration/execution.md`（仅本地）。
 
 Python 开发工具与根 `docs/` 开发文档仅保留本地并由 Git 忽略；新拉取仓库按根 README 使用 Cargo 原生命令。
+
+旧移动端目录本地保留，新的原生 App 工程尚未开始实现。
