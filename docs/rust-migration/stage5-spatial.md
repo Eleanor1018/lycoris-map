@@ -3,12 +3,12 @@
 日期：2026-09-14。苏瑶实现、测试与返工；温晓设计、审查与验收。分支工作树
 `rust-spatial-worktree`；不修改 `0001_baseline.sql`、不改前端/Android/Java、不部署。
 
-状态：**已通过在线小门禁、正式空间测量与主分支 Linux 集中整合**：`integration`/`markers_spatial`/
+状态：**阶段 5 已完成本地验收**：`integration`/`markers_spatial`/
 `spatial_migration`/`baseline_adoption` 在线小门禁 **41 项测试通过、0 失败**；`cargo sqlx prepare
 --check` 通过；1000/10000/100000 三规模正式测量旧/新 ID 与排序全部一致、两索引真实入选、无失败；
 主分支 Linux 发布容器全量门禁 **223 项通过、0 失败**（fmt / 离线全 targets / clippy / `cargo test`），
-运行验证（非 root/只读根/上传卷/健康/SIGTERM/负向）通过。原 Java JAR 真实 HTTP 与最小客户端验证
-仍待验收（由温晓安排）。本文件区分“已实测”与“待测”，不把未执行项写成通过。
+运行验证（非 root/只读根/上传卷/健康/SIGTERM/负向）通过。原 Java JAR 在迁移后真实 HTTP 读写与
+回退、Web/Android 查询复查均通过。生产部署与生产性能不在本轮验收范围。
 
 ## 1. 改动文件
 
@@ -243,9 +243,9 @@ python backend-rust/scripts/spatial_explain.py --scale <1000|10000|100000> \
 强制 plan cache 设置，也不将未选择的 generic plan 记为验证通过。独立脚本和原始计划位于本地
 交付 `work/review-stage5-spatial-evidence.py`、`work/stage5-spatial-evidence-independent.json`。
 
-### 未测
+### 验收边界
 
-- 原 Java JAR 真实 HTTP 验收、最小客户端验证（由温晓安排）。
+- 原 Java JAR 真实 HTTP 验收与最小客户端验证已完成，见第 11 节。
 - 生产环境性能与容量不在本阶段结论内。
 - （已完成）主分支 Linux 集中全套门禁与 `integration` 同类 `[1,2]` 断言：由苏瑶 A 在整合轮处理，
   结果见 `stage5-release-linux-evidence.json` 与第 10 节。
@@ -280,10 +280,32 @@ python backend-rust/scripts/spatial_explain.py --scale 100000  --output docs/rus
 - 旧查询原文：`backend-rust/scripts/find_nearby_legacy.sql`。
 - 兼容边界：`docs/rust-migration/stages-4-5-design.md`、`api-contract.md`。
 
-## 10. 未做 / 待办
+## 10. 完成情况与范围
 
 - 在线小门禁与正式测量（1000/10000/100000）：**已完成**（41 测试通过、prepare --check、
   fmt/clippy、三规模两索引真实入选、ID/排序一致），见第 7 节。
 - 主分支 Linux 集中整合门禁与运行验证：**已完成**（223 测试通过；非 root/只读根/上传卷/健康/
   SIGTERM/负向通过），见第 9 节证据。
-- 原 Java JAR 真实 HTTP 验收、最小客户端验证：由温晓安排；生产性能与容量不在本阶段结论内。
+- 原 Java JAR 真实 HTTP 验收、最小客户端验证：**已完成**；生产性能与容量不在本阶段结论内。
+
+## 11. 最终独立验收与交付
+
+- 温晓读取全部 Linux 原始日志，15 个输出套件（含 2 个零用例输出）合计 223 项通过、0 失败、
+  0 跳过；对最终镜像复用完整真实 TCP 验收，64/64、43/43 模板，无遗漏。TCP 测试在独立合成
+  UUID 克隆库执行，结束清除克隆，保留阶段 4 的原始证据。
+- 最终镜像 `lycoris-rust-stage5:local` =
+  `sha256:d074e39c56769dd4fb5878d14592183552de9d7567b490f22b5a5b1179dc4664`；
+  binary SHA-256 `ea8deb49f67552ffd944821863435bf74884a68dab43e5a9b3f6926fea61c417`。
+- 合成最新库先快照再迁移 0002，原 6 张表的显式业务列指纹、序列、158 个媒体文件完全一致；
+  Rust g21 → 原 Java g22 → Rust g23 均为实际切换，旧 Cookie 重放全为 401。Java 实际创建、
+  编辑、审核后保留点位 5007，另创建删除 5008；Rust 最终读取 5007 的类别/坐标/空间值一致。
+  5005 的真实 zh/en 译文、改密账号、头像/图片与收藏也在两实现中验证。
+- 演练工具经历缺少 `REDIS_URL` 和 PostgreSQL `attgenerated` 类型拼接歧义的返工，3 份失败
+  报告保留。最终成功报告 12 份经温晓独立复核，并重新进行 HTTP/SQL/媒体校验，详见
+  [Java 兼容记录](stage5-java-compatibility.md)。
+- 温晓直接操作既有 Web 与 Android APK，通过发现类别筛选、搜索、图片、跳转地图和点位弹窗。
+  Web OSM 实际显示；Android 的测试底图配置仍为空，不将其记为通过。完整观察和截图说明见
+  [客户端复查](stage5-clients.md)。
+- 本地归档 `outputs/rust-migration-verification/stage5/` 收录原始报告、独立检查脚本、日志和截图；
+  SHA-256 清单为 `accepted-evidence-manifest.json`。阶段完成后推送 `refactor/rust-backend` 并核对
+  远端，准确 Git SHA、镜像及归档清单 SHA 记入本地 `stage5-delivery.json`。

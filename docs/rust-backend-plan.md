@@ -1,6 +1,6 @@
-# Lycoris Rust 重构计划 v0.5：技术栈、架构与发布演练交付
+# Lycoris Rust 重构计划 v0.6：后端替换与空间查询验收
 
-日期：2026-09-14。状态：阶段 0 至 4 已完成本地验收，43 个既有接口、Linux 发布、PG 升级与回退、客户端及同条件性能测量均有实际证据；阶段 5 的 PostGIS 改动正在整合验收。温晓负责设计、指导和验收，苏瑶负责实现、测试与返工；验收完成的改动独立 commit，阶段交付推送到 `refactor/rust-backend`。生产继续使用 Java；实施证据与兼容边界见 [执行与验收记录](rust-migration/execution.md)。
+日期：2026-09-14。状态：阶段 0 至 5 已完成本地验收，43 个既有接口、Linux 发布、PG 升级与回退、客户端、同条件性能测量及 PostGIS 空间查询均有实际证据。温晓负责设计、指导和验收，苏瑶负责实现、测试与返工；验收完成的改动独立 commit，阶段交付推送到 `refactor/rust-backend`。生产继续使用 Java；实施证据与兼容边界见 [执行与验收记录](rust-migration/execution.md)。
 
 采用 **Rust + Axum + SQLx + PostgreSQL + Redis，以按业务划分模块的单体服务替换 Spring Boot 后端**。全部 PostgreSQL 业务访问使用 SQLx，数据库结构变更使用版本化 SQL 和 SQLx 迁移工具；SQLx 直接执行参数化 SQL，保留明确的数据访问层。首版以现有 Web、移动端和业务数据的兼容性为交付目标。
 
@@ -151,7 +151,7 @@ Axum 的 `CurrentUser`、`AdminUser` 等提取器负责身份入口，`can_view_
 
 Spring Session 默认使用 Java 序列化，现有代码未找到覆盖该序列化器的配置。共享 Redis 实例不意味着 Rust 能读取这些会话。[Spring Session 官方说明](https://docs.spring.io/spring-session/reference/configuration/redis.html)。
 
-**建议正式切换时让用户重新登录一次**，Rust 使用新的 Redis 会话命名空间。这个用户体验取舍仍是建议，尚未执行。全站切换后可沿用原 Cookie 名称，由 Rust 忽略无法识别的旧 ID 并在重新登录时替换。
+**建议正式切换时让用户重新登录一次**，Rust 使用新的 Redis 会话命名空间。本地演练已通过逐代更新命名空间与 Cookie、重新登录及旧 Cookie 401 核对；生产切换尚未执行。全站切换后可沿用原 Cookie 名称，由 Rust 忽略无法识别的旧 ID 并在重新登录时替换。
 
 测试和并行验证使用独立 Cookie 名称与命名空间。正式切换时，登录、所有受保护 API 和受保护的图片读取必须进入同一套后端。回退时同样整体切回，并让用户重新登录，避免旧登录状态重新生效。
 
@@ -250,6 +250,6 @@ Java 与 Rust 可并行运行进行比较，但写操作在隔离数据副本上
 
 阶段 4 已完成：Linux 全套 216 项通过、43 路由的 64 条真实 TCP 断言通过；真实 Web/Android 流程、PG17→18 升级、Rust 新写入后 Java 应用回退及最新数据恢复 PG17 均通过。十组配对性能测量保留三轮原始证据，正常负载全部零错误；本地进程 RSS 降低约 93%～96%，该数字只适用于本轮整套实现与合成负载。详见 [发布演练记录](rust-migration/stage4-rehearsal.md)。
 
-按 [发布演练与空间查询设计](rust-migration/stages-4-5-design.md) 继续阶段 5：PostGIS 生成列、索引与查询在独立工作树完成，已验证三种数据规模，接下来完成主分支 Linux 整合与 Java/客户端回归。认证重设计仍单独讨论，生产切流不由本地演练自动触发。
+阶段 5 已按 [发布演练与空间查询设计](rust-migration/stages-4-5-design.md) 完成：PostGIS 生成列、GiST 和历史异常坐标部分索引、候选查询与 `nearby:v2` 缓存已整合；Linux 全套 223 项、43 路由的 64 项独立 TCP 断言通过。三种规模保存 198 份执行计划，10 万点位的城区热点 SQL 约快 2 倍、稀疏查询约快 100 倍；首次执行并非总有收益，详见 [空间实测](rust-migration/stage5-spatial.md)。迁移前后原业务/序列/媒体完全一致；原 Java JAR 在新结构上实际读写，再切回 Rust 保留 Java 新点位，Web/Android 查询复查通过。认证重设计仍单独讨论，生产切流不由本地演练自动触发。
 
 完成情况以执行记录中的实际验证结果和 Git 提交为准。候选版本调研不等于编译、安装、升级或生产验证通过；未完成的阶段不得标记完成。

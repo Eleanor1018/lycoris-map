@@ -9,8 +9,8 @@ Lycoris Rust 后端采用 Axum + SQLx + PostgreSQL + Redis。阶段 0 至 3 已�
 TCP 验收 **64/64**、覆盖 **43/43** 个接口模板。阶段 4 已实现已有库
 `--check-baseline`/`--adopt-baseline` 基线接管与数据库超时/密码并发运行配置；阶段 5 已实现
 `0002_spatial` 生成列/GiST 部分索引与 `nearby:v2` PostGIS 候选查询，并已在重构分支 Linux 发布
-容器跑通全套门禁（fmt / 离线全 targets / clippy / 全部 cargo test）与运行验证。原 Java JAR 真实
-HTTP 与最小客户端验证仍待验收。生产切换不在本阶段范围内。
+容器跑通全套门禁（fmt / 离线全 targets / clippy / 全部 cargo test）与运行验证。空间迁移后的原
+Java JAR 真实 HTTP 读写与回退、Web/Android 查询复查也已通过。生产切换不在本阶段范围内。
 详细证据与差异见 [执行记录](../docs/rust-migration/execution.md)。生产仍由 `backend/` 的
 Spring Boot 服务承担。
 

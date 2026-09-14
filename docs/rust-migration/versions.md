@@ -895,6 +895,22 @@ stdout/stderr 诊断。无数据库配置时帮助和探针均按各自模式工
 
 ## 备注
 
+### 阶段 5 最终发布（2026-09-14）
+
+版本锁定与阶段 4 相同。整合 `0002_spatial`、空间查询和 SQLx 元数据后，以相同 Linux 构建流程
+生成 `lycoris-rust-stage5:local`，imageId
+`sha256:d074e39c56769dd4fb5878d14592183552de9d7567b490f22b5a5b1179dc4664`，
+binary SHA-256 `ea8deb49f67552ffd944821863435bf74884a68dab43e5a9b3f6926fea61c417`。
+阶段 4 稳定标签 `lycoris-rust-stage4:local` 与镜像保持原值。
+
+Windows 在线 SQLx `prepare --check`、fmt、离线 check、Clippy 通过；Linux 单次全套
+**223 项通过，0 失败、0 跳过**，新增空间查询 5 项和迁移 2 项。非 root、只读根、受控临时目录、
+上传卷、健康检查、SIGTERM 0 和不可写目录负向均通过；温晓独立真实 TCP 64/64、43/43 接口模板
+通过。原始运行证据为 [stage5-release-linux-evidence.json](stage5-release-linux-evidence.json)，
+完整验收与范围见 [阶段 5 记录](stage5-spatial.md)。工具与文档的后续提交没有修改产品二进制。
+
+### 较早的阶段 4 检查记录
+
 第二轮收尾后新增 2 项，测试集合共 191 项；该轮按改动范围复跑基线接管 25 项和基础迁移 9 项，
 并通过 fmt/clippy，没有把未重跑的完整集合记为一次全量通过。温晓独立复跑相同 34 项全部通过，
 另对最新合成 PG17.11 来源库和 PG18.6 升级库执行 `--check-baseline`，两者均通过且未创建迁移历史。
