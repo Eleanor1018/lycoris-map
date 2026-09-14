@@ -22,7 +22,7 @@ Lycoris Rust 后端（Axum + SQLx）工作目录。**阶段 1 公开点位读取
 | `rust-toolchain.toml` | 精确固定 Rust `1.98.1`（含 rustfmt、Clippy） |
 | `src/lib.rs` | 库根，`#![forbid(unsafe_code)]` |
 | `src/main.rs` | 可执行入口：配置、PG 池、Redis、Router、`--migrate` |
-| `src/app.rs` | `AppState` / Router / 中间件装配 |
+| `src/app.rs` | `AppState` / Router / 中间件装配（全局 8 MiB 上限、超时、服务端请求 ID + 访问日志、CORS） |
 | `src/config.rs` | 环境变量配置，非法值报可读错误且不回显连接串 |
 | `src/error.rs` | 四类响应体与错误类型（不统一包裹） |
 | `src/modules/markers/` | 点位读取与写入：`model`（行/DTO）、`repository`（`sql/*.sql` + `query_file_as!`）、`localization`（语言/哈希/纯函数）、`cache`（Redis ID 缓存）、`service`（读取/本地化）、`http`（公开读取薄 handler）、`write`/`write_model`（已验收写入事务）、`write_http`（写入/收藏/审核薄 handler） |
@@ -90,9 +90,16 @@ Lycoris Rust 后端（Axum + SQLx）工作目录。**阶段 1 公开点位读取
   超限分类沿整条 `source()` 链识别 `LengthLimitError`，不依赖错误字符串。
 - **multipart 读取**：逐块累计 ≤5 MiB、不依赖 `Content-Length`、读到结束；重复/缺/空 `400`，
   超限 `413`（同上形状）。
-- **CORS 为最外层**：限流/标准化后的 413 与其它响应都由统一 CORS 层补齐
+- **CORS 包住所有错误来源**：限流/标准化后的 413 与其它响应都由统一 CORS 层补齐
   `Access-Control-Allow-Origin`/`Access-Control-Allow-Credentials` 与 `Vary: Origin`；非白名单
-  Origin 不发 `allow-origin`。
+  Origin 不发 `allow-origin`。允许来源还通过 `Access-Control-Expose-Headers` 暴露
+  `X-Request-ID`，供浏览器读取关联头。
+- **请求日志与请求 ID**：访问日志中间件为最外层（包住 CORS），每个请求由**服务端**生成新的
+  UUID 请求 ID，放入 tracing span，使 handler 与下游受控日志都落在同一 span；完成事件记录
+  请求 ID、方法、匹配路由模板、状态与耗时。普通成功、404 fallback 与全局 body limit 413
+  都有请求 ID 与完成日志；`MatchedPath` 缺失时用固定占位 `<unmatched>`，**绝不**记录原始
+  URI/query、Cookie 或请求体，也**不**信任/回显客户端 `X-Request-ID`。每个响应统一附
+  `X-Request-ID`。
 
 
 ## 点位写入/收藏/审核（18，阶段 3）
@@ -365,7 +372,9 @@ avatars 与匿名 markers 读取在 Redis 不可用时仍可读（不加载会�
 `Access-Control-Allow-Origin`/`Credentials` 与 `Vary`，非白名单 Origin 不发 allow-origin**；
 **不读 body 的 `GET /health/live` 带超限 `Content-Length` 仍 413**；JSON 提取器超限为结构化
 `{"code":413,"message":"上传文件过大，请选择 5MB 以内的图片"}`、读取中途出错为 400
-`请求体读取失败`。
+`请求体读取失败`；**成功、404 fallback 与全局 body limit 413 都带合法且互不相同的服务端
+`X-Request-ID`（客户端伪造的 ID 不被照搬），且允许来源可通过 `Access-Control-Expose-Headers`
+读取该头**。
 
 每个用例使用 UUID 命名临时库与随机 Redis 命名空间，不 `FLUSHALL`、不 `KEYS`，
 只连接回环地址上的合成测试服务；失败不做静默跳过。

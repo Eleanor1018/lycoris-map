@@ -565,6 +565,34 @@ powershell -NoProfile -File backend-rust/scripts/check-rust.ps1   # 前置设置
 阶段 3 的**最终完成状态**仍由温晓验收后更新：`POST /api/markers/{id}/image` 与
 AdminMarkerController 的 4 条媒体路由由另一独立工作树接入，本层不宣称 43 接口全部完成。
 
+### 补齐：请求日志的请求 ID、span 与响应关联头（2026-09-14，主工作树）
+
+小范围补齐 `docs/rust-backend-plan.md` 第 6 节「日志包含请求 ID、路由、耗时、状态」中缺失的
+请求 ID。仅改 `backend-rust/src/app.rs`、`backend-rust/tests/media_http.rs` 与本文件/README；
+未接入最后 5 条图片路由，未改其它功能，未 commit/push。
+
+- `app.rs::log_requests` 为每个请求由**服务端**生成新的 UUID 请求 ID，放入 `tracing` span
+  （字段 `request_id`/`method`/`route`），用 `tracing::Instrument` 让 handler 与下游受控日志
+  都落在该 span 内；完成事件记录状态与耗时。**不**记录原始 URI/query、Cookie 或请求体，
+  也**不**信任/回显客户端传入的 `X-Request-ID`。
+- 日志层移到最外层（包住 CORS）后，普通成功、404 fallback 与全局 body limit 413 都得到
+  请求 ID 与完成日志；`MatchedPath` 缺失时用固定占位 `<unmatched>`，不记录真实 URI。
+  CORS 仍包住所有错误来源，故允许来源的错误响应都带跨域头；`build_cors` 增加
+  `expose_headers([x-request-id])`，允许来源可在浏览器读取关联头。每个响应统一附
+  `X-Request-ID`。
+- 未引入新 crate（复用已有 `uuid`/`tracing`），未加入追踪平台或通用框架；未破坏已验收的
+  Source/Origin、`RequestBodyLimit`+`DefaultBodyLimit`、统一 413 与媒体流式响应。
+- 新增集成用例 `tests/media_http.rs::responses_carry_server_generated_request_id`：成功、404、
+  413 各自返回合法且互不相同的 `X-Request-ID`，客户端伪造 ID 不被照搬，允许来源可通过
+  `Access-Control-Expose-Headers` 读取该头；复用既有 `TestEnv`（临时上传根，不写真实 uploads）。
+
+验证（2026-09-14，本机，仅回环合成服务；与图片 HTTP 工作树并行，`RUST_TEST_THREADS=2`）：
+SQLx CLI 0.9.0 校验通过；`cargo sqlx prepare --check -- --all-targets` 通过；
+`SQLX_OFFLINE=true cargo check --all-targets` 成功；`cargo fmt --all -- --check` 通过；
+`cargo clippy --all-targets -- -D warnings` 零警告；`cargo test` **155** 个测试通过、
+0 失败 0 跳过（42 单元 + 28 认证 + 9 基础集成 + 8 点位 HTTP + 17 公开读取 + 17 写入事务 +
+16 媒体存储 + 8 媒体业务 + 10 媒体 HTTP，其中媒体 HTTP 新增 1 条）。
+
 ## 备注
 
 `lycoris-restore-review` 容器属温晓的私有恢复验收环境，不在本次范围。本阶段仅新建并操作 `lycoris-rust-postgres`、`lycoris-rust-redis`。

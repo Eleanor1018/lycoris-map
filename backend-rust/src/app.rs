@@ -1,13 +1,14 @@
 //! Axum 装配：AppState、Router 与健康检查。
 //!
 //! 这里挂载健康检查与公开点位读取路由；后续业务路由继续在此挂载。中间件固定
-//! 8 MiB 总请求上限、请求超时、按路由模板的访问日志与显式凭据白名单 CORS。
+//! 8 MiB 总请求上限、请求超时、服务端请求 ID + 按路由模板的访问日志，以及显式凭据白名单
+//! CORS；日志层最外层并附 `X-Request-ID`，CORS 仍包住所有错误来源。
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::extract::{MatchedPath, Request, State};
-use axum::http::{HeaderName, Method, StatusCode, header};
+use axum::http::{HeaderName, HeaderValue, Method, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
@@ -19,6 +20,8 @@ use sqlx::PgPool;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::timeout::TimeoutLayer;
+use tracing::Instrument;
+use uuid::Uuid;
 
 use crate::config::{Config, REQUEST_BODY_LIMIT_BYTES};
 use crate::error::AppError;
@@ -36,6 +39,12 @@ use crate::session::SessionStore;
 /// `/health/ready` 单项依赖检查的超时；保证依赖卡住时可靠返回 503，
 /// 而不会被全局请求超时先截断为 408。
 const READY_CHECK_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// 响应关联头名：每个响应都回填服务端生成的请求 ID，便于与日志关联。
+const REQUEST_ID_HEADER: &str = "x-request-id";
+
+/// 未匹配到任何路由模板时的固定占位；绝不回退到真实 URI（避免把 query/路径细节写进日志）。
+const UNMATCHED_ROUTE: &str = "<unmatched>";
 
 /// 应用共享状态。`Client` 与 `PgPool` 均为克隆廉价的句柄。
 #[derive(Clone)]
@@ -168,8 +177,6 @@ pub fn build_router(state: AppState) -> Router {
             "/uploads/markers/{filename}",
             get(routes::uploads::serve_marker),
         )
-        // `route_layer` 在路由匹配后执行，因此能读到 `MatchedPath` 路由模板。
-        .route_layer(middleware::from_fn(log_requests))
         // 写请求来源校验对所有路由（含 login/register/logout 与 multipart）生效。
         .layer(middleware::from_fn_with_state(
             origin_state,
@@ -189,9 +196,14 @@ pub fn build_router(state: AppState) -> Router {
         // 把 tower-http 的空体/文本 413 统一为 GlobalExceptionHandler 形状；JSON 提取器自己的
         // 结构化 413（application/json）原样保留，避免把损坏请求体误报为“图片太大”。
         .layer(middleware::from_fn(normalize_payload_too_large))
-        // CORS 为最外层：限流/标准化后的 413 与其它响应都由它统一补齐
+        // CORS 包住所有错误来源：限流/标准化后的 413 与其它响应都由它统一补齐
         // Access-Control-Allow-Origin/Credentials 与 Vary；非白名单不发 allow-origin。
         .layer(cors)
+        // 访问日志/请求 ID 为最外层（包住 CORS）：普通成功、404 fallback 与全局 body limit
+        // 413 都会生成请求 ID 并留下完成日志。`Router::layer` 在路由匹配后执行，仍能读到
+        // `MatchedPath`（缺失时用固定占位，绝不记录真实 URI）；CORS 仍包住所有错误，故允许
+        // 来源的错误响应都带跨域头。日志层只增补 `X-Request-ID`，不覆盖已有的响应头。
+        .layer(middleware::from_fn(log_requests))
         .with_state(state)
 }
 
@@ -212,6 +224,8 @@ fn build_cors(origins: &[axum::http::HeaderValue]) -> CorsLayer {
             HeaderName::from_static("x-app-language"),
         ])
         .allow_origin(AllowOrigin::list(origins.to_vec()))
+        // 允许来源的浏览器可读取服务端回填的关联头，便于把前端错误关联到服务端日志。
+        .expose_headers([HeaderName::from_static(REQUEST_ID_HEADER)])
 }
 
 /// 把 tower-http 全局请求体上限产生的 413（空体/文本）统一为 `GlobalExceptionHandler` 的
@@ -235,25 +249,50 @@ async fn normalize_payload_too_large(request: Request, next: Next) -> Response {
     crate::multipart::payload_too_large_response()
 }
 
-/// 访问日志：只记录路由模板、方法、状态与耗时，不记录带查询串的完整 URI。
+/// 访问日志与请求 ID 中间件（最外层，包住 CORS）。
+///
+/// 每个请求都由**服务端**生成一个新的 UUID 作为请求 ID：放入 tracing span，使 handler 与
+/// 下游受控日志都落在同一 span 内；完成事件只记录请求 ID、方法、匹配路由模板、状态与耗时。
+/// 明确**不**记录原始 URI/query、Cookie、请求体或任何用户内容；也**不**信任或回显客户端
+/// 传入的 `X-Request-ID`。响应统一附 `X-Request-ID`（CORS 已 expose 该头）供关联。
+///
+/// 该层位于路由匹配之后、所有错误来源之外，因此普通成功、404 fallback 与全局请求体 413
+/// 都会得到请求 ID 与完成日志；路由模板缺失时用固定占位，不回退到真实 URI。
 async fn log_requests(matched: Option<MatchedPath>, request: Request, next: Next) -> Response {
+    // 只取方法；不读 URI、query、Cookie 或 body。客户端提供的 X-Request-ID 被忽略。
     let method = request.method().clone();
     let route = matched
         .map(|path| path.as_str().to_string())
-        .unwrap_or_else(|| "<unmatched>".to_string());
+        .unwrap_or_else(|| UNMATCHED_ROUTE.to_string());
+    let request_id = Uuid::new_v4().to_string();
 
-    let started = Instant::now();
-    let response = next.run(request).await;
-    let status = response.status();
-
-    tracing::info!(
+    let span = tracing::info_span!(
         target: "lycoris_backend::http",
+        "http.request",
+        request_id = %request_id,
         %method,
         %route,
-        status = status.as_u16(),
-        elapsed_ms = started.elapsed().as_millis() as u64,
-        "request"
     );
+
+    let started = Instant::now();
+    // handler 及下游受控日志在该 span 中执行，自动携带 request_id/method/route。
+    let mut response = next.run(request).instrument(span.clone()).await;
+    let status = response.status();
+    span.in_scope(|| {
+        tracing::info!(
+            target: "lycoris_backend::http",
+            status = status.as_u16(),
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            "request completed"
+        );
+    });
+
+    // UUID 原文为 ASCII，`from_str` 不会失败；失败时保守跳过，不影响业务响应。
+    if let Ok(value) = HeaderValue::from_str(&request_id) {
+        response
+            .headers_mut()
+            .insert(HeaderName::from_static(REQUEST_ID_HEADER), value);
+    }
     response
 }
 

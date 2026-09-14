@@ -1062,3 +1062,69 @@ async fn json_body_length_limit_is_structured_and_read_failure_is_400() {
     assert_eq!(broken.status, StatusCode::BAD_REQUEST);
     assert_eq!(broken.text(), "请求体读取失败");
 }
+
+// ---------------------------------------------------------------------------
+// 请求 ID（最外层访问日志中间件）
+// ---------------------------------------------------------------------------
+
+/// 成功、404 fallback 与全局 body limit 413 都由服务端生成合法且互不相同的 `X-Request-ID`；
+/// 客户端提供的 ID 不被照搬；允许来源可通过 expose-headers 在浏览器读取该头。
+#[tokio::test]
+async fn responses_carry_server_generated_request_id() {
+    let env = TestEnv::new().await;
+    let client_supplied = "11111111-1111-4111-8111-111111111111";
+    let declared = (8 * 1024 * 1024 + 1).to_string();
+
+    // 成功：同时携带客户端伪造的 X-Request-ID，服务端必须忽略并生成自己的。
+    let ok = send(
+        &env.router,
+        Call::new(Method::GET, "/health/live")
+            .header("origin", ALLOWED_ORIGIN)
+            .header("x-request-id", client_supplied),
+    )
+    .await;
+    assert_eq!(ok.status, StatusCode::OK);
+    let ok_id = response_request_id(&ok);
+
+    // 404 fallback（无匹配路由模板）。
+    let missing = send(&env.router, Call::new(Method::GET, "/no/such/route")).await;
+    assert_eq!(missing.status, StatusCode::NOT_FOUND);
+    let missing_id = response_request_id(&missing);
+
+    // 全局 body limit 413（已知 Content-Length 超限，不读 body）。
+    let too_large = send(
+        &env.router,
+        Call::new(Method::GET, "/health/live").header("content-length", &declared),
+    )
+    .await;
+    assert_eq!(too_large.status, StatusCode::PAYLOAD_TOO_LARGE);
+    let too_large_id = response_request_id(&too_large);
+
+    // 三个 ID 各自合法（已在 `response_request_id` 校验），且互不相同、均非客户端值。
+    let forged = Uuid::parse_str(client_supplied).expect("测试用客户端 ID 应为合法 UUID");
+    assert_ne!(ok_id, forged, "不得照搬客户端提供的 X-Request-ID");
+    assert_ne!(ok_id, missing_id);
+    assert_ne!(ok_id, too_large_id);
+    assert_ne!(missing_id, too_large_id);
+
+    // 允许来源：既有 allow-origin，又通过 expose-headers 暴露 X-Request-ID 供浏览器读取。
+    assert_eq!(
+        ok.header(header::ACCESS_CONTROL_ALLOW_ORIGIN),
+        Some(ALLOWED_ORIGIN)
+    );
+    let expose = ok
+        .header(header::ACCESS_CONTROL_EXPOSE_HEADERS)
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    assert!(
+        expose.contains("x-request-id"),
+        "允许来源必须能读取 X-Request-ID，实际 Access-Control-Expose-Headers: {expose}"
+    );
+}
+
+fn response_request_id(response: &Resp) -> Uuid {
+    let raw = response
+        .header(HeaderName::from_static("x-request-id"))
+        .expect("响应缺少 X-Request-ID");
+    Uuid::parse_str(raw).expect("X-Request-ID 不是合法 UUID")
+}
