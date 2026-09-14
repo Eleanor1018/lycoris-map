@@ -1,6 +1,8 @@
-# backend-rust
+# Lycoris 默认后端（Rust）
 
-Lycoris Rust 后端采用 Axum + SQLx + PostgreSQL + Redis。阶段 0 至 3 已通过本地验收，
+仓库与本地开发默认使用本目录；HTTP 默认 `127.0.0.1:8080`。旧 `backend/` Java 实现已退出默认开发流程，保留供现有线上服务与回退参考。本次只切换仓库和本地，线上 API 保持 Java。
+
+Lycoris Rust 后端采用 Axum + SQLx + PostgreSQL + Redis。阶段 0 至 5 已通过本地验收，
 实现全部 **43 个既有 API 契约模板**：公开点位、认证与用户、头像、点位写入、收藏、译文与
 图片提案审核、受控资源读取。`/uploads` 模板拆为两个明确目录路由，健康探针另列。
 
@@ -58,6 +60,7 @@ Spring Boot 服务承担。
 | `tests/media_http.rs` | 头像 3 路由、受控 `/uploads`、私有点位 detail、阶段 3 点位图片上传与管理员图片提案/清理的真实 PG / Redis / 临时文件 HTTP 集成测试 |
 | `tests/auth_integration.rs` | 认证/用户真实 PG / Redis 集成测试 |
 | `tests/common/mod.rs` | 集成测试共享工具（临时库、回环校验、请求辅助） |
+| `scripts/run-local.py` | 日常启动入口：加载 `.env`（进程环境优先）、设置 SQLx 离线构建、固定 Cargo 工作目录；维护参数显式传入，不自动迁移 |
 | `scripts/check-rust.ps1` | 迁移合成开发库、校验离线元数据、离线构建并跑 fmt / clippy / test |
 | `compose.test.yml` | 隔离测试依赖：PostgreSQL 18.6 + PostGIS 3.6.4、Redis 8.10.1 |
 | `scripts/check-services.py` | 启动并校验上述两个容器及精确版本（仅标准库） |
@@ -286,14 +289,19 @@ Remove-Item Env:SQLX_OFFLINE -ErrorAction SilentlyContinue
 cargo sqlx prepare -- --all-targets
 ```
 
-运行只从环境变量读取配置，`DATABASE_URL` 与 `REDIS_URL` 无默认值。例如（PowerShell）：
+日常启动从仓库根目录执行，首次复制 `.env.example` 为 `.env`（已有配置不要覆盖）：
 
 ```powershell
-$env:DATABASE_URL = "postgres://lycoris:lycoris_local_test@127.0.0.1:55432/lycoris_rust"
-$env:REDIS_URL    = "redis://127.0.0.1:56379"
-$env:SQLX_OFFLINE = "true"
-cargo run --locked
+Copy-Item backend-rust/.env.example backend-rust/.env
+# 仅首次初始化空开发库或显式升级时执行：
+python backend-rust/scripts/run-local.py --migrate
+# 平时启动：
+python backend-rust/scripts/run-local.py
 ```
+
+启动器读取 `backend-rust/.env`，已有进程环境变量优先。支持 `KEY=value`、空行、整行注释和包围值的一对引号；不做变量插值、命令替换或行尾注释解析。相对 `UPLOAD_DIR` 从 `backend-rust/` 解析，普通启动不会执行迁移。二进制本身仍只读取环境变量；手动导出 `DATABASE_URL`、`REDIS_URL` 与 `SQLX_OFFLINE=true` 后，也可以在 crate 目录直接执行 `cargo run --locked`。
+
+默认监听 `http://127.0.0.1:8080`。Vite 默认代理到该地址；`.env.example` 的 `WRITE_ALLOWED_ORIGINS` 允许本机 5173 端口，改变页面来源时应同步调整。Linux 发布/演练 Compose 的显式隔离端口保持原配置，不能用其端口推断日常开发默认值。
 
 普通启动只校验迁移已应用；空库需显式 `cargo run -- --migrate`。健康检查
 `/health/live`、`/health/ready` 行为与阶段 1 相同。已有 Java 库（有业务表、无
@@ -315,7 +323,7 @@ cargo run --locked
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `DATABASE_URL` / `REDIS_URL` | 必填 | 仅校验格式，不打印 |
-| `SERVER_HOST` / `SERVER_PORT` | `127.0.0.1` / `18081` | HTTP 监听 |
+| `SERVER_HOST` / `SERVER_PORT` | `127.0.0.1` / `8080` | HTTP 监听 |
 | `UPLOAD_DIR` | `uploads` | 上传根目录；启动时创建并 canonicalize（`--migrate` 不初始化） |
 | `MEDIA_MAX_CONCURRENCY` | `1` | 图片 CPU 处理并发许可数，必须为正值；无许可立即返回 503（语义不变） |
 | `PASSWORD_MAX_CONCURRENCY` | CPU 数 clamp `1..=4` | BCrypt 阻塞任务并发许可；显式只接受 `1..=32`，0/溢出启动即拒绝；许可随 `spawn_blocking` 持有到任务结束 |
