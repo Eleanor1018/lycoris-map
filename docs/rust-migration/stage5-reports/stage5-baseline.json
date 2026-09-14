@@ -1,0 +1,40 @@
+{
+  "artifacts": {
+    "baselineDump": "C:\\Users\\Nora\\AppData\\Local\\Temp\\opencode\\rehearsal-pg1711\\artifacts\\baseline-stage5-pre-spatial-20260914.dump",
+    "baselineManifest": "C:\\Users\\Nora\\AppData\\Local\\Temp\\opencode\\rehearsal-pg1711\\artifacts\\baseline-stage5-pre-spatial-20260914.manifest.json"
+  },
+  "error": null,
+  "facts": {
+    "businessBefore": {
+      "map_marker_translations": 7501,
+      "map_markers": 5006,
+      "marker_edit_proposals": 17,
+      "marker_favorites": 186,
+      "marker_image_proposals": 22,
+      "users": 22
+    },
+    "frozen": true,
+    "media": {
+      "combinedSha256": "ea7378d55ed1410c0d21d3445d804ab3cad92f5674f6dd84c7c0dc9bb8bac0c2",
+      "fileCount": 158
+    },
+    "mediaBefore": {
+      "combinedSha256": "ea7378d55ed1410c0d21d3445d804ab3cad92f5674f6dd84c7c0dc9bb8bac0c2",
+      "fileCount": 158
+    },
+    "rows": {
+      "map_marker_translations": 7501,
+      "map_markers": 5006,
+      "marker_edit_proposals": 17,
+      "marker_favorites": 186,
+      "marker_image_proposals": 22,
+      "users": 22
+    }
+  },
+  "gitHead": "ca36a8ed65e22c99c107654a6f5370eb4cd1372d",
+  "ok": true,
+  "status": "ok",
+  "step": "stage5-baseline",
+  "timestamp": "2026-09-14T13:12:40.456454+00:00",
+  "workDir": "C:\\Users\\Nora\\AppData\\Local\\Temp\\opencode\\rehearsal-pg1711"
+}

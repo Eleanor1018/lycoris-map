@@ -1,0 +1,18 @@
+{
+  "artifacts": {},
+  "error": null,
+  "facts": {
+    "keptMarkerId": 5007,
+    "location": {
+      "srid": 4326,
+      "x": 121.4901,
+      "y": 31.2401
+    }
+  },
+  "gitHead": "ca36a8ed65e22c99c107654a6f5370eb4cd1372d",
+  "ok": true,
+  "status": "ok",
+  "step": "stage5-java-crud",
+  "timestamp": "2026-09-14T13:15:36.456500+00:00",
+  "workDir": "C:\\Users\\Nora\\AppData\\Local\\Temp\\opencode\\rehearsal-pg1711"
+}
