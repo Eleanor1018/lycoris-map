@@ -3,11 +3,12 @@
 日期：2026-09-14。苏瑶实现、测试与返工；温晓设计、审查与验收。分支工作树
 `rust-spatial-worktree`；不修改 `0001_baseline.sql`、不改前端/Android/Java、不部署。
 
-状态：**已通过在线小门禁与正式空间测量**：`integration`/`markers_spatial`/`spatial_migration`/
-`baseline_adoption` 共 **41 项测试通过、0 失败**；`cargo sqlx prepare --check` 通过；已用修正后的
-工具在 1000/10000/100000 三个规模完成正式测量，三规模旧/新 ID 与排序全部一致、两索引真实入选、
-无失败。阶段 5 仍待主分支 Linux 集中整合、原 Java JAR 与最小客户端验证（由温晓安排）。
-本文件区分“已实测”与“待测”，不把未执行项写成通过。
+状态：**已通过在线小门禁、正式空间测量与主分支 Linux 集中整合**：`integration`/`markers_spatial`/
+`spatial_migration`/`baseline_adoption` 在线小门禁 **41 项测试通过、0 失败**；`cargo sqlx prepare
+--check` 通过；1000/10000/100000 三规模正式测量旧/新 ID 与排序全部一致、两索引真实入选、无失败；
+主分支 Linux 发布容器全量门禁 **223 项通过、0 失败**（fmt / 离线全 targets / clippy / `cargo test`），
+运行验证（非 root/只读根/上传卷/健康/SIGTERM/负向）通过。原 Java JAR 真实 HTTP 与最小客户端验证
+仍待验收（由温晓安排）。本文件区分“已实测”与“待测”，不把未执行项写成通过。
 
 ## 1. 改动文件
 
@@ -244,10 +245,10 @@ python backend-rust/scripts/spatial_explain.py --scale <1000|10000|100000> \
 
 ### 未测
 
-- 主分支阶段 4 整合后的 Linux 集中全套门禁、原 Java JAR 真实 HTTP 验收、最小客户端验证（由
-  温晓安排）。
+- 原 Java JAR 真实 HTTP 验收、最小客户端验证（由温晓安排）。
 - 生产环境性能与容量不在本阶段结论内。
-- 主分支阶段 4 的 integration 同类 `[1,2]` 断言由苏瑶 A 在整合时处理，本工作树不复制整份文件。
+- （已完成）主分支 Linux 集中全套门禁与 `integration` 同类 `[1,2]` 断言：由苏瑶 A 在整合轮处理，
+  结果见 `stage5-release-linux-evidence.json` 与第 10 节。
 
 ## 8. 验证命令（本轮范围）
 
@@ -273,12 +274,16 @@ python backend-rust/scripts/spatial_explain.py --scale 100000  --output docs/rus
   `stage5-spatial-10000.json`、`stage5-spatial-100000.json`（各含每轮完整 EXPLAIN JSON）。
   `stage5-spatial-small.json` 为 1000 行小门禁首跑，保留对照；旧 `stage5-spatial-perf.json`
   已作废并删除。
+- Linux 集成运行验证：`docs/rust-migration/stage5-release-linux-evidence.json`（本次
+  `test_count=223`，app 镜像与二进制 SHA 见内）；阶段 4 证据
+  `release-linux-evidence.json` 保留。
 - 旧查询原文：`backend-rust/scripts/find_nearby_legacy.sql`。
 - 兼容边界：`docs/rust-migration/stages-4-5-design.md`、`api-contract.md`。
 
 ## 10. 未做 / 待办
 
-- 在线小门禁与正式测量（1000/10000/100000）：**本轮已完成**（41 测试通过、prepare --check、
+- 在线小门禁与正式测量（1000/10000/100000）：**已完成**（41 测试通过、prepare --check、
   fmt/clippy、三规模两索引真实入选、ID/排序一致），见第 7 节。
-- 阶段 4 整合后的 Linux 集中全套门禁、原 Java JAR 真实 HTTP 验收、最小客户端验证：由温晓安排；
-  生产性能与容量不在本阶段结论内。
+- 主分支 Linux 集中整合门禁与运行验证：**已完成**（223 测试通过；非 root/只读根/上传卷/健康/
+  SIGTERM/负向通过），见第 9 节证据。
+- 原 Java JAR 真实 HTTP 验收、最小客户端验证：由温晓安排；生产性能与容量不在本阶段结论内。

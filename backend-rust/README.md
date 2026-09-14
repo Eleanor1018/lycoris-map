@@ -4,12 +4,13 @@ Lycoris Rust 后端采用 Axum + SQLx + PostgreSQL + Redis。阶段 0 至 3 已�
 实现全部 **43 个既有 API 契约模板**：公开点位、认证与用户、头像、点位写入、收藏、译文与
 图片提案审核、受控资源读取。`/uploads` 模板拆为两个明确目录路由，健康探针另列。
 
-完整检查 **202 项通过**（阶段 3 为 162 项；阶段 4 新增 25 项基线接管真实 PG 集成、4 项 CLI
-单元测试与 11 项发布运行参数补齐测试：3 项配置边界与 1 项 SQLSTATE 分类单元测试、5 项真实
-PG/Router 语句/锁超时集成、2 项迁移锁独占/争用集成），独立真实 TCP 验收 **64/64**、覆盖
-**43/43** 个接口模板。阶段 4 已实现已有库
-`--check-baseline`/`--adopt-baseline` 基线接管与数据库超时/密码并发运行配置；Linux 验证、
-性能测量与生产切换仍在阶段 4 内进行。
+完整检查 **223 项通过**（阶段 3 为 162 项；阶段 4 新增基线接管、CLI 与发布运行参数测试；
+阶段 5 新增 `markers_spatial` 5 项与 `spatial_migration` 2 项 PostGIS 空间查询测试）。独立真实
+TCP 验收 **64/64**、覆盖 **43/43** 个接口模板。阶段 4 已实现已有库
+`--check-baseline`/`--adopt-baseline` 基线接管与数据库超时/密码并发运行配置；阶段 5 已实现
+`0002_spatial` 生成列/GiST 部分索引与 `nearby:v2` PostGIS 候选查询，并已在重构分支 Linux 发布
+容器跑通全套门禁（fmt / 离线全 targets / clippy / 全部 cargo test）与运行验证。原 Java JAR 真实
+HTTP 与最小客户端验证仍待验收。生产切换不在本阶段范围内。
 详细证据与差异见 [执行记录](../docs/rust-migration/execution.md)。生产仍由 `backend/` 的
 Spring Boot 服务承担。
 
@@ -568,8 +569,9 @@ docker compose -f compose.release.yml run --rm --entrypoint bash test /app/scrip
 ```powershell
 # 端到端：目标校验、运行器边界、就绪/读接口、非 root、只读根、上传卷可写、
 # SIGTERM(0)、重启持久、负向启动失败（原因必须为上传目录不可写）
-python scripts/verify-release-linux.py --build --test-count 171 `
-  --evidence ../docs/rust-migration/release-linux-evidence.json
+# 阶段 5 集成报告写入独立文件，保留阶段 4 release-linux-evidence.json
+python scripts/verify-release-linux.py --test-count 223 --task stage5-spatial-integrated `
+  --evidence ../docs/rust-migration/stage5-release-linux-evidence.json
 ```
 
 运行加固（`compose.release.yml`）：`read_only: true`、`tmpfs /tmp`、`cap_drop: [ALL]`、
@@ -605,9 +607,11 @@ python scripts/test_verify_release_linux.py
 **边界**：`compose.release.yml` 仅为本地演练，复用温晓授权的合成 PG/Redis，其 `DATABASE_URL`/
 `REDIS_URL` 默认值是合成地址而**非生产配置**；镜像不含 `uploads/.env/target/备份`；ENTRYPOINT
 不自动迁移/接管（`--migrate` 仅演练时显式调用，且仅指向 synthetic `lycoris_rust`）；不操作
-`lycoris-restore-review` 或其它 Docker 项目。真实 Linux 构建、**171** 项测试与运行验证证据见
+`lycoris-restore-review` 或其它 Docker 项目。真实 Linux 构建、**223** 项测试（阶段 5 主分支集成）
+与运行验证证据见
 [版本记录](../docs/rust-migration/versions.md)与
-[release-linux-evidence.json](../docs/rust-migration/release-linux-evidence.json)。
+[stage5-release-linux-evidence.json](../docs/rust-migration/stage5-release-linux-evidence.json)；
+阶段 4 证据 [release-linux-evidence.json](../docs/rust-migration/release-linux-evidence.json) 保留。
 
 ## 连接与数据目录
 

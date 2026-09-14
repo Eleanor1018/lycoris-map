@@ -308,7 +308,7 @@ def finalize_return_code(return_code: int, path: Path | None, evidence: dict) ->
 
 def build_evidence(args: argparse.Namespace) -> dict:
     return {
-        "task": "stage4-linux-release-basics",
+        "task": args.task,
         "project": PROJECT_NAME,
         "targets": {
             "database_host": DEFAULT_DATABASE_HOST,
@@ -339,6 +339,11 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--skip-guards", action="store_true", help="跳过测试运行器边界 guard")
     parser.add_argument("--evidence", type=Path, help="将 JSON 证据写入该路径")
     parser.add_argument("--test-count", type=int, help="记录本次 Linux cargo test 通过数量")
+    parser.add_argument(
+        "--task",
+        default="stage4-linux-release-basics",
+        help="证据中的任务标识（默认保留阶段 4 值；阶段 5 显式传入新标识）",
+    )
     args = parser.parse_args(argv)
 
     evidence = build_evidence(args)
