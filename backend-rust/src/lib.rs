@@ -25,6 +25,7 @@ pub mod auth;
 pub mod baseline;
 pub mod cli;
 pub mod config;
+pub mod db;
 pub mod dto;
 pub mod error;
 pub mod healthcheck;

@@ -16,10 +16,10 @@ use lycoris_backend::app::{AppState, build_router};
 use lycoris_backend::baseline;
 use lycoris_backend::cli::{self, Command};
 use lycoris_backend::config::Config;
+use lycoris_backend::db;
 use lycoris_backend::error::AppError;
 use lycoris_backend::healthcheck;
 use lycoris_backend::migrate;
-use sqlx::postgres::PgPoolOptions;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -58,36 +58,37 @@ async fn run(command: Command) -> Result<(), AppError> {
     // 只记录“已加载”，不打印连接串或其参数。
     tracing::info!("配置加载完成");
 
-    let pool = PgPoolOptions::new()
-        .max_connections(config.db_max_connections)
-        .acquire_timeout(config.db_acquire_timeout)
-        .max_lifetime(config.db_max_lifetime)
-        .idle_timeout(config.db_idle_timeout)
-        .connect(&config.database_url)
-        .await?;
-
+    // 维护命令使用不含服务语句超时的独立连接策略；普通启动使用服务池（语句/锁超时）。
     match command {
         Command::Migrate => {
+            let pool = db::connect_maintenance_pool(&config).await?;
             migrate::run(&pool).await?;
+            pool.close().await;
             tracing::info!("迁移完成");
             return Ok(());
         }
         Command::AdoptBaseline => {
+            let pool = db::connect_maintenance_pool(&config).await?;
             let report = baseline::adopt_baseline(&pool).await?;
             report.log_summary("基线接管");
+            pool.close().await;
             tracing::info!("基线接管完成");
             return Ok(());
         }
         Command::CheckBaseline => {
+            let pool = db::connect_maintenance_pool(&config).await?;
             let report = baseline::check_baseline(&pool).await?;
             report.log_summary("基线预检");
-            report.into_result().map(|_| ())?;
+            let result = report.into_result().map(|_| ());
+            pool.close().await;
+            result?;
             tracing::info!("基线预检通过");
             return Ok(());
         }
         Command::Serve | Command::Help | Command::Healthcheck(_) => {}
     }
 
+    let pool = db::connect_serve_pool(&config).await?;
     // 普通启动只读校验，不自动执行 DDL。
     migrate::verify_applied(&pool).await?;
     tracing::info!("迁移校验通过");

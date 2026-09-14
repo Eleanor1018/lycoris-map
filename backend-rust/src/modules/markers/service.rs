@@ -448,12 +448,20 @@ fn order_by_ids(ids: &[i64], rows: Vec<MarkerRow>) -> Vec<MarkerRow> {
 }
 
 fn db_error(error: sqlx::Error) -> ApiError {
+    // 只记录受控 SQLSTATE，不输出底层驱动 detail、SQL 或参数。
+    let code = error
+        .as_database_error()
+        .and_then(|database| database.code().map(|value| value.into_owned()));
     tracing::error!(
         target: "lycoris_backend::markers",
-        error = %error,
+        db_code = code.as_deref().unwrap_or("none"),
         "点位数据库查询失败"
     );
-    ApiError::Internal
+    if crate::db::is_timeout_sqlstate(&error) {
+        ApiError::Unavailable
+    } else {
+        ApiError::Internal
+    }
 }
 
 #[cfg(test)]

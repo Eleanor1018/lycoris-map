@@ -705,5 +705,9 @@ fn db_error(context: &'static str, error: sqlx::Error) -> MediaServiceError {
         db_constraint = constraint.as_deref().unwrap_or("none"),
         "媒体数据库操作失败"
     );
-    MediaServiceError::Internal
+    if crate::db::is_timeout_sqlstate(&error) {
+        MediaServiceError::Unavailable
+    } else {
+        MediaServiceError::Internal
+    }
 }

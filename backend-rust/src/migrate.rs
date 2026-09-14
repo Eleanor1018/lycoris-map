@@ -9,6 +9,7 @@
 
 use std::collections::HashMap;
 
+use sqlx::Connection as _;
 use sqlx::PgPool;
 use sqlx::Row as _;
 use sqlx::migrate::Migrator;
@@ -54,12 +55,23 @@ pub enum MigrationError {
 ///
 /// 若目标库已存在基线业务表却还没有对应迁移记录，则拒绝直接建表并提示使用
 /// `--adopt-baseline`；只有空库或已由 SQLx 管理的库才会执行迁移。
+///
+/// 迁移在**独占物理连接**上执行（与已验收的接管一致）：成功后主动关闭，SQLx 出错或任务被
+/// 取消时连接随 future drop 关闭。SQLx 的迁移锁是会话级 advisory lock，若把连接还回池会
+/// 在池里残留锁并阻塞后续迁移；独占后无论成功/失败/取消都不会泄漏。
 pub async fn run(pool: &PgPool) -> Result<(), MigrationError> {
     if needs_adoption(pool).await? {
         return Err(MigrationError::ExistingSchemaNeedsAdoption);
     }
-    MIGRATOR.run(pool).await?;
-    Ok(())
+    let mut connection = pool.acquire().await?.detach();
+    let result = MIGRATOR
+        .run(&mut connection)
+        .await
+        .map_err(MigrationError::from);
+    if connection.close().await.is_err() {
+        tracing::warn!("关闭迁移连接失败");
+    }
+    result
 }
 
 /// 判断目标库是否“已有业务表但尚无已登记的基线迁移”。

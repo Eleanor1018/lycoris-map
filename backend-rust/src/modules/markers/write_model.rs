@@ -171,6 +171,9 @@ pub enum WriteError {
     NotFound(String),
     #[error("{0}")]
     Conflict(String),
+    /// 数据库语句/锁等待超时（SQLSTATE 57014/55P03）；事务已回滚，受控映射 503。
+    #[error("服务暂时不可用")]
+    Unavailable,
     /// 数据库/未知内部错误；日志已做受控摘要，不携带 SQL 或参数。
     #[error("服务器内部错误")]
     Internal,
@@ -183,6 +186,7 @@ impl WriteError {
             WriteError::Forbidden => StatusCode::FORBIDDEN,
             WriteError::NotFound(_) => StatusCode::NOT_FOUND,
             WriteError::Conflict(_) => StatusCode::CONFLICT,
+            WriteError::Unavailable => StatusCode::SERVICE_UNAVAILABLE,
             WriteError::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

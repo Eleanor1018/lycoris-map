@@ -91,10 +91,7 @@ impl AppState {
             config.session_ttl,
             config.redis_command_timeout,
         );
-        let parallelism = std::thread::available_parallelism()
-            .map(|value| value.get())
-            .unwrap_or(4);
-        let passwords = PasswordHasher::new(config.bcrypt_cost, parallelism);
+        let passwords = PasswordHasher::new(config.bcrypt_cost, config.password_max_concurrency);
         let rate_limiter = RegisterRateLimiter::new(
             redis.clone(),
             config.rate_limit_namespace.clone(),

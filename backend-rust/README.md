@@ -4,9 +4,12 @@ Lycoris Rust 后端采用 Axum + SQLx + PostgreSQL + Redis。阶段 0 至 3 已�
 实现全部 **43 个既有 API 契约模板**：公开点位、认证与用户、头像、点位写入、收藏、译文与
 图片提案审核、受控资源读取。`/uploads` 模板拆为两个明确目录路由，健康探针另列。
 
-完整检查 **191 项通过**（阶段 3 为 162 项，阶段 4 新增 25 项基线接管真实 PG 集成与 4 项 CLI
-单元测试），独立真实 TCP 验收 **64/64**、覆盖 **43/43** 个接口模板。阶段 4 已实现已有库
-`--check-baseline`/`--adopt-baseline` 基线接管；Linux 验证、性能测量与生产切换仍在阶段 4 内进行。
+完整检查 **202 项通过**（阶段 3 为 162 项；阶段 4 新增 25 项基线接管真实 PG 集成、4 项 CLI
+单元测试与 11 项发布运行参数补齐测试：3 项配置边界与 1 项 SQLSTATE 分类单元测试、5 项真实
+PG/Router 语句/锁超时集成、2 项迁移锁独占/争用集成），独立真实 TCP 验收 **64/64**、覆盖
+**43/43** 个接口模板。阶段 4 已实现已有库
+`--check-baseline`/`--adopt-baseline` 基线接管与数据库超时/密码并发运行配置；Linux 验证、
+性能测量与生产切换仍在阶段 4 内进行。
 详细证据与差异见 [执行记录](../docs/rust-migration/execution.md)。生产仍由 `backend/` 的
 Spring Boot 服务承担。
 
@@ -23,6 +26,8 @@ Spring Boot 服务承担。
 | `src/main.rs` | 可执行入口：配置、PG 池、Redis、Router、`--migrate` |
 | `src/app.rs` | `AppState` / Router / 中间件装配（全局 8 MiB 上限、超时、服务端请求 ID + 访问日志、CORS） |
 | `src/config.rs` | 环境变量配置，非法值报可读错误且不回显连接串 |
+| `src/db.rs` | 服务/维护连接池构建：服务连接 `after_connect` 用绑定参数设置 `statement_timeout`/`lock_timeout`；维护池不继承服务短超时；受控识别 SQLSTATE 57014/55P03 |
+| `.env.example` | 环境变量示例（含必填项与全部安全默认，新增数据库超时/密码并发说明；复制为 `.env` 使用） |
 | `src/error.rs` | 四类响应体与错误类型（不统一包裹） |
 | `src/modules/markers/` | 点位读取与写入：`model`（行/DTO）、`repository`（`sql/*.sql` + `query_file_as!`）、`localization`（语言/哈希/纯函数）、`cache`（Redis ID 缓存）、`service`（读取/本地化）、`http`（公开读取薄 handler）、`write`/`write_model`（已验收写入事务）、`write_http`（写入/收藏/审核薄 handler） |
 | `src/media/` | 媒体核心与业务：`storage.rs`（存储/读取）、`model.rs`（行/DTO）、`repository.rs`（固定 SQL）、`service.rs`（`MediaService`）、`sql/*.sql`（头像/提案/清理固定语句） |
@@ -43,6 +48,7 @@ Spring Boot 服务承担。
 | `migrations/0001_baseline.sql` | 从 `docs/rust-migration/schema-baseline.sql` 精确派生 |
 | `.sqlx/` | SQLx 离线元数据，`SQLX_OFFLINE=true` 时无需数据库即可编译 |
 | `tests/integration.rs` | 基础工程真实 PG / Redis 集成测试（临时建库并清理） |
+| `tests/db_runtime.rs` | 发布运行参数真实 PG / Redis 集成测试：服务连接语句/锁超时生效、超时取消后连接复用、锁竞争 503 无部分写入、维护池不继承服务短超时、真实 Router（`oneshot`）持锁写 503（CORS/请求 ID）解锁后成功 |
 | `tests/baseline_adoption.rs` | 已有库基线接管/只读预检真实 PG 集成测试（Java 形状库、结构拒绝、历史拒绝、并发、锁超时、CLI） |
 | `tests/markers_read.rs` | 公开点位读取真实 PG / Redis 集成测试 |
 | `tests/markers_http.rs` | 点位写入/收藏/审核 HTTP 真实 PG / Redis 集成测试（真实 Router + 登录 Cookie + 权限矩阵） |
@@ -310,13 +316,16 @@ cargo run --locked
 | `DATABASE_URL` / `REDIS_URL` | 必填 | 仅校验格式，不打印 |
 | `SERVER_HOST` / `SERVER_PORT` | `127.0.0.1` / `18081` | HTTP 监听 |
 | `UPLOAD_DIR` | `uploads` | 上传根目录；启动时创建并 canonicalize（`--migrate` 不初始化） |
-| `MEDIA_MAX_CONCURRENCY` | `1` | 图片 CPU 处理并发许可数，必须为正值；无许可立即返回 503 |
+| `MEDIA_MAX_CONCURRENCY` | `1` | 图片 CPU 处理并发许可数，必须为正值；无许可立即返回 503（语义不变） |
+| `PASSWORD_MAX_CONCURRENCY` | CPU 数 clamp `1..=4` | BCrypt 阻塞任务并发许可；显式只接受 `1..=32`，0/溢出启动即拒绝；许可随 `spawn_blocking` 持有到任务结束 |
 | `CORS_ALLOWED_ORIGINS` | 空 | 逗号分隔的凭据白名单；每项须为 `http`/`https` 源，拒绝 `*`、`null`、路径、查询、片段与用户名密码；空表示不放行跨域 |
 | `WRITE_ALLOWED_ORIGINS` | 回落到 CORS 白名单 | 写请求 Origin 白名单（含同源站点也需显式列入） |
 | `TRUSTED_PROXIES` | 空 | 可信代理 IP 列表；仅这些连接才读取 `X-Forwarded-For` |
 | `DB_MAX_CONNECTIONS` | `10` | 连接池上限，必须为正值 |
 | `DB_ACQUIRE_TIMEOUT_SECONDS` | `30` | 取连接超时 |
 | `DB_MAX_LIFETIME_SECONDS` / `DB_IDLE_TIMEOUT_SECONDS` | `1800` / `600` | 连接生命周期 |
+| `DB_STATEMENT_TIMEOUT_MS` | `20000` | 服务连接语句超时（`1..=300000` ms）；0/超上限/溢出启动即拒绝；仅 `Serve` 使用，维护命令不继承 |
+| `DB_LOCK_TIMEOUT_MS` | `5000` | 服务连接锁等待超时（`1..=300000` ms）；0/超上限/溢出启动即拒绝；仅 `Serve` 使用 |
 | `REQUEST_TIMEOUT_SECONDS` | `30` | 请求超时；请求体总上限固定 8 MiB |
 | `APP_AVAILABILITY_ZONE` | `Asia/Shanghai` | 读取时计算 `isActive` 的时区，须为合法 IANA 名称 |
 | `MARKER_CACHE_REDIS_ENABLED` | `true` | 是否启用查询缓存；关闭时直接回源 PG |
@@ -345,6 +354,34 @@ Redis 缓存独立于 Java 的 `cache:marker:*` 命名空间，只存 ID 与缓�
 > 与 Java 并行验收时，请为 Rust 实例设置独立 Cookie 名与命名空间，例如：
 > `SESSION_COOKIE_NAME=LYCORIS_RUST_SESSION`、`SESSION_NAMESPACE=lycoris:rust:session:v1`；
 > 正式默认仍为 `LYCORIS_SESSION`（可配置 Secure/Domain/SameSite=Lax/30d/HttpOnly/path=/）。
+
+## 数据库超时与密码并发（发布运行参数）
+
+**服务与维护使用不同连接策略**（`src/db.rs`）：
+
+- **服务连接（`Serve`）**：每条新物理连接在 `after_connect` 内用**绑定参数** `set_config` 设置
+  `statement_timeout`（`DB_STATEMENT_TIMEOUT_MS`，默认 20 秒）与 `lock_timeout`
+  （`DB_LOCK_TIMEOUT_MS`，默认 5 秒）。这样 HTTP 请求超时后语句不会继续拖住 PG，锁等待也不会无限
+  堆积。池上限/获取超时/生命周期/空闲参数保持 `DB_MAX_CONNECTIONS` 等既有语义。
+- **维护命令（`--migrate`/`--check-baseline`/`--adopt-baseline`）**：使用独立连接策略，**不**套用
+  服务的 20 秒语句限制（长迁移/接管需要更长语句），避免把维护语句误杀；迁移与接管锁仍由独立
+  `lock_timeout=5000ms` 明确约束等待上限，绝不永久阻塞。`--migrate` 的 SQLx 迁移在**独占物理连接**
+  上执行（结束后主动关闭；出错或任务取消时随 future drop 关闭），因此会话级迁移锁绝不会随连接
+  退回池而泄漏，SQLx 自身的迁移事务与 checksum 校验保持不变。
+- 数据库超时参数全部为绑定值，无字符串拼接，不存在 SQL 注入面。单位均为**毫秒**、范围
+  `1..=300000`；`PASSWORD_MAX_CONCURRENCY` 为计数（默认 CPU 数 clamp `1..=4`，显式 `1..=32`）。
+  示例与默认值见 `backend-rust/.env.example`。
+
+**新增受控边界（500 → 503）**：服务连接上 SQLSTATE `57014`（`query_canceled`，语句超时）与
+`55P03`（`lock_not_available`，锁等待超时）由 `db::is_timeout_sqlstate` 识别，按各接口**既有错误
+形状**受控映射为 **503 `服务暂时不可用`**（Auth 的普通 JSON、点位写/读的中文纯文本、媒体的
+`ApiResponse`/文本）。失败事务整体回滚，不产生部分写入；不会自动重试事务或写入；PG 提交后的
+Redis/缓存失效成功语义不变。其它未知数据库错误仍为 **500**，日志只记录受控 SQLSTATE/约束名，
+不输出驱动底层 detail、SQL 或参数。
+
+**密码并发**：`PASSWORD_MAX_CONCURRENCY` 默认按可用 CPU 数 clamp `1..=4`，可显式 `1..=32`；
+BCrypt 在 `spawn_blocking` 中执行并持有并发许可到任务真正结束，请求取消也不会无限堆积
+CPU 阻塞任务。图片并发继续使用 `MEDIA_MAX_CONCURRENCY`，语义不变。
 
 ## 会话与密码边界
 
@@ -376,12 +413,24 @@ Redis 缓存独立于 Java 的 `cache:marker:*` 命名空间，只存 ID 与缓�
 
 ## 测试
 
-`tests/integration.rs`、`tests/markers_read.rs`、`tests/auth_integration.rs` 与
+`tests/integration.rs`、`tests/markers_read.rs`、`tests/auth_integration.rs`、
+`tests/db_runtime.rs` 与
 `tests/media_http.rs` 使用标准 Rust 测试与 `tower::ServiceExt::oneshot`（认证用例另有真实
 HTTP 观察），不启动常驻外部 HTTP 服务器。每个用例从测试管理员连接创建 UUID 命名的临时库、
 应用迁移、构造 Router 并断言；无论成功失败都会删除自己的临时库。服务不可用时测试直接失败，
 不做静默跳过。只允许连接回环地址上的合成测试服务；需要上传根的基础测试各自使用
 `tempfile::TempDir` 并保持生命周期，不写真实 `uploads/`，也不遗留全局临时目录。
+
+`tests/db_runtime.rs` 覆盖发布运行参数：**同时持有两条物理连接**（`pg_backend_pid` 不同）并断言
+两者 `statement_timeout`/`lock_timeout` 都生效、短 `pg_sleep` 超过配置被 PG `57014` 取消且同连接
+随后 `SELECT 1` 可用、持锁写竞争按 `55P03` 返回 503 且业务事务无部分写入并解锁后可重试成功、
+维护池 `statement_timeout=0` 且 `lock_timeout=5000ms`、长语句不被服务短超时取消、真实 Router
+（`tower::ServiceExt::oneshot`，**非**真实 TCP 服务）上持锁 PATCH 返回 503 并保留 CORS 与
+`X-Request-ID`。夹具先用维护/默认池建立 schema，再建立被测短超时服务池，避免把 PostGIS 建表
+耗时误判为产品超时。`tests/integration.rs` 另新增迁移回归：脏历史失败后 `pg_locks` 无残留会话
+迁移锁（独占连接防泄漏），以及迁移锁争用时另一连接在有界时间内失败、释放后可立即取得迁移锁并
+完成迁移。相关配置默认与 `1..=300000`/`1..=32` 上下界由 `tests` 之外的纯解析单元测试覆盖，
+不依赖进程环境变量，避免并发污染。
 
 `tests/auth_integration.rs` 覆盖 11 条认证/用户路由与关键边界：Java 合成 BCrypt 向量、
 历史明文升级与哈希字面量拒绝、重复历史账号不授权、登录后 Cookie 稳定、失败登录保留会话、

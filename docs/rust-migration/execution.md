@@ -118,3 +118,51 @@ Nora 于 2026-09-14 授权完成计划阶段 0、0.5、1、2、3。分支 `refac
 - 响应与错误按契约保留形状：点位上传成功为本地化原点位（不换图、带 `Vary`），缺失/不可见 404 文本、非法 400 文本、413 `ApiResponse`、保存类 500「上传失败」、繁忙 503；4 条管理接口全部 `VerifiedAdmin`，未二次 403 文本、非管理员 403 Boot JSON、匿名 401 固定 JSON，重复处理 400、关联点位缺失 404。
 - 苏瑶自测：`check-rust.ps1` 全通过，`RUST_TEST_THREADS=2`（温晓已设置，本轮保持），**133 项通过、0 失败、0 跳过**；SQLx 在线元数据核对、离线全 targets 编译、fmt、Clippy 零警告。新增 7 项媒体 HTTP 测试覆盖上传/本地化、只建 `PENDING` 不改图、待审文件权限矩阵、点位接口 413 形状、管理员/二次验证、审批/驳回/清理与两条审批 HTTP 并发单成功。`Cargo.toml` description 改为不限阶段的 `Lycoris Rust 后端（Axum + SQLx）`。
 - 温晓随后在该工作树独立复跑 133 项通过，提交 `6deb394`；已整合到主分支 `bbca95f`，全部接口的最终验收结果见上文。
+
+### 阶段 4：发布运行参数补齐（苏瑶实现，待温晓验收）
+
+- 起点由温晓指定工作树 `work/rust-limits-worktree`；苏瑶实现、测试，未 `git add`/`commit`/`push`。
+- 新增配置：`DB_STATEMENT_TIMEOUT_MS`（默认 `20000`）与 `DB_LOCK_TIMEOUT_MS`（默认 `5000`），均在
+  `1..=300000` ms 内且拒绝 `0`/超上限/溢出，错误只报变量名不回显原值；`PASSWORD_MAX_CONCURRENCY`
+  默认按 `available_parallelism` clamp `1..=4`，显式 `1..=32`。`MEDIA_MAX_CONCURRENCY` 语义不变。
+  `Config::new` 与 `from_env` 默认一致。
+- 新增 `src/db.rs`：服务池沿 `PgConnectOptions` + `after_connect` 对**每条**服务连接用绑定参数
+  `set_config` 设置 `statement_timeout`/`lock_timeout`，保留 `max_connections`/`acquire_timeout`/
+  `max_lifetime`/`idle_timeout`；维护池（`--migrate`/`--check-baseline`/`--adopt-baseline`）不设置
+  服务语句超时，只保留独立 `lock_timeout=5000ms` 等待上限。数据库参数全部绑定，无拼接。
+- `migrate::run` 改为与已验收接管一致的独占连接：`pool.acquire().await?.detach()` 后交给 SQLx
+  `MIGRATOR`；成功后主动 `close`，出错或任务取消时连接随 future drop 关闭。SQLx 迁移锁是会话级
+  advisory lock，独占避免把带锁连接退回池而永久阻塞后续迁移；SQLx 自身迁移事务与 checksum 校验不变。
+- `AppState::new` 改用 `config.password_max_concurrency` 建立 `PasswordHasher`，许可仍在
+  `spawn_blocking` 闭包内持有至任务结束。
+- SQLSTATE `57014`/`55P03` 由 `db::is_timeout_sqlstate` 识别，按既有错误形状受控映射 503
+  （Auth JSON、点位写/读文本、媒体 `ApiResponse`/文本）；未知数据库错误仍 500（Auth 本来映射
+  unavailable 的路径保持）；失败事务整体回滚、不自动重试；PG 提交后的 Redis/清理成功语义未改；
+  点位读取日志不再输出底层 driver detail。
+- 苏瑶初轮完整脚本通过 199 项；本轮收尾按套件分别执行（`RUST_TEST_THREADS=2`、
+  `CARGO_BUILD_JOBS=2`）：`cargo sqlx prepare --check`、`SQLX_OFFLINE=true cargo check --all-targets`、
+  `cargo fmt --all -- --check`、`cargo clippy --all-targets -- -D warnings` 全部通过；各测试套件合计
+  **202 项通过、0 失败、0 跳过**（50 单元、28 认证、25 基线接管、5 db_runtime、**11 基础迁移**、
+  8 点位 HTTP、17 公开读取、17 写事务、16 图片存储、8 媒体业务、17 媒体 HTTP）。阶段 3 为 162 项，
+  阶段 4 既有 29 项，本轮新增 11 项（`config` 3 项 + `db` 1 项 SQLSTATE 分类单元、`db_runtime`
+  5 项真实 PG/Router、`integration` 2 项迁移锁独占/争用）。
+- `tests/db_runtime.rs` 实测：**同时持有两条物理连接**（`pg_backend_pid` 不同），两条
+  `statement_timeout=250ms`/`lock_timeout=125ms` 都生效；短 `pg_sleep(5)` 在 200ms 语句超时下被
+  PG `57014` 取消且同连接 `SELECT 1` 可用；`FOR UPDATE` 持锁写在 150ms 锁超时下按 `55P03` 返回
+  503、收藏 0 行且点位版本不变，解锁后成功；维护池 `statement_timeout=0` 且 `lock_timeout=5000ms`，
+  `pg_sleep(0.4)` 不被服务 150ms 超时取消；真实 Router（`tower::ServiceExt::oneshot`，**非**真实
+  TCP 服务）持锁 `PATCH /api/admin/markers/{id}` 返回 503 `服务暂时不可用`，带
+  `Access-Control-Allow-Origin` 与合法服务端 `X-Request-ID`，解锁后 200 且写入生效。夹具统一先用
+  维护/默认池建立 schema，再建立被测短超时服务池，避免把 PostGIS 建表耗时误判为产品超时。
+- `tests/integration.rs` 迁移新增：脏历史使迁移在取得会话锁后失败，断言 `pg_locks` 无残留迁移锁
+  （独占连接防泄漏）；持锁争用时另一连接在 200ms 有界锁超时内失败且不建 `_sqlx_migrations`，
+  释放后可立即取得迁移锁并完成迁移。已有 migration 9 项保留。
+- 配置上下界（含 `0`、`300001`、`u64` 溢出、负数、非数字、`PASSWORD_MAX_CONCURRENCY` 的
+  `0`/`33`）由纯函数单元测试覆盖，不依赖环境变量；未知 SQLSTATE 仍 500 由 `db` 单元测试钉住。
+- 未测项（据实记录）：未在本轮跑 Linux 发布基础、容器资源配额、真实 release TCP 超时验收或真实
+  生产切流；未用真实备份/生产库，仅回环合成库与 Redis；未单独测量 BCrypt 并发生效对延迟的影响
+  （仅验证配置接线与许可持有语义）。真实 release TCP 超时验收由温晓另备。
+- 文档：`backend-rust/README.md` 配置表新增三项并新增「数据库超时与密码并发」小节，写明单位/范围、
+  服务与维护策略差异、`--migrate` 独占连接与 `500 → 503` 新边界；新增 `backend-rust/.env.example`
+  模板；`api-contract.md` 记录 Rust 的 503 边界。温晓独立复跑 5 项 db_runtime 与 11 项基础集成
+  全部通过，审查通过后提交；最终 Linux 整合门禁与真实 TCP 另记。

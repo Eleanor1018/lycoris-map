@@ -30,6 +30,17 @@ pub const REQUEST_BODY_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 /// 默认同时执行的图片 CPU 处理任务数（一个并发许可）。
 pub const DEFAULT_MEDIA_CONCURRENCY: u32 = 1;
 
+/// 默认服务连接 PostgreSQL 语句超时（20 秒）；超时受控映射 503，不允许无意关闭。
+pub const DEFAULT_DB_STATEMENT_TIMEOUT_MS: u64 = 20_000;
+/// 默认服务连接 PostgreSQL 锁等待超时（5 秒）；锁等待超时同样受控映射 503。
+pub const DEFAULT_DB_LOCK_TIMEOUT_MS: u64 = 5_000;
+/// 数据库超时上限（5 分钟），避免接受荒谬值。
+pub const MAX_DB_TIMEOUT_MS: u64 = 300_000;
+/// 密码哈希默认并发的 CPU 上限（`available_parallelism` clamp 到 `1..=4`）。
+pub const PASSWORD_MAX_CONCURRENCY_DEFAULT_CAP: usize = 4;
+/// 显式 `PASSWORD_MAX_CONCURRENCY` 的上限。
+pub const MAX_PASSWORD_MAX_CONCURRENCY: usize = 32;
+
 /// 默认会话 Cookie 名。批量并行验收可用 `SESSION_COOKIE_NAME` 覆盖为独立名，
 /// 避免与 Java 的 `LYCORIS_SESSION` 混用。
 pub const DEFAULT_SESSION_COOKIE_NAME: &str = "LYCORIS_SESSION";
@@ -84,6 +95,8 @@ pub struct Config {
     pub upload_dir: PathBuf,
     /// 图片 CPU 处理的并发许可数（必须为正值，默认 1）。
     pub media_max_concurrency: usize,
+    /// 密码哈希（BCrypt）并发许可数；默认按 CPU 并行度 clamp `1..=4`，可显式 `1..=32`。
+    pub password_max_concurrency: usize,
     pub cors_allowed_origins: Vec<HeaderValue>,
     /// 写请求 Origin 白名单（与 CORS 分开实施）。未配置时回落到 CORS 白名单。
     pub write_allowed_origins: Vec<HeaderValue>,
@@ -91,6 +104,10 @@ pub struct Config {
     pub db_acquire_timeout: Duration,
     pub db_max_lifetime: Duration,
     pub db_idle_timeout: Duration,
+    /// 服务连接 PostgreSQL 语句超时；只用于服务池，维护池不继承。
+    pub db_statement_timeout: Duration,
+    /// 服务连接 PostgreSQL 锁等待超时；只用于服务池，维护池不继承。
+    pub db_lock_timeout: Duration,
     pub request_timeout: Duration,
     pub availability_zone: Tz,
     pub marker_cache_enabled: bool,
@@ -139,12 +156,15 @@ impl Config {
             server_port: DEFAULT_SERVER_PORT,
             upload_dir: PathBuf::from("uploads"),
             media_max_concurrency: DEFAULT_MEDIA_CONCURRENCY as usize,
+            password_max_concurrency: default_password_max_concurrency(),
             cors_allowed_origins: Vec::new(),
             write_allowed_origins: Vec::new(),
             db_max_connections: 10,
             db_acquire_timeout: Duration::from_secs(30),
             db_max_lifetime: Duration::from_secs(1800),
             db_idle_timeout: Duration::from_secs(600),
+            db_statement_timeout: Duration::from_millis(DEFAULT_DB_STATEMENT_TIMEOUT_MS),
+            db_lock_timeout: Duration::from_millis(DEFAULT_DB_LOCK_TIMEOUT_MS),
             request_timeout: Duration::from_secs(30),
             availability_zone: DEFAULT_AVAILABILITY_ZONE,
             marker_cache_enabled: true,
@@ -237,6 +257,16 @@ impl Config {
             db_acquire_timeout: seconds("DB_ACQUIRE_TIMEOUT_SECONDS", 30)?,
             db_max_lifetime: seconds("DB_MAX_LIFETIME_SECONDS", 1800)?,
             db_idle_timeout: seconds("DB_IDLE_TIMEOUT_SECONDS", 600)?,
+            db_statement_timeout: bounded_millis(
+                "DB_STATEMENT_TIMEOUT_MS",
+                DEFAULT_DB_STATEMENT_TIMEOUT_MS,
+                MAX_DB_TIMEOUT_MS,
+            )?,
+            db_lock_timeout: bounded_millis(
+                "DB_LOCK_TIMEOUT_MS",
+                DEFAULT_DB_LOCK_TIMEOUT_MS,
+                MAX_DB_TIMEOUT_MS,
+            )?,
             request_timeout: seconds("REQUEST_TIMEOUT_SECONDS", 30)?,
             availability_zone,
             marker_cache_enabled: parse_or("MARKER_CACHE_REDIS_ENABLED", true)?,
@@ -286,6 +316,7 @@ impl Config {
                 parse_or("REGISTER_RATE_LIMIT_MAX", DEFAULT_REGISTER_RATE_LIMIT_MAX)?,
             )?,
             register_rate_limit_window: seconds("REGISTER_RATE_LIMIT_WINDOW_SECONDS", 600)?,
+            password_max_concurrency: parse_password_max_concurrency("PASSWORD_MAX_CONCURRENCY")?,
             bcrypt_cost: non_zero("BCRYPT_COST", parse_or("BCRYPT_COST", DEFAULT_BCRYPT_COST)?)?,
             admin_second_factor_enabled: parse_bool("ADMIN_SECOND_FACTOR_ENABLED", true)?,
             admin_second_password_hash,
@@ -350,6 +381,66 @@ fn bounded_seconds(
         return Err(ConfigError::Invalid(key));
     }
     Ok(Duration::from_secs(secs))
+}
+
+/// 正且不超过上限的毫秒数（用于数据库语句/锁超时）。
+fn bounded_millis(
+    key: &'static str,
+    default_ms: u64,
+    max_ms: u64,
+) -> Result<Duration, ConfigError> {
+    parse_bounded_millis(key, optional(key).as_deref(), default_ms, max_ms)
+}
+
+/// 纯解析：缺失取默认；0、超上限或解析溢出（含负数/非数字）都返回 `Invalid`，不回显原值。
+fn parse_bounded_millis(
+    key: &'static str,
+    raw: Option<&str>,
+    default_ms: u64,
+    max_ms: u64,
+) -> Result<Duration, ConfigError> {
+    let millis: u64 = match raw {
+        Some(value) => value
+            .trim()
+            .parse()
+            .map_err(|_| ConfigError::Invalid(key))?,
+        None => default_ms,
+    };
+    if millis == 0 || millis > max_ms {
+        return Err(ConfigError::Invalid(key));
+    }
+    Ok(Duration::from_millis(millis))
+}
+
+/// 密码哈希默认并发：可用 CPU 数，缺失时回退上限值，再 clamp 到 `1..=4`。
+fn default_password_max_concurrency() -> usize {
+    std::thread::available_parallelism()
+        .map(|value| value.get())
+        .unwrap_or(PASSWORD_MAX_CONCURRENCY_DEFAULT_CAP)
+        .clamp(1, PASSWORD_MAX_CONCURRENCY_DEFAULT_CAP)
+}
+
+/// 解析显式 `PASSWORD_MAX_CONCURRENCY`；缺失取默认，显式必须是 `1..=32`。
+fn parse_password_max_concurrency(key: &'static str) -> Result<usize, ConfigError> {
+    parse_password_max_concurrency_value(key, optional(key).as_deref())
+}
+
+/// 纯解析：缺失取默认；0、超上限或解析溢出（含负数/非数字）都返回 `Invalid`，不回显原值。
+fn parse_password_max_concurrency_value(
+    key: &'static str,
+    raw: Option<&str>,
+) -> Result<usize, ConfigError> {
+    let Some(value) = raw else {
+        return Ok(default_password_max_concurrency());
+    };
+    let parsed: usize = value
+        .trim()
+        .parse()
+        .map_err(|_| ConfigError::Invalid(key))?;
+    if parsed == 0 || parsed > MAX_PASSWORD_MAX_CONCURRENCY {
+        return Err(ConfigError::Invalid(key));
+    }
+    Ok(parsed)
 }
 
 /// Cookie 名必须是合法的 RFC 6265 token，避免运行期才产生非法响应头。
@@ -497,8 +588,13 @@ fn non_empty(key: &'static str, value: String) -> Result<String, ConfigError> {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use super::{
-        ConfigError, non_zero, parse_origins, validated_cookie_domain, validated_cookie_name,
+        Config, ConfigError, DEFAULT_DB_LOCK_TIMEOUT_MS, DEFAULT_DB_STATEMENT_TIMEOUT_MS,
+        MAX_DB_TIMEOUT_MS, MAX_PASSWORD_MAX_CONCURRENCY, PASSWORD_MAX_CONCURRENCY_DEFAULT_CAP,
+        default_password_max_concurrency, non_zero, parse_bounded_millis, parse_origins,
+        parse_password_max_concurrency_value, validated_cookie_domain, validated_cookie_name,
     };
 
     #[test]
@@ -569,5 +665,112 @@ mod tests {
             non_zero("DB_MAX_CONNECTIONS", 0),
             Err(ConfigError::Invalid("DB_MAX_CONNECTIONS"))
         ));
+    }
+
+    #[test]
+    fn db_timeouts_accept_bounds_and_reject_zero_or_overflow() {
+        // 缺失取默认。
+        assert_eq!(
+            parse_bounded_millis(
+                "DB_STATEMENT_TIMEOUT_MS",
+                None,
+                DEFAULT_DB_STATEMENT_TIMEOUT_MS,
+                MAX_DB_TIMEOUT_MS,
+            )
+            .unwrap(),
+            Duration::from_millis(DEFAULT_DB_STATEMENT_TIMEOUT_MS)
+        );
+        // 下界与上界都接受。
+        assert_eq!(
+            parse_bounded_millis(
+                "DB_STATEMENT_TIMEOUT_MS",
+                Some("1"),
+                20_000,
+                MAX_DB_TIMEOUT_MS
+            )
+            .unwrap(),
+            Duration::from_millis(1)
+        );
+        assert_eq!(
+            parse_bounded_millis(
+                "DB_LOCK_TIMEOUT_MS",
+                Some("300000"),
+                DEFAULT_DB_LOCK_TIMEOUT_MS,
+                MAX_DB_TIMEOUT_MS,
+            )
+            .unwrap(),
+            Duration::from_millis(MAX_DB_TIMEOUT_MS)
+        );
+        // 0、超上限、溢出（u64 无法容纳）、负数、非数字都拒绝，且不含原值。
+        for bad in ["0", "300001", "18446744073709551616", "-1", "abc", "20.5"] {
+            let error = parse_bounded_millis(
+                "DB_STATEMENT_TIMEOUT_MS",
+                Some(bad),
+                DEFAULT_DB_STATEMENT_TIMEOUT_MS,
+                MAX_DB_TIMEOUT_MS,
+            )
+            .expect_err(bad);
+            assert!(
+                matches!(error, ConfigError::Invalid("DB_STATEMENT_TIMEOUT_MS")),
+                "{bad} 应报 Invalid"
+            );
+            assert!(
+                !error.to_string().contains(bad),
+                "错误信息不得回显原值: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn password_max_concurrency_default_and_bounds() {
+        // 默认按 CPU clamp 到 1..=4，两端都健全。
+        let default = default_password_max_concurrency();
+        assert!((1..=PASSWORD_MAX_CONCURRENCY_DEFAULT_CAP).contains(&default));
+        assert_eq!(
+            parse_password_max_concurrency_value("PASSWORD_MAX_CONCURRENCY", None).unwrap(),
+            default
+        );
+
+        // 显式上下界 1 与 32 接受。
+        assert_eq!(
+            parse_password_max_concurrency_value("PASSWORD_MAX_CONCURRENCY", Some("1")).unwrap(),
+            1
+        );
+        assert_eq!(
+            parse_password_max_concurrency_value("PASSWORD_MAX_CONCURRENCY", Some(" 32 ")).unwrap(),
+            MAX_PASSWORD_MAX_CONCURRENCY
+        );
+
+        // 0、超上限、溢出、负数、非数字都拒绝。
+        for bad in ["0", "33", "18446744073709551616", "-1", "many", "1.5"] {
+            let error = parse_password_max_concurrency_value("PASSWORD_MAX_CONCURRENCY", Some(bad))
+                .expect_err(bad);
+            assert!(
+                matches!(error, ConfigError::Invalid("PASSWORD_MAX_CONCURRENCY")),
+                "{bad} 应报 Invalid"
+            );
+            assert!(
+                !error.to_string().contains(bad),
+                "错误信息不得回显原值: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn config_new_matches_env_defaults() {
+        let config = Config::new("postgres://u:p@127.0.0.1/lycoris", "redis://127.0.0.1:6379");
+        assert_eq!(
+            config.db_statement_timeout,
+            Duration::from_millis(DEFAULT_DB_STATEMENT_TIMEOUT_MS)
+        );
+        assert_eq!(
+            config.db_lock_timeout,
+            Duration::from_millis(DEFAULT_DB_LOCK_TIMEOUT_MS)
+        );
+        assert_eq!(
+            config.password_max_concurrency,
+            default_password_max_concurrency()
+        );
+        assert_eq!(config.media_max_concurrency, 1, "媒体并发语义不变");
     }
 }

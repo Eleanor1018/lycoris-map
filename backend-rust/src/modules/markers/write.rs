@@ -1059,6 +1059,8 @@ fn client_request_conflict(error: &sqlx::Error) -> bool {
 }
 
 /// 受控数据库错误日志：只记录错误码/约束名，不携带 SQL、参数或用户资料。
+///
+/// 语句取消（57014）与锁等待超时（55P03）是可重试的依赖不可用，受控映射 503；未知错误保持 500。
 fn log_db_error(error: &sqlx::Error) -> WriteError {
     match error {
         sqlx::Error::Database(database) => tracing::error!(
@@ -1072,7 +1074,11 @@ fn log_db_error(error: &sqlx::Error) -> WriteError {
             "点位写入数据库错误"
         ),
     }
-    WriteError::Internal
+    if crate::db::is_timeout_sqlstate(error) {
+        WriteError::Unavailable
+    } else {
+        WriteError::Internal
+    }
 }
 
 #[cfg(test)]

@@ -284,3 +284,133 @@ async fn migrate_cli_applies_baseline_to_empty_database() {
         .expect("迁移 CLI 执行后校验应通过");
     pool.close().await;
 }
+
+/// 统计当前测试库内仍持有的 advisory 锁（迁移锁泄漏会让计数 > 0）。
+async fn advisory_lock_count(pool: &sqlx::PgPool) -> i64 {
+    sqlx::query_scalar(
+        "SELECT count(*) FROM pg_locks l \
+         JOIN pg_database d ON d.oid = l.database \
+         WHERE l.locktype = 'advisory' AND d.datname = current_database()",
+    )
+    .fetch_one(pool)
+    .await
+    .expect("统计 advisory 锁失败")
+}
+
+/// 标准 CRC-32（ISO-HDLC，反射多项式 0xEDB88320），与 `sqlx-postgres` 0.9.0 使用的 `crc` 一致。
+fn crc32_iso_hdlc(data: &[u8]) -> u32 {
+    let mut crc = 0xFFFF_FFFF_u32;
+    for &byte in data {
+        crc ^= u32::from(byte);
+        for _ in 0..8 {
+            let mask = (crc & 1).wrapping_neg();
+            crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+        }
+    }
+    !crc
+}
+
+/// SQLx 迁移锁 key：`0x3d32ad9e * CRC32_ISO_HDLC(current_database())`（sqlx-postgres 0.9.0）。
+fn migration_lock_id(database: &str) -> i64 {
+    0x3d32_ad9e_i64 * i64::from(crc32_iso_hdlc(database.as_bytes()))
+}
+
+/// 带独立短 `lock_timeout` 的池，用于让迁移锁争用快速失败（不继承服务/维护默认值）。
+async fn bounded_lock_pool(url: &str, lock_ms: u64) -> sqlx::PgPool {
+    let value = format!("{lock_ms}ms");
+    PgPoolOptions::new()
+        .max_connections(2)
+        .after_connect(move |connection, _metadata| {
+            let value = value.clone();
+            Box::pin(async move {
+                sqlx::query("SELECT set_config('lock_timeout', $1, false)")
+                    .bind(&value)
+                    .execute(&mut *connection)
+                    .await?;
+                Ok(())
+            })
+        })
+        .connect(url)
+        .await
+        .expect("构建短锁超时池失败")
+}
+
+/// 迁移在取得会话迁移锁后失败（脏历史）时，独占连接必须关闭释放锁；
+/// 旧实现把带锁的连接还回池，会让后续迁移永久阻塞。用 `pg_locks` 直接回归。
+#[tokio::test]
+async fn migrate_failure_does_not_strand_session_lock() {
+    let (_temp, pool) = TempDatabase::create_migrated().await;
+    // 取得锁后失败：dirty_version 命中已标记未完成的基线，SQLx 不会走到 unlock。
+    sqlx::query("UPDATE _sqlx_migrations SET success = false WHERE version = 1")
+        .execute(&pool)
+        .await
+        .expect("标记迁移失败状态失败");
+
+    let error = migrate::run(&pool).await.expect_err("脏迁移历史必须失败");
+    assert!(
+        matches!(error, MigrationError::Execute(_)),
+        "期望 SQLx 执行错误，实际 {error}"
+    );
+    assert_eq!(
+        advisory_lock_count(&pool).await,
+        0,
+        "失败迁移不得把会话迁移锁滞留在池连接上"
+    );
+    pool.close().await;
+}
+
+/// 迁移锁争用：持有迁移锁时另一连接应在有界时间内失败且不建历史表；
+/// 释放后另一连接可立即取得迁移锁并完成迁移。
+#[tokio::test]
+async fn migrate_lock_contention_is_bounded_then_reusable() {
+    let temp = TempDatabase::create().await;
+    let holder_pool = temp.connect_pool().await;
+    let mut holder = holder_pool.acquire().await.expect("取持锁连接失败");
+    let database: String = sqlx::query_scalar("SELECT current_database()")
+        .fetch_one(&mut *holder)
+        .await
+        .expect("查询当前库名失败");
+    let lock_id = migration_lock_id(&database);
+    sqlx::query("SELECT pg_advisory_lock($1)")
+        .bind(lock_id)
+        .execute(&mut *holder)
+        .await
+        .expect("持有迁移锁失败");
+
+    let contender = bounded_lock_pool(temp.url(), 200).await;
+    let started = std::time::Instant::now();
+    migrate::run(&contender)
+        .await
+        .expect_err("迁移锁被占用时应失败");
+    assert!(
+        started.elapsed() < Duration::from_secs(3),
+        "锁等待必须有明确上限，实际 {:?}",
+        started.elapsed()
+    );
+    // 未取得迁移锁前不得建立历史表或业务表。
+    let history: Option<String> =
+        sqlx::query_scalar("SELECT to_regclass('_sqlx_migrations')::text")
+            .fetch_one(&contender)
+            .await
+            .expect("查询历史表失败");
+    assert!(history.is_none(), "未取得迁移锁不得建立 _sqlx_migrations");
+
+    // 释放后另一连接可立即取得迁移锁并完成迁移（证明争用未留残留）。
+    sqlx::query("SELECT pg_advisory_unlock($1)")
+        .bind(lock_id)
+        .execute(&mut *holder)
+        .await
+        .expect("释放迁移锁失败");
+    drop(holder);
+    migrate::run(&contender)
+        .await
+        .expect("释放迁移锁后迁移应成功");
+    let applied: i64 = sqlx::query_scalar("SELECT count(*) FROM _sqlx_migrations")
+        .fetch_one(&contender)
+        .await
+        .expect("查询迁移记录失败");
+    assert_eq!(applied, 1, "迁移应登记唯一基线");
+
+    contender.close().await;
+    holder_pool.close().await;
+}

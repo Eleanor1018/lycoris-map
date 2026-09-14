@@ -34,6 +34,8 @@
 
 > 全局并发/上传异常（`GlobalExceptionHandler`）属于第 2 类：`OptimisticLockingFailureException` / `OptimisticLockException` → `409 ApiResponse{code:409,"数据已更新，请刷新后重试"}`；`MaxUploadSizeExceededException` → `413 ApiResponse{code:413,"上传文件过大，请选择 5MB 以内的图片"}`。
 
+> **Rust 新增运行边界（阶段 4，详见 `stages-4-5-design.md` 与 `README`）**：服务连接上的 SQL 语句超时（SQLSTATE `57014`）与锁等待超时（SQLSTATE `55P03`）按各接口**既有错误形状**受控映射为 **503 `服务暂时不可用`**（Auth 普通 JSON、点位写/读中文纯文本、媒体 `ApiResponse`/文本），不再落入 500；失败事务整体回滚且不自动重试，PG 提交后的缓存/清理成功语义不变。未知数据库错误仍为 500。该 503 属 Rust 运行参数边界，不是 Java 已有行为。
+
 ### 1.4 语言与本地化
 
 - 支持语言仅 `zh` / `en`。`MarkerLanguage.normalize`：先 trim、转小写、把 `_` 换成 `-`，之后仅当值为 `en` 或以 `en-` 开头时归一为 `en`，值为 `zh` 或以 `zh-` 开头时归一为 `zh`，其它或空一律回退 `zh`（**不是**任意 `en*`/`zh*`）。
