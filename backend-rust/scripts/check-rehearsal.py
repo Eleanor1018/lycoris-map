@@ -880,6 +880,15 @@ def cmd_switch(ctx: Ctx, args: argparse.Namespace) -> int:
         # generation：正整数、严格递增、启动前原子登记为已用。
         generation = switching.validate_generation(ctx.work_dir, target, args.generation)
         env_values = common.read_env_file(ctx.env_path)
+        # 受控缓存开关：显式 --cache 写入 .env（两后端同 key），否则沿用现值。
+        if args.cache:
+            env_values["MARKER_CACHE_REDIS_ENABLED"] = "true" if args.cache == "on" else "false"
+        effective_cache = (
+            args.cache
+            if args.cache
+            else ("on" if env_values.get("MARKER_CACHE_REDIS_ENABLED", "true") == "true" else "off")
+        )
+        report.add("cacheState", effective_cache)
         if target == "java":
             env_values["JAVA_SESSION_NAMESPACE"] = str(generation["namespace"])
             env_values["JAVA_SESSION_COOKIE"] = str(generation["cookie"])
@@ -912,7 +921,7 @@ def cmd_switch(ctx: Ctx, args: argparse.Namespace) -> int:
             report.add(
                 "targetConfig",
                 bench_core.verify_target_config(
-                    container, target, "on", user=ctx.env.get("PG_REHEARSAL_USER", "")
+                    container, target, effective_cache, user=ctx.env.get("PG_REHEARSAL_USER", "")
                 ),
             )
 
@@ -1181,6 +1190,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--db",
         choices=["pg17", "pg18", "back"],
         help="仅 java：JAVA_DB_URL 指向 PG17 来源、PG18 升级库或 PG17 回退目标库",
+    )
+    p.add_argument(
+        "--cache",
+        choices=["on", "off"],
+        help="受控缓存开关（写入 .env 并 inspect 实测）；缺省沿用现值",
     )
     p.set_defaults(func=cmd_switch)
 
