@@ -21,18 +21,21 @@ Rust 保留 Cookie、账号密码与管理员二次验证体验，通过类型�
 
 ## 本地启动与验证
 
-后端默认地址为 `http://127.0.0.1:8080`，Web 默认经 Vite 代理到该地址。日常在仓库根执行：
+后端默认地址为 `http://127.0.0.1:8080`，Web 默认经 Vite 代理到该地址。按根 README 设置进程环境变量后执行：
 
 ```bash
-python backend-rust/scripts/run-local.py
+cd backend-rust
+cargo run --locked
 ```
 
 首次配置、数据库启动与显式迁移步骤见 [README](README.md#克隆与初始化)。普通启动不自动执行 DDL。
 
-重构阶段 0 至 5 已完成本地验收：43 个 API 契约模板、223 项 Linux 检查、64 条真实 TCP 断言，以及 PG 升级、媒体核对、Java 应用回退、Web/Android 和空间查询验证。该数字对应阶段 5 的已保存证据，本轮启动入口的检查单独记录于 [本地默认切换](docs/rust-migration/local-default.md)。
+重构阶段 0 至 5 已完成本地验收：43 个 API 契约模板、223 项 Linux 检查、64 条真实 TCP 断言，以及 PG 升级、媒体核对、Java 应用回退、Web/Android 和空间查询验证。该数字对应阶段 5 的已保存证据，本轮启动入口的检查单独记录于 `docs/rust-migration/local-default.md`（仅本地）。
 
 ## 发布边界
 
 本次正式切换的范围是**仓库与本地开发**。线上 `api.lycoris.online` 继续运行 Java；旧部署文件保持原用途，Rust 的发布 Compose 仍用于本地演练。生产切换、数据库升级与认证演进需按后续任务执行。
 
-架构见 [程序架构](docs/architecture.md)，开发计划与历史验收见 [重构计划](docs/rust-backend-plan.md) 和 [执行记录](docs/rust-migration/execution.md)。
+架构见 `docs/architecture.md`（仅本地），开发计划与历史验收见 `docs/rust-backend-plan.md`（仅本地） 和 `docs/rust-migration/execution.md`（仅本地）。
+
+Python 开发工具与根 `docs/` 开发文档仅保留本地并由 Git 忽略；新拉取仓库按根 README 使用 Cargo 原生命令。

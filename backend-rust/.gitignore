@@ -20,3 +20,8 @@ compose.override.yml
 # Python 测试/演练工具编译缓存（scripts/ 边界自测与演练工具，不提交）
 __pycache__/
 *.pyc
+
+# Python 开发脚本与文档仅保留本地，不上传仓库
+*.py
+/doc/
+/docs/

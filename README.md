@@ -49,7 +49,7 @@ APK 包含运行所需的 JavaScript 和文档资源，**不需要启动 Metro**
 
 ## 技术栈
 
-开发者快速了解项目：[程序架构](./docs/architecture.md)。
+开发者快速了解项目：[Rust 后端说明](./backend-rust/README.md)。
 
 - frontend： React(Typescript)
 - backend-rust：Rust + Axum + SQLx（默认后端；无 ORM）
@@ -70,7 +70,7 @@ APK 包含运行所需的 JavaScript 和文档资源，**不需要启动 Metro**
 | 组件 | 本仓库的要求 |
 | --- | --- |
 | JavaScript | Node.js 22（至少 22.12.0）或 Node.js 20（至少 20.19.4），以及随 Node 安装的 npm；同时满足 Vite 7 和 React Native 0.83.1 的要求。 |
-| 后端 | rustup；进入 `backend-rust/` 后按 `rust-toolchain.toml` 使用 Rust 1.98.1。启动器需要 Python 3.10+；Windows 原生编译需 Visual Studio C++ Build Tools。后端不再要求 JDK/Maven；Android 构建仍需要其 Java 工具链。 |
+| 后端 | rustup；进入 `backend-rust/` 后按 `rust-toolchain.toml` 使用 Rust 1.98.1。Windows 原生编译需 Visual Studio C++ Build Tools。后端不再要求 JDK/Maven；Android 构建仍需要其 Java 工具链。 |
 | 数据库 | 本地 Compose 固定 PostgreSQL 18.6 + PostGIS 3.6.4；附近查询使用 PostGIS 候选筛选与距离计算。 |
 | 缓存与会话 | 本地 Compose 固定 Redis 8.10.1；登录会话需要 Redis。 |
 | Android | Android Studio、Android SDK Platform 36、Build-Tools 36.0.0、NDK 27.1.12297006；模拟器或开启 USB 调试的 Android 设备。 |
@@ -94,32 +94,48 @@ git pull
 
 ### 2. 后端：Rust、数据库与本地启动
 
-**仓库与本地默认后端为 `backend-rust/`（Axum + SQLx）。** `backend/` 的 Java 实现已退出默认开发流程，保留源码与原运维文件供现有线上服务和回退参考；本次没有切换线上 API。
+**仓库与本地默认后端为 `backend-rust/`（Axum + SQLx）。** `backend/` 的 Java 实现保留供现有线上服务与回退参考，线上 API 本次未切换。
 
-从仓库根目录启动本地 PostgreSQL / PostGIS 与 Redis（需要 Docker），首次复制配置；已有 `.env` 时保留自己的配置：
-
-```bash
-docker compose -f backend-rust/compose.test.yml up -d
-python backend-rust/scripts/check-services.py
-cp backend-rust/.env.example backend-rust/.env
-```
-
-Windows PowerShell 可用 `Copy-Item backend-rust/.env.example backend-rust/.env` 完成首次复制。Python 使用 3.10 或更新版本；macOS / Linux 如只有 `python3`，将命令中的 `python` 替换为 `python3`。
-
-示例连接本机 `55432` 的 `lycoris_rust` 数据库与 `56379` 的 Redis。修改 `backend-rust/.env` 可选用自己的本地数据库和上传目录。新库第一次启动前显式执行迁移，然后启动服务：
+从仓库根目录启动本地 PostgreSQL / PostGIS 与 Redis（需要 Docker）：
 
 ```bash
-python backend-rust/scripts/run-local.py --migrate
-python backend-rust/scripts/run-local.py
+docker compose -f backend-rust/compose.test.yml up -d --wait
 ```
 
-日常只需第二条命令。启动器读取 `.env`，已有进程环境变量优先，并在正确的 Rust 工具链目录运行 `cargo run --locked`，默认使用 SQLx 离线元数据。首次运行会下载和编译依赖。
+Rust 二进制读取进程环境变量，不自动加载 `.env`。完整变量见 `backend-rust/.env.example`；下面使用 Compose 的空开发库示例，自定义本地数据库或上传目录时设置对应变量。
 
-默认服务地址为 `http://127.0.0.1:8080`；访问 `/health/ready` 检查数据库与 Redis 是否就绪，访问 `/api/markers/public` 查看 JSON。新开发库返回空列表正常。普通启动只检查迁移状态，不自动建表或修改结构；已有 Java 数据库应按 [Rust 基线接管说明](./backend-rust/README.md) 先检查和接管，不能当空库重复初始化。
+Windows PowerShell：
 
-Web 通过 Vite 的同源代理访问 `/api` 和 `/uploads`。示例 `WRITE_ALLOWED_ORIGINS` 允许本机 5173 端口；若 Vite 改端口或域名，需把实际页面来源加入白名单并重启 Rust，否则登录等写操作会被拒绝。原生 App 真机联调还需显式设置 `SERVER_HOST=0.0.0.0` 并使用电脑的局域网地址。
+```powershell
+cd backend-rust
+$env:DATABASE_URL = 'postgres://lycoris:lycoris_local_test@127.0.0.1:55432/lycoris_rust'
+$env:REDIS_URL = 'redis://127.0.0.1:56379'
+$env:WRITE_ALLOWED_ORIGINS = 'http://localhost:5173,http://127.0.0.1:5173,https://localhost:5173,https://127.0.0.1:5173'
+$env:SQLX_OFFLINE = 'true'
+```
 
-详细配置、测试命令和 Linux 发布演练说明见 [Rust 后端说明](./backend-rust/README.md)。`compose.test.yml` 是本地开发/测试依赖，`compose.release.yml` 是发布演练配置，均不作为线上部署命令。
+macOS / Linux：
+
+```bash
+cd backend-rust
+export DATABASE_URL='postgres://lycoris:lycoris_local_test@127.0.0.1:55432/lycoris_rust'
+export REDIS_URL='redis://127.0.0.1:56379'
+export WRITE_ALLOWED_ORIGINS='http://localhost:5173,http://127.0.0.1:5173,https://localhost:5173,https://127.0.0.1:5173'
+export SQLX_OFFLINE=true
+```
+
+新开发库首次显式迁移，然后启动；日常只需最后一条命令：
+
+```bash
+cargo run --locked -- --migrate
+cargo run --locked
+```
+
+在 `backend-rust/` 内运行 Cargo，使用目录中固定的 Rust 工具链。默认服务地址为 `http://127.0.0.1:8080`，可访问 `/health/ready` 和 `/api/markers/public` 检查服务；新开发库返回空列表正常。普通启动只读校验迁移状态，不自动建表；已有 Java 数据库按 [Rust 基线接管说明](./backend-rust/README.md) 处理。
+
+Web 的 `/api` 与 `/uploads` 经 Vite 同源代理访问 Rust。若页面端口或域名改变，需调整 `WRITE_ALLOWED_ORIGINS`；真机联调另需设置 `SERVER_HOST=0.0.0.0` 并使用电脑局域网地址。
+
+Python 开发脚本与根 `docs/` 文档仅保留本地，不随 Git 分发。已有本地 `run-local.py` 仍可读取自己的 `.env` 运行；新拉取仓库使用上面的 Cargo 命令，不需要 Python。详细配置与测试见 [Rust 后端说明](./backend-rust/README.md)。
 
 ### 3. 网页：安装依赖并启动
 
