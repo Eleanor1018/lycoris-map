@@ -329,7 +329,7 @@ cargo run --locked
 | `REQUEST_TIMEOUT_SECONDS` | `30` | 请求超时；请求体总上限固定 8 MiB |
 | `APP_AVAILABILITY_ZONE` | `Asia/Shanghai` | 读取时计算 `isActive` 的时区，须为合法 IANA 名称 |
 | `MARKER_CACHE_REDIS_ENABLED` | `true` | 是否启用查询缓存；关闭时直接回源 PG |
-| `MARKER_CACHE_NAMESPACE` | `lycoris:rust:marker` | 缓存命名空间；`nearby` 12s / `viewport` 10s，只缓存 ID |
+| `MARKER_CACHE_NAMESPACE` | `lycoris:rust:marker` | 缓存命名空间；`nearby:v2` 12s / `viewport:v1` 10s，只缓存 ID |
 | `SESSION_COOKIE_NAME` | `LYCORIS_SESSION` | 必须是 RFC 6265 token；并行验收可改为独立名（如 `LYCORIS_RUST_SESSION`） |
 | `SESSION_COOKIE_SECURE` / `SESSION_COOKIE_DOMAIN` / `SESSION_COOKIE_SAME_SITE` | `false` / 空 / `lax` | Cookie 属性；domain 拒绝控制字符与分隔符 |
 | `SESSION_COOKIE_MAX_AGE_SECONDS` / `SESSION_TTL_SECONDS` | `2592000`（30 天） | Cookie 与会话 TTL（上限 10 年） |
@@ -344,8 +344,10 @@ cargo run --locked
 | `ADMIN_DEFAULT_USER_PASSWORD` | `Lycoris123!` | 管理员重置密码的默认值（README 建议显式配置） |
 
 Redis 缓存独立于 Java 的 `cache:marker:*` 命名空间，只存 ID 与缓存版本；缓存 key 中的
-经纬度按 `f64::to_bits` 精确保留请求值。命中后仍回 PG 校验当前 `is_public+APPROVED` 并读取
-最新内容；每条 Redis 命令 500ms 超时，故障、超时或坏 JSON 一律回源，不会排队到全局 HTTP 超时。
+经纬度按 `f64::to_bits` 精确保留请求值。阶段 5 把 `nearby` 缓存键升为 `nearby:v2`（查询改为
+PostGIS 候选 + legacy 并集后与旧 `v1` 结果隔离）；`viewport` 仍为 `viewport:v1` 且 SQL 未改。
+命中后仍回 PG 校验当前 `is_public+APPROVED` 并读取最新内容；每条 Redis 命令 500ms 超时，
+故障、超时或坏 JSON 一律回源，不会排队到全局 HTTP 超时。
 失效通过永不过期的 generation key 原子 `INCR` 切换命名空间（每次必然变化），不做
 `FLUSHALL` / `KEYS` 扫描；提交后失效函数 `MarkerCache::invalidate` 供阶段 3 写接口调用，
 禁用缓存时不访问 Redis。
@@ -465,6 +467,14 @@ avatars 与匿名 markers 读取在 Redis 不可用时仍可读（不加载会�
 
 每个用例使用 UUID 命名临时库与随机 Redis 命名空间，不 `FLUSHALL`、不 `KEYS`，
 只连接回环地址上的合成测试服务；失败不做静默跳过。
+
+阶段 5 空间查询另有 `tests/markers_spatial.rs`（独立 Rust 参考差分、NaN/Infinity 与有限越界、
+半径恰好边界、近极点旧 bbox 漏点、缓存 v2 隔离）与 `tests/spatial_migration.rs`（0002 生成列与
+索引、legacy 接管→`--migrate`、Java 形状 INSERT/UPDATE/DELETE）。可重复性能/EXPLAIN 工具为
+`scripts/spatial_explain.py`，用法与边界见
+[../docs/rust-migration/stage5-spatial.md](../docs/rust-migration/stage5-spatial.md)；正式大规模
+测量由温晓在独占窗口执行，本地合成开发库用 `scripts/spatial_run.py`（`DATABASE_URL` 指向
+`lycoris_spatial_dev`，**不迁移共享 `lycoris_rust`**）。
 
 ```powershell
 # 在 backend-rust 目录一步完成：迁移合成库、校验 .sqlx、离线构建、fmt / clippy / test
@@ -614,7 +624,15 @@ python scripts/test_verify_release_linux.py
 
 - `migrations/0001_baseline.sql` 只用于**空库初始化**，与
   [../docs/rust-migration/schema-baseline.sql](../docs/rust-migration/schema-baseline.sql)
-  逐字一致（6 张表、无数据）；本轮未新增任何迁移或唯一索引。
+  逐字一致（6 张表、无数据）；SHA-256 为
+  `86f2fc0f8140895f12efbea0b6e39e8ba30dc67f2b786e0cc2d2f8f6dd5daa89`，**不得修改**。
+- `migrations/0002_spatial.sql` 是阶段 5 增量迁移：新增 `location geography(Point,4326)`
+  STORED 生成列、`is_public AND review_status='APPROVED' AND location IS NOT NULL` 的 GiST
+  部分索引，以及 `is_public AND review_status='APPROVED' AND location IS NULL` 的 `(category,id)`
+  部分索引（异常历史行）。0001 结构不动；生成列由旧 lat/lng 自动同步，Java 回退只写旧列即可。
+  该迁移在 SQLx 单事务内执行，`ADD COLUMN ... STORED` 的 ACCESS EXCLUSIVE 持有到 COMMIT，
+  读者在整个迁移期间被阻塞，必须在维护窗口执行；磁盘需预留表重写 + 索引 + WAL 余量。
+  详见 [../docs/rust-migration/stage5-spatial.md](../docs/rust-migration/stage5-spatial.md)。
 - 普通启动只做只读校验，确认所需迁移已应用且校验和一致，**不会自动执行 DDL**；
   空库需在 `backend-rust/` 内显式运行 `cargo run --locked -- --migrate`。
 - **禁止把初始建表重复用于已有库**。已有库（有业务表、无 `_sqlx_migrations`）使用

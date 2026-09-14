@@ -15,7 +15,7 @@ use common::{
 };
 use lycoris_backend::app::{AppState, build_router};
 use lycoris_backend::config::Config;
-use lycoris_backend::migrate::{self, MigrationError};
+use lycoris_backend::migrate::{self, MIGRATOR, MigrationError};
 use sqlx::postgres::PgPoolOptions;
 use tower::ServiceExt;
 
@@ -38,11 +38,15 @@ async fn migrates_baseline_and_passes_health_checks() {
         assert!(exists.is_some(), "迁移后缺少表 {table}，基线未正确应用");
     }
 
-    let applied: i64 = sqlx::query_scalar("SELECT count(*) FROM _sqlx_migrations")
-        .fetch_one(&pool)
-        .await
-        .expect("查询迁移记录失败");
-    assert_eq!(applied, 1, "基线应只包含一条迁移");
+    let applied: Vec<i64> =
+        sqlx::query_scalar("SELECT version FROM _sqlx_migrations ORDER BY version")
+            .fetch_all(&pool)
+            .await
+            .expect("查询迁移记录失败");
+    // 完整迁移应登记内嵌迁移集合的全部版本；0002 之后即为 [1, 2]。
+    let expected: Vec<i64> = MIGRATOR.iter().map(|migration| migration.version).collect();
+    assert_eq!(applied, expected, "完整迁移应登记内嵌迁移的全部版本");
+    assert_eq!(applied, vec![1, 2], "0002 之后完整迁移版本应为 [1, 2]");
 
     let redis = connect_redis().await;
     let mut config = Config::new(temp.url(), test_redis_url());
@@ -405,11 +409,15 @@ async fn migrate_lock_contention_is_bounded_then_reusable() {
     migrate::run(&contender)
         .await
         .expect("释放迁移锁后迁移应成功");
-    let applied: i64 = sqlx::query_scalar("SELECT count(*) FROM _sqlx_migrations")
-        .fetch_one(&contender)
-        .await
-        .expect("查询迁移记录失败");
-    assert_eq!(applied, 1, "迁移应登记唯一基线");
+    let applied: Vec<i64> =
+        sqlx::query_scalar("SELECT version FROM _sqlx_migrations ORDER BY version")
+            .fetch_all(&contender)
+            .await
+            .expect("查询迁移记录失败");
+    // 完整迁移应登记内嵌迁移集合的全部版本；0002 之后即为 [1, 2]。
+    let expected: Vec<i64> = MIGRATOR.iter().map(|migration| migration.version).collect();
+    assert_eq!(applied, expected, "释放迁移锁后应登记内嵌迁移的全部版本");
+    assert_eq!(applied, vec![1, 2], "0002 之后完整迁移版本应为 [1, 2]");
 
     contender.close().await;
     holder_pool.close().await;

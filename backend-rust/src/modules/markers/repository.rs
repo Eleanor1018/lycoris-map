@@ -86,20 +86,13 @@ impl MarkerRepository {
         .await
     }
 
-    /// 有包围盒的 Haversine 邻近查询；参数语义与 Java 仓储一致。
-    #[allow(clippy::too_many_arguments)]
+    /// PostGIS 候选 + legacy 有限异常坐标的 Haversine 邻近查询；参数语义与 Java 仓储一致。
     pub async fn find_nearby(
         &self,
         lat: f64,
         lng: f64,
         radius_meters: f64,
         category: &str,
-        use_bounds: bool,
-        min_lat: f64,
-        max_lat: f64,
-        min_lng: f64,
-        max_lng: f64,
-        all_longitudes: bool,
     ) -> Result<Vec<MarkerRow>, sqlx::Error> {
         sqlx::query_file_as!(
             MarkerRow,
@@ -107,13 +100,7 @@ impl MarkerRepository {
             lat,
             lng,
             radius_meters,
-            category,
-            use_bounds,
-            min_lat,
-            max_lat,
-            min_lng,
-            max_lng,
-            all_longitudes
+            category
         )
         .fetch_all(&self.pool)
         .await

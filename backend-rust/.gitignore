@@ -1,6 +1,7 @@
 # Rust 构建产物
 /target/
 **/target/
+/target-spatial/
 
 # 本地环境与覆盖
 .env

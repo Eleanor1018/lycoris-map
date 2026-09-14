@@ -1,7 +1,7 @@
 //! 已有库基线接管与只读预检的真实 PG 集成测试。
 //!
 //! 每个用例创建并清理自己的 UUID 临时库；只连接回环合成测试服务，不触碰其他测试库。
-//! 结构期望来自已审查基线（`tests` 通过 `TempDatabase::create_migrated` 由基线建表核对），
+//! 结构期望来自已审查基线（测试通过只含 0001 的 fixture 建立 legacy 形状核对），
 //! 检查目标库时只读系统目录，不在目标库执行基线 DDL。
 
 mod common;
@@ -85,14 +85,12 @@ async fn snapshot(pool: &PgPool) -> Snapshot {
     }
 }
 
-/// 合成一个“Java 形状”的非空库：基线结构 + 业务行 + 已推进的 identity 序列 + 无 SQLx 历史。
+/// 合成一个“Java 形状”的非空库：只有 0001 结构 + 业务行 + 已推进的 identity 序列 + 无 SQLx 历史。
+///
+/// 明确使用 `create_only_0001`，不把含 0002 生成列的 `create_migrated` 误当 legacy。
 async fn java_shaped() -> (TempDatabase, PgPool) {
-    let (temp, pool) = TempDatabase::create_migrated().await;
+    let (temp, pool) = TempDatabase::create_only_0001().await;
     seed_java_rows(&pool).await;
-    sqlx::query("DROP TABLE _sqlx_migrations")
-        .execute(&pool)
-        .await
-        .expect("移除 SQLx 历史表失败");
     (temp, pool)
 }
 
@@ -197,10 +195,27 @@ async fn adopt_preserves_java_rows_and_sequences_and_new_ids_work() {
     assert_eq!(rows[0].2, real_checksum, "必须登记原始基线真实校验和");
 
     assert_eq!(before, snapshot(&pool).await, "接管不得改动业务行或序列值");
-    migrate::verify_applied(&pool)
-        .await
-        .expect("接管后启动只读校验应通过");
 
+    // 接管后仍是 0001-only legacy：重复接管幂等，且普通启动校验明确报告缺少 0002。
+    let second = baseline::adopt_baseline(&pool)
+        .await
+        .expect("重复接管应幂等成功");
+    assert_eq!(
+        second.history,
+        HistoryReport::Consistent {
+            applied: vec![BASELINE_VERSION]
+        }
+    );
+    assert_eq!(applied_rows(&pool).await.len(), 1, "重复接管不得新增历史");
+    assert!(
+        matches!(
+            migrate::verify_applied(&pool).await.unwrap_err(),
+            MigrationError::Missing(2)
+        ),
+        "只接管 0001 时启动校验应报告缺少 0002"
+    );
+
+    // Java 形状写入在接管后、0002 之前仍可用，ID 延续 identity 序列。
     let new_user: i32 = sqlx::query_scalar(
         "INSERT INTO users (public_id, role, username) VALUES (gen_random_uuid(), 'USER', 'carol') \
          RETURNING id",
@@ -221,16 +236,32 @@ async fn adopt_preserves_java_rows_and_sequences_and_new_ids_work() {
     .expect("接管后新点位插入应成功");
     assert!(new_marker > 10, "新点位 ID 必须延续序列，实际 {new_marker}");
 
-    let second = baseline::adopt_baseline(&pool)
+    // 真实流程：接管只登记 0001，随后 `--migrate` 才应用 0002，启动校验再通过。
+    let before_migrate = snapshot(&pool).await;
+    migrate::run(&pool)
         .await
-        .expect("重复接管应幂等成功");
+        .expect("接管后 --migrate 应应用 0002");
+    migrate::verify_applied(&pool)
+        .await
+        .expect("升级后启动只读校验应通过");
     assert_eq!(
-        second.history,
-        HistoryReport::Consistent {
-            applied: vec![BASELINE_VERSION]
-        }
+        before_migrate,
+        snapshot(&pool).await,
+        "0002 迁移不得改动业务行或序列值"
     );
-    assert_eq!(applied_rows(&pool).await.len(), 1, "重复接管不得新增历史");
+    let null_locations: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM map_markers WHERE location IS NULL")
+            .fetch_one(&pool)
+            .await
+            .expect("读取生成列失败");
+    assert_eq!(null_locations, 0, "现有合法坐标行应生成 location");
+    let version_two: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM _sqlx_migrations WHERE version = 2)")
+            .fetch_one(&pool)
+            .await
+            .expect("读取迁移历史失败");
+    assert!(version_two, "0002 应登记在迁移历史");
+
     pool.close().await;
     drop(temp);
 }
@@ -264,11 +295,7 @@ async fn adopt_rejects_structural_mismatches() {
         "DROP TABLE marker_favorites",
     ];
     for mutation in cases {
-        let (temp, pool) = TempDatabase::create_migrated().await;
-        sqlx::query("DROP TABLE _sqlx_migrations")
-            .execute(&pool)
-            .await
-            .expect("移除历史表失败");
+        let (temp, pool) = TempDatabase::create_only_0001().await;
         sqlx::query(sqlx::AssertSqlSafe((*mutation).to_string()))
             .execute(&pool)
             .await
@@ -316,7 +343,7 @@ async fn adopt_rejects_non_ordinary_relation_kind() {
 
 #[tokio::test]
 async fn adopt_rejects_generated_columns() {
-    let (temp, pool) = TempDatabase::create_migrated().await;
+    let (temp, pool) = TempDatabase::create_only_0001().await;
     sqlx::query("ALTER TABLE users DROP COLUMN nickname")
         .execute(&pool)
         .await
@@ -328,10 +355,6 @@ async fn adopt_rejects_generated_columns() {
     .execute(&pool)
     .await
     .expect("新增生成列失败");
-    sqlx::query("DROP TABLE _sqlx_migrations")
-        .execute(&pool)
-        .await
-        .expect("移除历史表失败");
 
     let diffs = expect_mismatch(baseline::adopt_baseline(&pool).await.unwrap_err());
     assert!(
@@ -349,7 +372,7 @@ async fn adopt_rejects_generated_columns() {
 
 #[tokio::test]
 async fn adopt_rejects_deferrable_or_not_validated_constraints() {
-    let (temp, pool) = TempDatabase::create_migrated().await;
+    let (temp, pool) = TempDatabase::create_only_0001().await;
     sqlx::query(
         "ALTER TABLE map_marker_translations \
          ALTER CONSTRAINT map_marker_translations_marker_id_fkey DEFERRABLE INITIALLY DEFERRED",
@@ -369,7 +392,7 @@ async fn adopt_rejects_deferrable_or_not_validated_constraints() {
     pool.close().await;
     drop(temp);
 
-    let (temp, pool) = TempDatabase::create_migrated().await;
+    let (temp, pool) = TempDatabase::create_only_0001().await;
     sqlx::query(
         "ALTER TABLE map_marker_translations \
          DROP CONSTRAINT map_marker_translations_marker_id_fkey",
@@ -485,7 +508,7 @@ async fn share_lock_blocks_writes_and_ddl_until_released() {
 
 #[tokio::test]
 async fn registration_failure_rolls_back_without_half_record() {
-    let (temp, pool) = TempDatabase::create_migrated().await;
+    let (temp, pool) = TempDatabase::create_only_0001_migrated().await;
     sqlx::query(
         "CREATE FUNCTION reject_history_insert() RETURNS trigger AS \
          $$ BEGIN RAISE EXCEPTION 'blocked insert'; END $$ LANGUAGE plpgsql",
@@ -586,15 +609,11 @@ async fn check_baseline_reports_missing_tables_without_database_error() {
 
 #[tokio::test]
 async fn check_baseline_marks_counts_unavailable_on_incompatible_columns() {
-    let (temp, pool) = TempDatabase::create_migrated().await;
+    let (temp, pool) = TempDatabase::create_only_0001().await;
     sqlx::query("ALTER TABLE map_markers DROP COLUMN lng")
         .execute(&pool)
         .await
         .expect("删除坐标列失败");
-    sqlx::query("DROP TABLE _sqlx_migrations")
-        .execute(&pool)
-        .await
-        .expect("移除历史表失败");
     let report = check_baseline(&pool)
         .await
         .expect("列缺失时应返回可读报告而非 SQL 错误");
@@ -651,7 +670,7 @@ async fn new_history_table_rolls_back_when_registration_fails() {
 #[tokio::test]
 async fn adopt_rejects_history_problems_without_rewriting() {
     // 错误校验和
-    let (temp, pool) = TempDatabase::create_migrated().await;
+    let (temp, pool) = TempDatabase::create_only_0001_migrated().await;
     sqlx::query(
         "UPDATE _sqlx_migrations SET checksum = decode('deadbeef', 'hex') WHERE version = 1",
     )
@@ -673,7 +692,7 @@ async fn adopt_rejects_history_problems_without_rewriting() {
     drop(temp);
 
     // 未知迁移
-    let (temp, pool) = TempDatabase::create_migrated().await;
+    let (temp, pool) = TempDatabase::create_only_0001_migrated().await;
     sqlx::query(
         "INSERT INTO _sqlx_migrations \
          (version, description, installed_on, success, checksum, execution_time) \
@@ -692,7 +711,7 @@ async fn adopt_rejects_history_problems_without_rewriting() {
     drop(temp);
 
     // 未完成迁移
-    let (temp, pool) = TempDatabase::create_migrated().await;
+    let (temp, pool) = TempDatabase::create_only_0001_migrated().await;
     sqlx::query("UPDATE _sqlx_migrations SET success = false WHERE version = 1")
         .execute(&pool)
         .await
@@ -711,7 +730,7 @@ async fn adopt_rejects_history_problems_without_rewriting() {
 
 #[tokio::test]
 async fn adopt_confirms_clean_sqlx_database_idempotently() {
-    let (temp, pool) = TempDatabase::create_migrated().await;
+    let (temp, pool) = TempDatabase::create_only_0001_migrated().await;
     for _ in 0..2 {
         let report = baseline::adopt_baseline(&pool)
             .await
@@ -789,7 +808,7 @@ async fn adopt_lock_timeout_does_not_register_partial_history() {
 
 #[tokio::test]
 async fn check_baseline_is_read_only_and_reports_decision_counts() {
-    let (temp, pool) = TempDatabase::create_migrated().await;
+    let (temp, pool) = TempDatabase::create_only_0001().await;
     sqlx::query(
         "INSERT INTO users (id, public_id, role, username, email) VALUES \
          (1, gen_random_uuid(), 'USER', 'alice', 'Alice@Example.com'), \
@@ -811,10 +830,6 @@ async fn check_baseline_is_read_only_and_reports_decision_counts() {
     .execute(&pool)
     .await
     .expect("插入异常坐标失败");
-    sqlx::query("DROP TABLE _sqlx_migrations")
-        .execute(&pool)
-        .await
-        .expect("移除历史表失败");
 
     let report = check_baseline(&pool).await.expect("只读预检应成功");
     assert!(report.schema_ok, "结构应一致: {:?}", report.diffs);
@@ -906,9 +921,14 @@ async fn adopt_does_not_mark_future_migrations_as_applied() {
             .await
             .expect("读取版本失败");
     assert_eq!(versions, vec![BASELINE_VERSION], "不得登记未来迁移");
-    migrate::verify_applied(&pool)
-        .await
-        .expect("静态 MIGRATOR 只含基线，校验应通过");
+    // 静态 MIGRATOR 现含 0001+0002；自定义集合只登记 0001，启动校验应报告缺少 0002。
+    assert!(
+        matches!(
+            migrate::verify_applied(&pool).await.unwrap_err(),
+            MigrationError::Missing(2)
+        ),
+        "adopt 不得把未执行的后续迁移记为已应用"
+    );
     pool.close().await;
     drop(temp);
 }

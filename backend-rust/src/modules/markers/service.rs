@@ -19,8 +19,6 @@ use crate::modules::markers::repository::MarkerRepository;
 
 /// 坐标容差（度）。
 const COORDINATE_EPSILON: f64 = 0.00015;
-/// 地球半径（米），与 Java 一致。
-const EARTH_RADIUS_METERS: f64 = 6_371_000.0;
 
 /// 点位读取服务。
 #[derive(Clone)]
@@ -115,7 +113,6 @@ impl MarkerService {
         }
         let category = normalize_category_query(category)?;
         let safe_radius = radius.clamp(1, 50_000);
-        let bounds = NearbyBounds::from_request(lat, lng, safe_radius);
 
         let cache_key = self.cache.current_generation().await.map(|generation| {
             self.cache
@@ -132,18 +129,7 @@ impl MarkerService {
 
         let rows = self
             .repo
-            .find_nearby(
-                lat,
-                lng,
-                safe_radius as f64,
-                &category,
-                bounds.use_bounds,
-                bounds.min_lat,
-                bounds.max_lat,
-                bounds.min_lng,
-                bounds.max_lng,
-                bounds.all_longitudes,
-            )
+            .find_nearby(lat, lng, safe_radius as f64, &category)
             .await
             .map_err(db_error)?;
 
@@ -327,68 +313,6 @@ impl MarkerService {
                 )
             })
             .collect())
-    }
-}
-
-/// 邻近查询的包围盒参数（与 Java `MapMarkerRepository.findNearbyByCategory` 一致）。
-struct NearbyBounds {
-    use_bounds: bool,
-    min_lat: f64,
-    max_lat: f64,
-    min_lng: f64,
-    max_lng: f64,
-    all_longitudes: bool,
-}
-
-impl NearbyBounds {
-    fn from_request(lat: f64, lng: f64, radius_meters: i32) -> Self {
-        let use_bounds = lat.is_finite()
-            && lng.is_finite()
-            && lat.abs() <= 90.0
-            && lng.abs() <= 180.0
-            && (1..=50_000).contains(&radius_meters);
-        if !use_bounds {
-            return Self {
-                use_bounds: false,
-                min_lat: -90.0,
-                max_lat: 90.0,
-                min_lng: -180.0,
-                max_lng: 180.0,
-                all_longitudes: true,
-            };
-        }
-
-        // 稍微放宽球冠半径后再同时推导两个边界，避免极区或边界舍入漏点。
-        let angular_radius = radius_meters as f64 / EARTH_RADIUS_METERS + 1e-9_f64.to_radians();
-        let latitude_delta = angular_radius.to_degrees();
-        let min_lat = (lat - latitude_delta).max(-90.0);
-        let max_lat = (lat + latitude_delta).min(90.0);
-        let all_longitudes = min_lat <= -90.0 || max_lat >= 90.0;
-        let mut min_lng = -180.0;
-        let mut max_lng = 180.0;
-        if !all_longitudes {
-            let longitude_delta = (angular_radius.sin() / lat.to_radians().cos())
-                .asin()
-                .min(1.0)
-                .to_degrees()
-                + 1e-9;
-            min_lng = lng - longitude_delta;
-            max_lng = lng + longitude_delta;
-            if min_lng <= -180.0 {
-                min_lng += 360.0;
-            }
-            if max_lng >= 180.0 {
-                max_lng -= 360.0;
-            }
-        }
-        Self {
-            use_bounds: true,
-            min_lat,
-            max_lat,
-            min_lng,
-            max_lng,
-            all_longitudes,
-        }
     }
 }
 

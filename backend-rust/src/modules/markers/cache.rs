@@ -154,7 +154,7 @@ impl MarkerCache {
         category: &str,
     ) -> String {
         format!(
-            "{}:nearby:v1:g{}:lat={:016x}|lng={:016x}|r={}|c={}",
+            "{}:nearby:v2:g{}:lat={:016x}|lng={:016x}|r={}|c={}",
             self.namespace,
             generation,
             lat.to_bits(),

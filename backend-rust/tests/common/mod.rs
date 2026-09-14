@@ -27,6 +27,9 @@ pub const UNREACHABLE_PG_URL: &str =
     "postgres://lycoris:lycoris_local_test@127.0.0.1:1/lycoris_rust";
 pub const UNREACHABLE_REDIS_URL: &str = "redis://127.0.0.1:1";
 
+/// 已审查的 0001 基线结构原文（显式建立 legacy 形状 fixture，绝不应用 0002）。
+pub const ONLY_0001_BASELINE_SQL: &str = include_str!("../../migrations/0001_baseline.sql");
+
 pub const BASELINE_TABLES: [&str; 6] = [
     "map_markers",
     "map_marker_translations",
@@ -116,13 +119,41 @@ impl TempDatabase {
         }
     }
 
-    /// 创建临时库并应用基线迁移，返回可用连接池。
+    /// 创建临时库并应用全部迁移（0001 + 0002），返回可用连接池。
     pub async fn create_migrated() -> (Self, PgPool) {
         let temp = Self::create().await;
         let pool = temp.connect_pool().await;
         lycoris_backend::migrate::run(&pool)
             .await
             .expect("执行基线迁移失败");
+        (temp, pool)
+    }
+
+    /// 建立**只含 0001 结构、无 `_sqlx_migrations`** 的 legacy/Java 形状合成库。
+    ///
+    /// 直接执行已审查的 `0001_baseline.sql` 原文，不经过含 0002 的 `create_migrated`，
+    /// 因此基线接管/结构预检测试不会把含 0002 生成列的库误当 legacy。
+    pub async fn create_only_0001() -> (Self, PgPool) {
+        let temp = Self::create().await;
+        let pool = temp.connect_pool().await;
+        sqlx::raw_sql(ONLY_0001_BASELINE_SQL)
+            .execute(&pool)
+            .await
+            .expect("执行 0001 基线结构失败");
+        (temp, pool)
+    }
+
+    /// 建立**只迁移到 0001**（有 `_sqlx_migrations`，无 0002）的 SQLx 管理合成库。
+    pub async fn create_only_0001_migrated() -> (Self, PgPool) {
+        let temp = Self::create().await;
+        let pool = temp.connect_pool().await;
+        let baseline = lycoris_backend::migrate::MIGRATOR
+            .iter()
+            .next()
+            .expect("内嵌 0001 基线迁移")
+            .clone();
+        let migrator = sqlx::migrate::Migrator::with_migrations(vec![baseline]);
+        migrator.run(&pool).await.expect("执行 0001 迁移失败");
         (temp, pool)
     }
 
