@@ -303,6 +303,8 @@ python backend-rust/scripts/run-local.py
 
 默认监听 `http://127.0.0.1:8080`。Vite 默认代理到该地址；`.env.example` 的 `WRITE_ALLOWED_ORIGINS` 允许本机 5173 端口，改变页面来源时应同步调整。Linux 发布/演练 Compose 的显式隔离端口保持原配置，不能用其端口推断日常开发默认值。
 
+同一地址只能运行一个后端实例。若提示监听地址已被占用，先用 `python backend-rust/scripts/run-local.py --healthcheck` 检查是否已有服务，再到启动它的终端按 `Ctrl+C` 停止。Windows 可用 `Get-NetTCPConnection -State Listen -LocalPort 8080` 查看占用者，再用 `Get-Process -Id <OwningProcess>` 确认进程。不要直接按进程名称批量结束服务。也可显式修改 `SERVER_PORT`，并同步调整前端代理目标。
+
 普通启动只校验迁移已应用；空库需显式 `cargo run -- --migrate`。健康检查
 `/health/live`、`/health/ready` 行为与阶段 1 相同。已有 Java 库（有业务表、无
 `_sqlx_migrations`）不得用 `--migrate` 重复建表：先 `--check-baseline` 只读预检，再

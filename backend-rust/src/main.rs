@@ -97,7 +97,28 @@ async fn run(command: Command) -> Result<(), AppError> {
     let state = AppState::new(pool.clone(), redis.clone(), config.clone())?;
     let router = build_router(state);
 
-    let listener = tokio::net::TcpListener::bind((config.server_host, config.server_port)).await?;
+    let listener = tokio::net::TcpListener::bind((config.server_host, config.server_port))
+        .await
+        .map_err(|error| {
+            // 只记录监听地址与系统错误类别；不打印完整错误链或连接凭据。
+            let kind = error.kind();
+            let raw_os_error = error.raw_os_error();
+            if kind == std::io::ErrorKind::AddrInUse {
+                tracing::error!(
+                    "监听地址 {}:{} 已被占用（kind={kind:?}, raw_os_error={raw_os_error:?}）；\
+                     请停止已有实例或修改 SERVER_PORT",
+                    config.server_host,
+                    config.server_port
+                );
+            } else {
+                tracing::error!(
+                    "监听地址 {}:{} 启动失败（kind={kind:?}, raw_os_error={raw_os_error:?}）",
+                    config.server_host,
+                    config.server_port
+                );
+            }
+            AppError::Io(error)
+        })?;
     tracing::info!(
         "HTTP 服务已启动，监听 {}:{}",
         config.server_host,
