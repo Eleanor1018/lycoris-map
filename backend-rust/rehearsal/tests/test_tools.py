@@ -746,5 +746,92 @@ class TestBenchmarkOutRefusal(unittest.TestCase):
             mocked.assert_not_called()
 
 
+class TestBenchmarkSummaryFixtures(unittest.TestCase):
+    """纯文件 fixture：验证 benchmark-summary 的第二轮与损坏输入行为。"""
+
+    def _load_module(self):
+        import importlib.util
+
+        script = Path(__file__).resolve().parents[2] / "scripts" / "benchmark-summary.py"
+        spec = importlib.util.spec_from_file_location("benchmark_summary_mod", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def _bench(self, backend: str, scenario: str = "read") -> str:
+        return json.dumps(
+            {
+                "meta": {"backend": backend, "scenario": scenario, "cacheState": "on"},
+                "summary": {
+                    "requestsTotal": 10,
+                    "success": 10,
+                    "unexpectedErrors": 0,
+                    "errorRate": 0.0,
+                    "successLatencyMs": {"p50": 1.5, "p95": 2.5},
+                    "throughputSuccessPerSecond": 5.0,
+                    "measuredWindowSeconds": 2.0,
+                },
+                "rounds": [
+                    {"round": 0, "total": 10, "success": 10, "error": 0,
+                     "byStatus": {"200": 10}, "metrics": {}, "datasetGrowth": {}}
+                ],
+            },
+            ensure_ascii=False,
+        )
+
+    def test_second_run_skips_summary_and_has_no_none_rows(self) -> None:
+        module = self._load_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            reports = work / "reports"
+            reports.mkdir(parents=True)
+            (reports / "perf-a.json").write_text(self._bench("java"), encoding="utf-8")
+            (reports / "perf-b.json").write_text(self._bench("rust"), encoding="utf-8")
+            old_summary = reports / "perf-summary-old.json"
+            old_summary.write_text(
+                json.dumps({"reports": [{"backend": None, "scenario": None}]}), encoding="utf-8"
+            )
+
+            self.assertEqual(module.main(["--work-dir", str(work)]), 0)
+            self.assertEqual(module.main(["--work-dir", str(work)]), 0)
+
+            first = json.loads((reports / "perf-summary.json").read_text(encoding="utf-8"))
+            second = json.loads((reports / "perf-summary-2.json").read_text(encoding="utf-8"))
+            for payload in (first, second):
+                self.assertEqual(len(payload["reports"]), 2)  # 两次都只读同样 2 份输入
+                for row in payload["reports"]:
+                    self.assertIsNotNone(row["backend"])
+                    self.assertIsNotNone(row["requestsTotal"])
+            self.assertEqual(
+                len(json.loads(old_summary.read_text(encoding="utf-8"))["reports"]), 1
+            )
+
+    def test_corrupt_input_fails_and_does_not_overwrite(self) -> None:
+        module = self._load_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            reports = work / "reports"
+            reports.mkdir(parents=True)
+            (reports / "perf-a.json").write_text(self._bench("java"), encoding="utf-8")
+            (reports / "perf-bad.json").write_text("{bad json", encoding="utf-8")
+            self.assertEqual(module.main(["--work-dir", str(work)]), 1)
+            self.assertFalse((reports / "perf-summary.json").exists())
+
+            existing = reports / "perf-summary.json"
+            original = json.dumps({"reports": [{"backend": "java"}]})
+            existing.write_text(original, encoding="utf-8")
+            self.assertEqual(module.main(["--work-dir", str(work)]), 1)
+            self.assertEqual(existing.read_text(encoding="utf-8"), original)
+
+    def test_structurally_invalid_fails(self) -> None:
+        module = self._load_module()
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp)
+            reports = work / "reports"
+            reports.mkdir(parents=True)
+            (reports / "perf-x.json").write_text(json.dumps({"foo": 1}), encoding="utf-8")
+            self.assertEqual(module.main(["--work-dir", str(work)]), 1)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
