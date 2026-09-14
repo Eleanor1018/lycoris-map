@@ -10,7 +10,7 @@ The project currently includes these pages:
 - Documents: currently featuring **Nora's HRT Guide**, written to share practical HRT experience and lessons learned in clear, approachable language.
 - About: the project's values, background, and contact details, explaining why we built this small light for our community.
 
-Lycoris is available as a **web application** and a **React Native mobile application**.
+Lycoris provides a **web application** and a previously published React Native app. The old app source is now retained locally in preparation for a native rewrite.
 
 ## Android APK download
 
@@ -53,7 +53,7 @@ Developer overview: [Rust backend guide (Chinese)](./backend/README.md).
 - `frontend`: React and TypeScript
 - `backend`: Rust, Axum, and SQLx (default backend; no ORM)
 - `backend-old`: deprecated Java / Spring Boot source, retained for current production and rollback reference
-- `mobile`: React Native and TypeScript, with Android / iOS native bridges
+- `mobile`: legacy React Native app, retained locally; native rewrite pending
 - Database: PostgreSQL with PostGIS; Redis for sessions, caching, and rate limiting
 
 ## License
@@ -62,18 +62,16 @@ This project is open source under the [MIT License](./LICENSE).
 
 ## Clone and initialize
 
-This monorepo contains `backend`, `frontend`, and `mobile`; `backend-old` holds the legacy Java implementation.
+This monorepo contains `backend` and `frontend`; `backend-old` holds legacy Java. The local `mobile/` tree is excluded from Git.
 
 ### 1. Prerequisites and source code
 
 | Component | Repository requirements |
 | --- | --- |
-| JavaScript | Node.js 22, at least 22.12.0, or Node.js 20, at least 20.19.4, with npm. These satisfy both Vite 7 and React Native 0.83.1. |
-| Backend | rustup with Rust 1.98.1 pinned in `backend/rust-toolchain.toml`. Native Windows builds require Visual Studio C++ Build Tools. JDK/Maven are no longer backend requirements; Android builds still need their Java toolchain. |
+| JavaScript | Node.js 22, at least 22.12.0, or Node.js 20, at least 20.19.4, with npm. These satisfy the current web development requirements. |
+| Backend | rustup with Rust 1.98.1 pinned in `backend/rust-toolchain.toml`. Native Windows builds require Visual Studio C++ Build Tools. JDK/Maven are no longer backend requirements. |
 | Database | Local Compose pins PostgreSQL 18.6 with PostGIS 3.6.4. Nearby queries use PostGIS candidate filtering and distance calculation. |
 | Cache and sessions | Local Compose pins Redis 8.10.1. Login sessions require Redis. |
-| Android | Android Studio, Android SDK Platform 36, Build-Tools 36.0.0, NDK 27.1.12297006, and an emulator or an Android device with USB debugging enabled. |
-| iOS | macOS, full Xcode, Ruby/Bundler, and CocoaPods. See the [iOS guide](./mobile/IOS.md) for detailed requirements. |
 
 The examples check out `refactor/rust-backend`, which contains the features described in this README:
 
@@ -89,7 +87,7 @@ git switch refactor/rust-backend
 git pull
 ```
 
-Start each section below from the repository root. Keep the backend, web server, and Metro running in separate terminals.
+Start each section below from the repository root. Keep the backend and web server running in separate terminals.
 
 ### 2. Backend: Rust, database, and local startup
 
@@ -163,53 +161,8 @@ npm run lint
 
 Static output is written to `frontend/dist/`. For static deployment, set `VITE_API_BASE_URL` to the intended API origin; the development proxy is not included in the static output.
 
-### 4. Mobile: install dependencies and run Android / iOS
+### 4. App: preparing for a native rewrite
 
-In a new terminal, install the mobile application's locked JavaScript dependencies from the repository root:
+The legacy React Native application remains in the local `mobile/` directory. Git ignores the entire directory, so fresh checkouts do not include it. Its previous development instructions remain locally in `mobile/README.md` and `mobile/IOS.md`.
 
-```bash
-cd mobile
-npm ci
-```
-
-**Android:** Install the SDK/NDK versions listed above through Android Studio's SDK Manager. Configure `ANDROID_HOME` or `sdk.dir` in your local `android/local.properties`, then start an emulator or connect a debugging device.
-
-```bash
-cp .env.mobile.example .env.mobile
-```
-
-Edit `mobile/.env.mobile`. An Android emulator can reach a backend on your computer with `LY_API_BASE_URL=http://10.0.2.2:8080`; a physical device needs the computer's reachable LAN address. Leave unused map keys empty. This configuration is compiled into the native application, so reinstall the application after changing it.
-
-Start Metro from `mobile/`:
-
-```bash
-npm start
-```
-
-In another terminal, also in `mobile/`, install and run the Android application:
-
-```bash
-npm run android
-```
-
-**iOS (macOS only):** Run `npm ci` again on the Mac, install full Xcode and Ruby/Bundler, then install the dependencies defined by the repository's Gemfile and Podfile:
-
-```bash
-bundle install
-cd ios
-bundle exec pod install
-cd ..
-npm start
-```
-
-In another terminal, run `npm run ios` from `mobile/`. The iOS development build derives the backend host from Metro and uses port 8080 by default. Configure custom Debug/Release addresses through `ios/RuntimeConfig.local.json`; iOS does not read Android's `.env.mobile`. See [mobile/IOS.md](./mobile/IOS.md) for Xcode, simulators, device networking, permissions, signing, and Archive instructions.
-
-Mobile checks:
-
-```bash
-npm test -- --runInBand
-npx tsc --noEmit
-npm run lint
-```
-
-See [mobile/README.md](./mobile/README.md) for more mobile configuration details. Local development is separate from installing the test APK above. Future updates should retain this release's package identifier and signing key.
+A native application rewrite is planned. This change only reorganizes the repository; it does not create a new native app project. The APK download information above remains as a reference for the previously published version.

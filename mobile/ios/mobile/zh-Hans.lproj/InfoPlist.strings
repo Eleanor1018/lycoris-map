@@ -1,4 +1,0 @@
-"CFBundleDisplayName" = "Lycoris";
-"NSLocationWhenInUseUsageDescription" = "用于显示你的当前位置并查询附近点位。";
-"NSPhotoLibraryUsageDescription" = "用于从相册选择头像或点位图片并上传。";
-"NSLocalNetworkUsageDescription" = "用于连接局域网内的 Metro 和开发环境 API。";

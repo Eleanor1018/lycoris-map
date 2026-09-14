@@ -7,7 +7,7 @@ Lycoris 是提供无障碍与友好设施信息的地图协作平台。核心能
 | 目录 | 当前职责 |
 | --- | --- |
 | `frontend/` | React + TypeScript + Vite + MUI + Leaflet 网页 |
-| `mobile/` | React Native Android / iOS 应用，包含原生桥接与 WebView 地图 |
+| `mobile/` | 旧 React Native 应用，仅保留本地并由 Git 忽略；后续重构为原生 App |
 | `backend/` | **默认后端**：Rust + Axum + SQLx；无 ORM，按业务划分模块的单体服务 |
 | `backend-old/` | 已弃用的 Java / Spring Boot 实现；保留供现有线上服务和回退参考 |
 
@@ -39,3 +39,5 @@ cargo run --locked
 架构见 `docs/architecture.md`（仅本地），开发计划与历史验收见 `docs/rust-backend-plan.md`（仅本地） 和 `docs/rust-migration/execution.md`（仅本地）。
 
 Python 开发工具与根 `docs/` 开发文档仅保留本地并由 Git 忽略；新拉取仓库按根 README 使用 Cargo 原生命令。
+
+旧移动端目录本地保留，新的原生 App 工程尚未开始实现。
