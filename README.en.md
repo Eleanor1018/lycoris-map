@@ -50,7 +50,8 @@ If this small light helps someone through a difficult night, everything we have 
 
 Developer overview: [Rust backend guide (Chinese)](./backend/README.md).
 
-- `frontend`: React and TypeScript
+- `frontend`: new Web v2 project, React 19 + TypeScript 7 + Vite 8 + Tailwind 4 (S1 engineering foundation; pages incomplete)
+- `frontend-old`: archived legacy web app, React + MUI + Leaflet, kept for behaviour comparison and rollback; no new features
 - `backend`: Rust, Axum, and SQLx (default backend; no ORM)
 - `backend-old`: deprecated Java / Spring Boot source, retained for current production and rollback reference
 - `mobile`: legacy React Native app, retained locally; native rewrite pending
@@ -62,13 +63,13 @@ This project is open source under the [MIT License](./LICENSE).
 
 ## Clone and initialize
 
-This monorepo contains `backend` and `frontend`; `backend-old` holds legacy Java. The local `mobile/` tree is excluded from Git.
+This monorepo contains `backend` and `frontend`; `backend-old` holds legacy Java and `frontend-old` the archived legacy web app. The local `mobile/` tree is excluded from Git.
 
 ### 1. Prerequisites and source code
 
 | Component | Repository requirements |
 | --- | --- |
-| JavaScript | Node.js 22, at least 22.12.0, or Node.js 20, at least 20.19.4, with npm. These satisfy the current web development requirements. |
+| JavaScript | Node.js 24.19.0 (pinned in `frontend/.nvmrc`) with pnpm 11.19.0 (pinned in `packageManager`). |
 | Backend | rustup with Rust 1.98.1 pinned in `backend/rust-toolchain.toml`. Native Windows builds require Visual Studio C++ Build Tools. JDK/Maven are no longer backend requirements. |
 | Database | Local Compose pins PostgreSQL 18.6 with PostGIS 3.6.4. Nearby queries use PostGIS candidate filtering and distance calculation. |
 | Cache and sessions | Local Compose pins Redis 8.10.1. Login sessions require Redis. |
@@ -136,30 +137,42 @@ Python development scripts and root `docs/` remain local and are excluded from G
 
 ### 3. Web: install dependencies and start Vite
 
+> **Current state: Web v2 is at the S1 engineering foundation.** The new project only contains the engineering shell and a backend-connectivity status screen; the full Figma pages arrive in later stages and this is not yet a usable product. For legacy behaviour, see [frontend-old](./frontend-old) (archived, no new features; its MUI/Cypress/legacy build commands apply to the old project only).
+
 In a new terminal, start from the repository root:
 
 ```bash
 cd frontend
+pnpm install
+pnpm dev
+```
+
+The dev server is fixed at `http://127.0.0.1:5173` (`strictPort`, so it cannot silently move ports and break the backend cookie/write-origin allowlist). Vite proxies `/api`, `/uploads` and the diagnostics-only `/health` same-origin to the local Rust backend at `http://127.0.0.1:8080`. The proxy target is a fixed local value: no environment variable, no server address or secret, and no `Origin` rewriting.
+
+Build and checks:
+
+```bash
+pnpm build
+pnpm typecheck
+pnpm format:check
+pnpm test:unit
+```
+
+Static output is written to `frontend/dist/`. The project has no ESLint or lint script; type boundaries are enforced by TypeScript 7 strict.
+
+### 3.1 Legacy web app (frontend-old, archived reference)
+
+`frontend-old` is the pre-refactor web app: React 19.2 + TypeScript 5.9 + Vite 7 + MUI + Leaflet, with Cypress specs. It exists only for rollback and behaviour comparison, and its install and build commands belong to that project:
+
+```bash
+cd frontend-old
 npm ci
-cp .env.example .env.local
-```
-
-Edit `frontend/.env.local`, keeping `VITE_API_BASE_URL=` empty for local development. Clear unused placeholder map keys, including `VITE_THUNDERFOREST_API_KEY` and `VITE_TIANDITU_API_KEY`, to use OSM.
-
-```bash
 npm run dev
-```
-
-Open the address printed in the terminal, normally `http://localhost:5173`. Vite proxies `/api` and `/uploads` to `http://127.0.0.1:8080`. To change the proxy target, set `VITE_BACKEND_URL` in the **environment of the process that starts Vite**. If the configured local certificate and key files exist, Vite automatically uses HTTPS; follow the address printed in the terminal.
-
-Build and lint:
-
-```bash
 npm run build
 npm run lint
 ```
 
-Static output is written to `frontend/dist/`. For static deployment, set `VITE_API_BASE_URL` to the intended API origin; the development proxy is not included in the static output.
+Legacy notes about MUI components, Cypress end-to-end specs and the old `.env.local`/basemap key configuration apply to `frontend-old` only and do not affect the new `frontend`.
 
 ### 4. App: preparing for a native rewrite
 

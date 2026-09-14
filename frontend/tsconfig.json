@@ -1,0 +1,31 @@
+{
+    "compilerOptions": {
+        "target": "ES2023",
+        "lib": ["ES2023", "DOM", "DOM.Iterable"],
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "moduleDetection": "force",
+        "jsx": "react-jsx",
+        "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"],
+        "paths": {
+            "@/*": ["./src/*"]
+        },
+
+        "strict": true,
+        "noUncheckedIndexedAccess": true,
+        "exactOptionalPropertyTypes": true,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "noFallthroughCasesInSwitch": true,
+        "noImplicitOverride": true,
+        "noImplicitReturns": true,
+        "useUnknownInCatchVariables": true,
+        "verbatimModuleSyntax": true,
+        "isolatedModules": true,
+        "forceConsistentCasingInFileNames": true,
+
+        "noEmit": true,
+        "skipLibCheck": true
+    },
+    "include": ["src", "vite.config.ts", "vitest.config.ts"]
+}
