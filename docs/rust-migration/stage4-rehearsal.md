@@ -270,11 +270,11 @@
 - `uid-check` 首跑失败（命名卷 root 属主）：改为 root 一次性 `chown 10001:10001 /vol`（0750，非 777）后通过。
 - 历史 `up-deps-2..7`（`compose config` 未带 `--profile apps`）、`upgrade-3`（并行误操作）、`flow-java-pg18-3`（旧 state 残留，已由 `seed` 新 runId 修复）、`switch-java-g2/g5`（generation 复用拒绝）等失败报告均保留。
 
-### 后续
+### 后续（历史）
 
-正式性能矩阵（配对基线快照/恢复 + idle/read/login/upload 两后端）待温晓客户端窗口结束后授权；本轮不跑正式 perf，不再切换，入口保持 Rust(PG18)。
+正式性能矩阵（配对基线快照/恢复 + idle/read/login/upload 两后端）当时待授权；**后续已执行**，见「正式性能矩阵」。
 
-## 补充矩阵计划（待执行，本轮只备工具/测试）
+## 补充矩阵（缺口描述与执行结果，原计划）
 
 首轮矩阵在**译文、收藏、PG17 back 读取**上有缺口，完整矩阵暂不通过：
 
@@ -377,8 +377,8 @@ Java back 读写 → 再留 Rust(PG18)；generation 严格递增，不从旧 see
 
 - ~~真实 en 译文/收藏补充矩阵~~：**已执行**（见「补充矩阵实跑」，报告 `flow-rust-writes-2`、
   `flow-rollback-verify-2`、`db-rollback-5`、`flow-db-final-verify` 等）。
-- **正式性能矩阵**（idle/warm read/login/upload × 两后端 × 3 轮，配对基线快照/恢复）：**未执行**，
-  待温晓安静窗口授权；不自行开始，另一工作树仍在小规模编译/测试。
+- ~~正式性能矩阵~~：**已执行**（见「正式性能矩阵」，快照 `perf-base-20260914`，10 份正式报告 + `perf-summary.json`）。
+- 无其他待补；阶段 5 工作独立进行。
 
 ## 路由/路径更正
 
@@ -396,4 +396,59 @@ Java back 读写 → 再留 Rust(PG18)；generation 严格递增，不从旧 see
 - 报告路径在负载前检查；PG18 up 的 client backend 总数、active / nonActive 数进入每轮报告，排除采样连接自身。nonActive 包含 idle in transaction，不能解释为全部空闲。
 - RSS、cgroup 内存、CPU 差值、PG 连接数任一零有效样本均拒绝生成成功结论；报告有效/缺失样本数与 PG 采样失败次数。两次串行采样命令各有 15 秒超时，线程退出等待覆盖两次命令。
 - 苏瑶执行 51 项纯 Python 检查全部通过；温晓独立复跑同 51 项通过（5.708 秒），审查工具 diff 通过。离线测试不代表真实负载或 PG 采样已经执行。
-- 当前 Docker 引擎卡在停止状态，补充回退矩阵与正式性能仍未执行。温晓已向 Nora 询问重启 Docker Desktop，因为会短暂中断其他项目容器；收到明确回复前不执行重启。
+- **历史事故（已解决）**：某阶段 Docker 引擎曾卡在 stopping；Nora 批准后温晓以 `docker desktop stop --force` 再 start 恢复（Engine 29.3.1），本任务容器恢复 healthy。该等待说法已过期，保留为历史记录。
+- 恢复后：补充真实回退矩阵已执行（见「补充矩阵实跑」）；正式性能矩阵也已执行（见「正式性能矩阵」）。
+
+## 正式性能矩阵（2026-09-14，RunID `55a35afa4465`）
+
+- 快照 label：**`perf-base-20260914`**（在补充矩阵新增写入之后创建，含 Rust 新用户+真实 en 译文、Java PG18 新增数据、Web 用户 2 签名/收藏 369）。
+- 每个后端组开始前 `restore-baseline --label perf-base-20260914` 恢复同一 PG18 `_up` + uploads 并核对指纹；`switch --db pg18` 均指向同一 `lycoris_rehearsal_up`；一次只运行一个后端；generation 单调（g10→g20）。
+- 缓存经 `.env` `MARKER_CACHE_REDIS_ENABLED` 受控切换，`switch --cache on|off` 后 `verify_target_config` 实测 inspect 与 `--cache-state` 一致；测量结束复位 `on`。
+- 参数：idle 每轮 15s×3；其余预热 30s 沿同路径、3 轮×20s；read/login 并发 8；upload 并发 1（两后端相同）；无过载场景；未用 `--quick`。
+- 上传固定 512×512 合成 PNG：**251390 字节，sha256 `a73b82649f1f50e960acc6e0acecebae518f1362033f06b49d80cc920a0b80b0`**（seed 424242）；服务端按既有策略重编码（有 alpha→PNG，否则 JPEG q75），未用极小图替代。
+- 产物标识：Java 运行 JAR sha256 **`3fc8d8f4f01ad4d97cd07a2b2b134e97ad3fb1f278453b5daa3101d9242c8b7a`**（`demo-1.0.3.jar`，70301331 字节）；Rust 镜像 `lycoris-rust-stage4:local` imageId `sha256:51776d6b0f3a9bd93d4a5f0a35595fc1df0a3285a2a4dbb38118eb1e8fa0875a`。**报告中 Java 的 `imageTag/imageId` 是 JRE 基础镜像记录，不能代替 JAR 标识**，JAR 以其 sha256 为准。
+- 机器汇总：`reports/perf-summary.json`（工具 `backend-rust/scripts/benchmark-summary.py`，不覆盖原报告）。
+
+| scenario | cache | backend | requests | success | err% | P50 ms | P95 ms | rps | window s |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| idle | on | java | 0 | 0 | n/a | n/a | n/a | 0 | 45.0 |
+| idle | on | rust | 0 | 0 | n/a | n/a | n/a | 0 | 45.0 |
+| read | on | java | 2961 | 2961 | 0 | 54.2 | 587.4 | 48.7 | 60.8 |
+| read | on | rust | 15696 | 15696 | 0 | 20.9 | 82.6 | 261.0 | 60.1 |
+| read | off | java | 6132 | 6132 | 0 | 66.9 | 202.7 | 101.7 | 60.3 |
+| read | off | rust | 14372 | 14372 | 0 | 24.2 | 90.2 | 239.2 | 60.1 |
+| login | on | java | 1538 | 1538 | 0 | 302.0 | 392.4 | 25.4 | 60.5 |
+| login | on | rust | 2108 | 2108 | 0 | 226.6 | 246.4 | 34.7 | 60.7 |
+| upload | on | java | 1361 | 1361 | 0 | 41.6 | 59.8 | 22.7 | 60.1 |
+| upload | on | rust | 2091 | 2091 | 0 | 22.8 | 46.5 | 34.8 | 60.1 |
+
+- 观察（据实际数据，不要求 Rust 更快）：本机合成负载下 Rust 各成功场景吞吐更高、P50/P95 更低；Java read 缓存 on 的 P95（587ms）高于本组缓存 off（203ms），为实际测得的差异，未做额外归因；login 两后端均 ~230–300ms（BCrypt cost 10）；upload 并发 1 两后端均无 503/错误。内存 RSS/容器 cgroup/CPU/PG total-active-nonActive 与 setup/采样开销记录在每份报告各轮 `metrics`。
+
+#### 进程 RSS 可读对照（按每轮有效采样数量加权的均值，MiB）
+
+| scenario | cache | Java | Rust | Rust 相对降低 |
+| --- | --- | --- | --- | --- |
+| idle | on | 325.347 | 13.986 | 95.70% |
+| read | on | 416.672 | 26.858 | 93.55% |
+| read | off | 415.171 | 27.520 | 93.37% |
+| login | on | 382.146 | 14.891 | 96.10% |
+| upload | on | 383.073 | 17.147 | 95.52% |
+
+上述为**整套实现**在**本轮本地合成负载**下的 `/proc/1 VmRSS` 对比（非容器 memory，非仅语言本身），
+不等于语言层面的必然比例；同一机器上用户的其他 Docker 项目仍在运行，不构成整机独占或生产性能结论。
+Java 缓存 on 相对更慢是观测，未做 profile，不据此定因。
+- 边界声明：本任务执行期间未同时运行构建/测试/模拟器（温晓已停止浏览器/模拟器/Metro/Vite；其他工作树正式空间测量暂停）；其他 Docker 项目保持原状。**本机非完全独占，结果不代表生产性能**；压测数据为合成负载，已通过已授权配对恢复回到 `perf-base-20260914`。
+- 最终状态：入口 **Rust(PG18) generation 20，缓存 on**；活动库 `_up`（users 22、markers 5006、favorites 186、Web 用户 2 签名保留）；PG17 `back` 保留其此前独立新增行（markers 5007、favorites 187），不宣称与 `_up` 完全相同。
+
+### 正式报告路径（均唯一文件名，未覆盖）
+
+`reports/perf-idle-java.json`、`perf-idle-rust.json`、`perf-read-on-java.json`、`perf-read-on-rust.json`、`perf-read-off-java.json`、`perf-read-off-rust.json`、`perf-login-java.json`、`perf-login-rust.json`、`perf-upload-java.json`、`perf-upload-rust.json`、`perf-summary.json`；配套 `snapshot-baseline.json`、`restore-baseline*.json`、`switch-*-g10..g20.json`。
+
+### 正式性能窗口修改文件
+
+- `backend-rust/scripts/check-rehearsal.py`（`switch --cache on|off` 受控切换 + inspect 实测）
+- `backend-rust/scripts/benchmark-summary.py`（新增，机器汇总；修复两点：①显式跳过本工具汇总格式
+  `perf-summary*.json`，第二次运行只读同样 10 份输入、输出唯一 `-N`、无全 None 行；②匹配输入损坏
+  或非合法 benchmark 结构即返回非 0 且不写/不覆盖汇总，合法 summary 才跳过；表头 `errRate` 为 0..1，
+  缺指标显示 `n/a` 不伪造 0）。纯文件 fixture 已验证（54 项工具测试含 3 项汇总 fixture）。
+- `docs/rust-migration/stage4-rehearsal.md`
