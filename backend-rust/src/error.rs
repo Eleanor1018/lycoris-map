@@ -181,6 +181,8 @@ impl ApiError {
 pub enum AppError {
     #[error("配置错误: {0}")]
     Config(#[from] crate::config::ConfigError),
+    #[error("命令行参数错误: {0}")]
+    Cli(#[from] crate::cli::CliError),
     #[error("迁移校验失败: {0}")]
     Migration(#[from] crate::migrate::MigrationError),
     #[error("媒体存储初始化失败: {0}")]

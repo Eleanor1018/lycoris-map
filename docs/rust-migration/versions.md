@@ -679,6 +679,92 @@ powershell -NoProfile -File backend-rust/scripts/check-rust.ps1
 17 公开读取 + 17 写入事务 + 16 媒体存储 + 8 媒体业务 + 17 媒体 HTTP）。仅清理各自用例的 UUID
 临时库，未枚举或删除其它数据库。阶段 3 最终接受状态由温晓收尾。
 
+### 阶段 4：已有库基线接管与只读预检（2026-09-14，`work/rust-adoption-20260914`）
+
+在阶段 3 交付 `bbca95f` 的隔离工作树上实现显式基线接管入口。范围仅 `backend-rust/` 与
+`docs/rust-migration/`；未改 `migrations/0001_baseline.sql` 任何字节，未新增迁移，未访问服务
+器/`lycoris-restore-review`/备份/真实数据，未 commit/push。只连接回环合成 PG 55432 / Redis 56379，
+每个用例自建 UUID 临时库。
+
+设计与边界：
+
+- **CLI**：`src/cli.rs` 显式解析 `--migrate`、`--check-baseline`、`--adopt-baseline`，三者互斥；
+  未知参数或多余位置参数直接报错退出，绝不静默进入服务；无参数仍为普通启动。`--help` 打印用法。
+- **普通启动**仍只调用 `verify_applied` 只读校验。`--migrate` 保留 SQLx 迁移，并新增守卫
+  `needs_adoption`：当基线业务表已存在而基线尚未登记时返回 `ExistingSchemaNeedsAdoption`，
+  提示改用接管，不以初始建表强行作用于已有库。
+- **结构期望**以代码定义（`src/baseline/expected.rs`）逐项对应已审查基线：6 张表 80 列的类型/
+  长度/空值/默认值/identity、主键/唯一/外键约束与名称、identity 序列定义与归属、PostGIS、
+  `current_schema()=public` 且 `search_path` 含 public，以及 SQLx `_sqlx_migrations` 的列格式。
+  另核对对象 `relkind`（只接受普通表，拒绝视图/物化视图/外部表/分区表/序列）、列不可为生成列
+  （`attgenerated`）、约束 `convalidated`/`condeferrable` 及 PK/唯一约束索引有效且唯一。
+  `check_baseline`/`adopt` 只读系统目录核对，**不在目标库执行基线 DDL 来比较**。缺列/多列/错类型/
+  错长度/错默认值/改 identity/生成列/缺唯一或外键/未验证或可延迟约束/缺序列/缺扩展/schema 非
+  public/额外 p·u·f 约束/索引不可用均按对象名与属性报告；额外无关表（如运维表）允许，不检查
+  额外非唯一性能索引。
+- **PG 目录归一**：NOT NULL 以 `information_schema.is_nullable` 判定，不把 PG 18 新增的 `pg_constraint`
+  NOT NULL（contype `n`）计入约束集合；时间列以 `datetime_precision=6` 比较，归一
+  `timestamp with time zone` 与 `timestamp(6) with time zone` 的文本差异。
+- **接管原子性（温晓第一轮验收返工）**：`src/baseline/adopt.rs` 从池中 `detach` 出**独占
+  `PgConnection`**（不把 session state 交回池），用 SQLx 自己的 `Migrate::lock`（与 `--migrate`
+  同一把数据库名 CRC 生成的 `pg_advisory_lock`）串行化，先保存并设置短 `lock_timeout`（默认 5s）。
+  随后在**单个事务**内：确认六对象存在且为普通表 → 按固定名称顺序 `LOCK TABLE … IN SHARE MODE`
+  （阻断外部 DDL 与写入，锁等待同样受 `lock_timeout` 约束，超时 `LockUnavailable` 明确退出）→
+  只读核对结构/计数 → `ensure_migrations_table` → `dirty_version`/`list_applied_migrations` 校验
+  失败/未知/校验和 → 基线未登记时用 SQLx `skip` 只插入**真实基线校验和**（已核对 `skip` 源码为
+  单条 `INSERT`，不自行开事务或 savepoint，故直接参与本事务）。结构、历史建表与登记同事务提交，
+  任一步失败整体回滚，不留下新历史表或半条记录；已登记且一致则幂等确认。任务取消/超时 drop
+  future 会关闭独占连接、释放会话 advisory lock，不把锁带回池；正常路径恢复原 `lock_timeout`
+  后主动 `close`。任何不匹配历史（失败、未知、校验和、历史表格式）均拒绝且不改写。只登记基线
+  版本（当前 1），未来迁移（如阶段 5 的 0002）保持未登记，需显式 `--migrate` 升级；接管明确仅
+  适用于原始基线，未知结构或未知迁移不会被静默接受。
+- **只读预检**：`--check-baseline` 在单个 `REPEATABLE READ READ ONLY` 快照内核对结构/历史/计数，
+  不调用 `ensure_migrations_table`，不创建 `_sqlx_migrations`；缺表时返回含 `MissingTable` 的
+  可读结构报告，计数安全归零而非报数据库错误。额外聚合发布决策计数：重复有效用户名组数、重复
+  规范化邮箱组数、不合法经纬度行数，并单独识别 NaN 与 Infinity。只输出计数与对象名/属性，不输出
+  身份值或行值，不自动加唯一索引、不合并账号。
+- **运行前提（仅记录，不实现线上操作）**：接管应在备份完成后、业务写入冻结或明确切换窗口内执行；
+  接管在短窗口内以 SHARE 锁阻断业务表写入，但仍应在可回退窗口内进行，并在接管后用
+  `--check-baseline` 留档；生产切换、数据导出/恢复与冻结窗口操作不在本工作树实现。
+
+验证记录（2026-09-14，本机，仅回环合成服务，`RUST_TEST_THREADS=2`）：
+
+```
+powershell -NoProfile -Command "$env:RUST_TEST_THREADS='2'; & backend-rust/scripts/check-rust.ps1"
+```
+
+结果：SQLx CLI 0.9.0 校验通过；合成开发库迁移成功；`cargo sqlx prepare --check -- --all-targets`
+通过；`SQLX_OFFLINE=true cargo check --all-targets` 成功；`cargo fmt --all -- --check` 通过；
+`cargo clippy --all-targets -- -D warnings` 零警告；第一轮返工的 `cargo test` **189** 个测试通过、0 失败 0 跳过
+（46 单元 + 28 认证 + 9 基础集成 + 23 基线接管 + 8 点位 HTTP + 17 公开读取 + 17 写入事务 +
+16 媒体存储 + 8 媒体业务 + 17 媒体 HTTP）。新增 4 个 CLI 单元测试与 `tests/baseline_adoption.rs`
+的 25 项真实 PG 集成：非空 Java 形状库接管后旧行/序列不变且新插入 ID 延续、正确库重复接管幂等、
+空库/缺列/错类型/错默认值/缺唯一/缺外键/改 identity/多列/缺表/同名视图/生成列/未验证或可延迟
+约束逐项拒绝、错误校验和/未知/失败历史拒绝且无改写、并发接管单一历史记录、迁移锁超时与业务表
+被独占锁时 `LockUnavailable` 且不部分登记、SHARE 锁确实阻断写入与 DDL、登记插入被触发器拒绝
+后事务回滚不留半条记录、**新建历史表在登记失败时随事务回滚且业务行/序列不变**、取消已获迁移锁
+的接管后另一连接可重新获锁且连接池可用、只读预检在 `REPEATABLE READ READ ONLY` 快照内不建历史
+表并报告重复账号组与 NaN/Infinity 计数、**结构不兼容时计数标记为未执行而非以 0 冒充**、缺表返回
+可读报告、`--migrate` 对已有业务表拒绝并指向接管、额外运维表不阻止接管、自定义迁移集合证明不
+登记未来迁移、CLI 三个命令与未知/互斥参数退出码。现有 162 项行为保持不变；每个用例只清理自己
+的 UUID 临时库，未枚举或删除其它数据库。
+
+温晓第二轮收尾（同工作树，未提交）：
+
+- `MigrationError::Execute` 的 `Display` 改为固定摘要“迁移执行失败”，保留 `#[from]`/`#[source]`
+  供程序取用，不再经 main 日志内联 SQLx 驱动报错；接管结束的 unlock/close 失败日志也只给固定
+  摘要，不格式化 driver 错误。
+- “已登记基线”日志移到事务 `commit` 成功之后，避免提交失败却先报告完成。
+- 新增 `check_baseline_marks_counts_unavailable_on_incompatible_columns`：列缺失/类型不符时先
+  返回结构 diff；`BaselineReport` 增加 `counts_available`，未真正执行计数时明确标记，0 仅占位。
+- 新增 `new_history_table_rolls_back_when_registration_fails`：无历史表 + 不含基线版本的自定义
+  Migrator，在 `ensure_migrations_table` 之后确定性失败，断言 `_sqlx_migrations` 不存在且业务
+  行/序列不变。
+
 ## 备注
+
+第二轮收尾后新增 2 项，测试集合共 191 项；该轮按改动范围复跑基线接管 25 项和基础迁移 9 项，
+并通过 fmt/clippy，没有把未重跑的完整集合记为一次全量通过。温晓独立复跑相同 34 项全部通过，
+另对最新合成 PG17.11 来源库和 PG18.6 升级库执行 `--check-baseline`，两者均通过且未创建迁移历史。
 
 `lycoris-restore-review` 容器属温晓的私有恢复验收环境，不在本次范围。本阶段仅新建并操作 `lycoris-rust-postgres`、`lycoris-rust-redis`。

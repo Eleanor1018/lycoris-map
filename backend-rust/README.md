@@ -4,9 +4,11 @@ Lycoris Rust 后端采用 Axum + SQLx + PostgreSQL + Redis。阶段 0 至 3 已�
 实现全部 **43 个既有 API 契约模板**：公开点位、认证与用户、头像、点位写入、收藏、译文与
 图片提案审核、受控资源读取。`/uploads` 模板拆为两个明确目录路由，健康探针另列。
 
-完整检查 **162 项通过**，独立真实 TCP 验收 **64/64**、覆盖 **43/43** 个接口模板。
+完整检查 **191 项通过**（阶段 3 为 162 项，阶段 4 新增 25 项基线接管真实 PG 集成与 4 项 CLI
+单元测试），独立真实 TCP 验收 **64/64**、覆盖 **43/43** 个接口模板。阶段 4 已实现已有库
+`--check-baseline`/`--adopt-baseline` 基线接管；Linux 验证、性能测量与生产切换仍在阶段 4 内进行。
 详细证据与差异见 [执行记录](../docs/rust-migration/execution.md)。生产仍由 `backend/` 的
-Spring Boot 服务承担；生产切换、Linux 验证和性能测量留在阶段 4。
+Spring Boot 服务承担。
 
 设计依据：`docs/rust-migration/auth-design.md`、`docs/rust-migration/api-contract.md`。
 本轮保留 Cookie + 账号 + 密码 + 管理员二次验证体验，最终认证重设计另案。
@@ -34,10 +36,13 @@ Spring Boot 服务承担；生产切换、Linux 验证和性能测量留在阶�
 | `src/origin.rs` | 写请求来源校验中间件 |
 | `src/ratelimit.rs` | 注册限流（Redis 原子 INCR + TTL） |
 | `src/routes/` | HTTP 处理器：`auth`、`admin`（账号）、`admin_markers`（阶段 3 图片提案/清理）、`avatar`（3 个头像路由）、`uploads`（受控读取） |
-| `src/migrate.rs` | 内嵌迁移、`--migrate` 执行与启动只读校验 |
+| `src/migrate.rs` | 内嵌迁移、`--migrate` 执行、已有库建表守卫与启动只读校验 |
+| `src/baseline/` | 已有库基线预检与接管：`expected`（已审查基线的结构期望）、`inspect`（只读目录核对/计数/历史读取）、`adopt`（`--check-baseline`/`--adopt-baseline`） |
+| `src/cli.rs` | 命令行参数解析（`--migrate`/`--check-baseline`/`--adopt-baseline` 互斥，拒绝未知参数） |
 | `migrations/0001_baseline.sql` | 从 `docs/rust-migration/schema-baseline.sql` 精确派生 |
 | `.sqlx/` | SQLx 离线元数据，`SQLX_OFFLINE=true` 时无需数据库即可编译 |
 | `tests/integration.rs` | 基础工程真实 PG / Redis 集成测试（临时建库并清理） |
+| `tests/baseline_adoption.rs` | 已有库基线接管/只读预检真实 PG 集成测试（Java 形状库、结构拒绝、历史拒绝、并发、锁超时、CLI） |
 | `tests/markers_read.rs` | 公开点位读取真实 PG / Redis 集成测试 |
 | `tests/markers_http.rs` | 点位写入/收藏/审核 HTTP 真实 PG / Redis 集成测试（真实 Router + 登录 Cookie + 权限矩阵） |
 | `tests/media.rs` | 媒体核心集成测试（合成图与真实临时目录，无需 PG/Redis） |
@@ -276,7 +281,17 @@ cargo run --locked
 ```
 
 普通启动只校验迁移已应用；空库需显式 `cargo run -- --migrate`。健康检查
-`/health/live`、`/health/ready` 行为与阶段 1 相同。
+`/health/live`、`/health/ready` 行为与阶段 1 相同。已有 Java 库（有业务表、无
+`_sqlx_migrations`）不得用 `--migrate` 重复建表：先 `--check-baseline` 只读预检，再
+`--adopt-baseline` 核对接管并登记原始基线真实校验和；阶段 5 新增迁移后再显式 `--migrate`。
+三个操作参数互斥，未知参数直接失败，不会误启动服务。
+
+| 命令 | 行为 |
+| --- | --- |
+| 无参数 | 普通启动：`verify_applied` 只读校验，不执行 DDL |
+| `--migrate` | 对空库执行 SQLx 迁移；业务表已存在但基线未登记时拒绝并提示接管 |
+| `--check-baseline` | 单个 `REPEATABLE READ READ ONLY` 快照内核对 6 张业务表结构、PostGIS/schema、SQLx 历史与发布决策计数；不创建 `_sqlx_migrations` |
+| `--adopt-baseline` | 独占连接 + SQLx 迁移锁 + 单事务内按固定顺序 `LOCK … IN SHARE MODE` 六表，核对结构/历史后登记真实基线校验和；不执行基线 DDL、不改业务数据，失败整体回滚，取消即释放锁 |
 
 ## 配置项
 
@@ -440,8 +455,14 @@ cargo test --locked
   逐字一致（6 张表、无数据）；本轮未新增任何迁移或唯一索引。
 - 普通启动只做只读校验，确认所需迁移已应用且校验和一致，**不会自动执行 DDL**；
   空库需在 `backend-rust/` 内显式运行 `cargo run --locked -- --migrate`。
-- **禁止把初始建表重复用于已有库**。已有生产库的接管尚未自动化，将在后续阶段专项设计并
-  验证（对照恢复库、逐表校验、回退演练）；本轮不得对已有库执行 `0001_baseline.sql`。
+- **禁止把初始建表重复用于已有库**。已有库（有业务表、无 `_sqlx_migrations`）使用
+  `--check-baseline` 只读预检后 `--adopt-baseline` 核对接管：接管使用 SQLx 同一把迁移锁，
+  只登记原始基线真实校验和，不执行基线 DDL、不改业务行/ID/序列值/业务结构；结构或历史不匹配
+  一律拒绝，失败不留伪完成历史。结构期望由已审查基线生成的 `src/baseline/expected.rs` 维护，
+  接管只在目标库读取系统目录比较，不在目标库重放基线 DDL。阶段 5 新增迁移后仍用 `--migrate` 升级。
+- 接管运行前提（仅记录，不实现线上操作）：应在备份完成、写入冻结或明确切换窗口内执行；
+  发布决策计数（重复有效用户名/规范化邮箱组、不合法经纬度与 NaN/Infinity 行数）只输出聚合计数，
+  不输出身份值，不自动加唯一索引或合并账号。
 
 ## 边界与后续
 

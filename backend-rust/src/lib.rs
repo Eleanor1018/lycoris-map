@@ -3,6 +3,8 @@
 //! Lycoris Rust 后端库根。
 //!
 //! - [`app`]：Axum Router、AppState 与健康检查；
+//! - [`baseline`]：已有库基线的只读预检与显式接管（`--check-baseline`/`--adopt-baseline`）；
+//! - [`cli`]：命令行参数解析（互斥、拒绝未知参数）；
 //! - [`config`]：环境变量配置，错误信息不泄露连接串密码；
 //! - [`error`]：显式的四类响应体与错误类型；
 //! - [`media`]：图片存储与读取核心（头像/点位图片共用，不含路由与授权）；
@@ -19,6 +21,8 @@
 
 pub mod app;
 pub mod auth;
+pub mod baseline;
+pub mod cli;
 pub mod config;
 pub mod dto;
 pub mod error;

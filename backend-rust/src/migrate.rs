@@ -4,8 +4,8 @@
 //! 只含 6 张表结构、约束与 PostGIS 扩展，无数据。
 //!
 //! 普通启动只调用 [`verify_applied`] 做只读校验，**不会自动执行 DDL**；对空库或需要
-//! 升级的库，必须显式运行 `lycoris-backend --migrate`。已有生产库的接管不在本轮范围，
-//! 不能把初始建表重复用于已有库（见 README 边界说明）。
+//! 升级的库，必须显式运行 `lycoris-backend --migrate`。已有 Java 库的接管走
+//! [`crate::baseline::adopt_baseline`]（`--adopt-baseline`），不会把初始建表重复用于已有库。
 
 use std::collections::HashMap;
 
@@ -13,6 +13,9 @@ use sqlx::PgPool;
 use sqlx::Row as _;
 use sqlx::migrate::Migrator;
 use sqlx::postgres::PgRow;
+
+use crate::baseline::BaselineMismatch;
+use crate::baseline::expected;
 
 /// 编译期内嵌的迁移集合（源目录 `migrations/`）。
 pub static MIGRATOR: Migrator = sqlx::migrate!();
@@ -29,16 +32,66 @@ pub enum MigrationError {
     ChecksumMismatch(i64),
     #[error("迁移 {0} 未成功完成，目标库处于未完成状态")]
     Failed(i64),
-    #[error("迁移执行失败: {0}")]
+    #[error(
+        "检测到已有业务表但缺少基线迁移记录，请先运行 `lycoris-backend --adopt-baseline` 核对接管，禁止重复建表"
+    )]
+    ExistingSchemaNeedsAdoption,
+    #[error("当前代码没有基线迁移 {0}")]
+    BaselineNotEmbedded(i64),
+    #[error("{0}")]
+    BaselineMismatch(BaselineMismatch),
+    #[error("接管等待 SQLx 迁移锁超时；可能有其他迁移或接管正在执行，请稍后重试")]
+    LockUnavailable,
+    #[error("_sqlx_migrations 历史表格式与 SQLx 期望不一致，拒绝接管")]
+    HistoryTableMismatch,
+    #[error("迁移执行失败")]
     Execute(#[from] sqlx::migrate::MigrateError),
     #[error("数据库错误")]
     Database(#[from] sqlx::Error),
 }
 
 /// 对空库执行迁移（`--migrate`）。SQLx 会自行维护 `_sqlx_migrations` 与事务。
+///
+/// 若目标库已存在基线业务表却还没有对应迁移记录，则拒绝直接建表并提示使用
+/// `--adopt-baseline`；只有空库或已由 SQLx 管理的库才会执行迁移。
 pub async fn run(pool: &PgPool) -> Result<(), MigrationError> {
+    if needs_adoption(pool).await? {
+        return Err(MigrationError::ExistingSchemaNeedsAdoption);
+    }
     MIGRATOR.run(pool).await?;
     Ok(())
+}
+
+/// 判断目标库是否“已有业务表但尚无已登记的基线迁移”。
+async fn needs_adoption(pool: &PgPool) -> Result<bool, sqlx::Error> {
+    let history: Option<String> =
+        sqlx::query_scalar("SELECT to_regclass('_sqlx_migrations')::text")
+            .fetch_one(pool)
+            .await?;
+    let baseline_applied = match history {
+        Some(_) => {
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM _sqlx_migrations WHERE version = $1)")
+                .bind(expected::BASELINE_VERSION)
+                .fetch_one(pool)
+                .await?
+        }
+        None => false,
+    };
+    if baseline_applied {
+        return Ok(false);
+    }
+    let tables: Vec<String> = expected::BASELINE_TABLES
+        .iter()
+        .map(|name| name.to_string())
+        .collect();
+    let present: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM unnest($1::text[]) AS t(name) \
+         WHERE to_regclass('public.' || t.name) IS NOT NULL",
+    )
+    .bind(&tables)
+    .fetch_one(pool)
+    .await?;
+    Ok(present > 0)
 }
 
 /// 只读校验：确认所有内嵌迁移都已在目标库成功应用且校验和一致。

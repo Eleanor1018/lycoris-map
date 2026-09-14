@@ -2,7 +2,9 @@
 
 //! 可执行入口：装配配置、PG 连接池、Redis 客户端与 Router。
 //!
-//! 普通启动只校验迁移已应用；`--migrate` 对空库执行 SQLx 迁移后退出。
+//! 普通启动只校验迁移已应用且不执行 DDL；`--migrate` 对空库执行 SQLx 迁移后退出；
+//! `--check-baseline` 只读预检已有库结构；`--adopt-baseline` 核对接管已有库并登记真实
+//! 基线校验和后退出。参数互斥，未知参数直接失败，不会误启动服务。
 
 use std::net::SocketAddr;
 use std::process::ExitCode;
@@ -10,6 +12,8 @@ use std::process::ExitCode;
 use fred::clients::Client;
 use fred::interfaces::ClientLike;
 use lycoris_backend::app::{AppState, build_router};
+use lycoris_backend::baseline;
+use lycoris_backend::cli::{self, Command};
 use lycoris_backend::config::Config;
 use lycoris_backend::error::AppError;
 use lycoris_backend::migrate;
@@ -29,7 +33,12 @@ async fn main() -> ExitCode {
 }
 
 async fn run() -> Result<(), AppError> {
-    let run_migrations = std::env::args().any(|arg| arg == "--migrate");
+    let command = cli::parse(std::env::args().skip(1))?;
+    if command == Command::Help {
+        println!("{}", cli::USAGE);
+        return Ok(());
+    }
+
     let config = Config::from_env()?;
     // 只记录“已加载”，不打印连接串或其参数。
     tracing::info!("配置加载完成");
@@ -42,10 +51,26 @@ async fn run() -> Result<(), AppError> {
         .connect(&config.database_url)
         .await?;
 
-    if run_migrations {
-        migrate::run(&pool).await?;
-        tracing::info!("迁移完成");
-        return Ok(());
+    match command {
+        Command::Migrate => {
+            migrate::run(&pool).await?;
+            tracing::info!("迁移完成");
+            return Ok(());
+        }
+        Command::AdoptBaseline => {
+            let report = baseline::adopt_baseline(&pool).await?;
+            report.log_summary("基线接管");
+            tracing::info!("基线接管完成");
+            return Ok(());
+        }
+        Command::CheckBaseline => {
+            let report = baseline::check_baseline(&pool).await?;
+            report.log_summary("基线预检");
+            report.into_result().map(|_| ())?;
+            tracing::info!("基线预检通过");
+            return Ok(());
+        }
+        Command::Serve | Command::Help => {}
     }
 
     // 普通启动只读校验，不自动执行 DDL。
