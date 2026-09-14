@@ -1,7 +1,8 @@
 # 版本基线与数据来源
 
-记录时间：2026-09-14（Asia/Shanghai）。以下区分「候选」与「已运行/已安装」：
-候选仅为查证结果，未编译、未运行；已运行表示本机隔离环境实际启动并通过检查。
+记录时间：2026-09-14（Asia/Shanghai）。本文件按实施顺序保留各次候选、运行和验收记录；下文“未提交”“待验收”等表述描述当次交付状态。当前阶段 0 至 3 已通过温晓验收，完整后端提交为 `bbca95f`，最终结果见 [执行与验收记录](execution.md)。
+
+最终锁定组合已通过 SQLx 在线元数据核对、离线全 targets 编译、fmt、Clippy 零警告和 162 项测试；正常可执行程序另经 `SQLX_OFFLINE=true cargo build --locked` 构建。独立真实 HTTP 验收为 64/64，覆盖 43/43 个既有 API 模板。生产升级及性能测量属于阶段 4。
 
 ## 工具链与宿主
 
@@ -10,7 +11,7 @@
 | Rust toolchain | 1.98.1 | 已安装 | 温晓通过官方 rustup 安装，含 rustfmt、Clippy；后续用精确 toolchain，不改用户默认 |
 | Docker Desktop | 29.3.1 | 已安装 | 仅作宿主测试工具，不是本轮部署目标 |
 
-来源：`rustup show`、官方 rust-lang.org 元数据、本机 Docker Desktop。Rust 版本尚未用于编译任何后端源码（本阶段不创建应用源码）。
+来源：`rustup show`、官方 rust-lang.org 元数据、本机 Docker Desktop。工具链在阶段 0.5 安装，随后已用于阶段 1 至 3 的全部编译与测试。
 
 ## 运行依赖镜像
 

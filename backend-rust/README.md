@@ -1,15 +1,12 @@
 # backend-rust
 
-Lycoris Rust 后端（Axum + SQLx）工作目录。**阶段 1 公开点位读取**、
-**阶段 2 认证/用户/头像**与**阶段 3 点位图片上传/管理员图片提案与清理**已接入 HTTP：
-可编译运行的 lib + bin、配置、健康检查、迁移基线集，
-5 条公开点位读取（`/api/markers/public`、`/search`、`/nearby`、`/viewport`、`/{id}`，
-含本地化与 Redis 查询缓存），9 条 AuthController + 4 条 AdminUserController +
-1 条 AdminAuthController（合计 **19** 条阶段 1/2 接口）、阶段 3 的 **18 条点位写入/收藏/审核
-非图片路由**与 **5 条图片路由**（`POST /api/markers/{id}/image` 与 4 条 `VerifiedAdmin` 管理接口）
-以及 2 条受控 `/uploads` 路由（合计契约 UploadController 的 1 个模板）均已挂载，
-配合真实 PG / Redis 集成测试。**43 个既有 API 契约模板全部挂载**（`/health/live`、`/health/ready`
-两个探针另列）；本轮不接管生产流量，生产仍由 `backend/` 的 Spring Boot 服务承担。
+Lycoris Rust 后端采用 Axum + SQLx + PostgreSQL + Redis。阶段 0 至 3 已通过本地验收，
+实现全部 **43 个既有 API 契约模板**：公开点位、认证与用户、头像、点位写入、收藏、译文与
+图片提案审核、受控资源读取。`/uploads` 模板拆为两个明确目录路由，健康探针另列。
+
+完整检查 **162 项通过**，独立真实 TCP 验收 **64/64**、覆盖 **43/43** 个接口模板。
+详细证据与差异见 [执行记录](../docs/rust-migration/execution.md)。生产仍由 `backend/` 的
+Spring Boot 服务承担；生产切换、Linux 验证和性能测量留在阶段 4。
 
 设计依据：`docs/rust-migration/auth-design.md`、`docs/rust-migration/api-contract.md`。
 本轮保留 Cookie + 账号 + 密码 + 管理员二次验证体验，最终认证重设计另案。
@@ -249,20 +246,24 @@ PATCH 与管理员 PATCH 使用全局 8 MiB（`web::MarkerJsonBody`），因为 
 ## 构建、运行与迁移
 
 ```powershell
-# 依赖容器（首次或重启后）
+# 从仓库根目录启动依赖容器（首次或重启后）
 docker compose -f backend-rust/compose.test.yml up -d
 python backend-rust/scripts/check-services.py
 
-# 构建
-cargo build --manifest-path backend-rust/Cargo.toml
+# 在 crate 目录运行 Cargo，让 rustup 读取这里固定的工具链
+Set-Location backend-rust
+$env:SQLX_OFFLINE = "true"
+cargo build --locked
 ```
 
-固定查询使用 SQLx 编译期宏（`queries/*.sql`）。离线元数据在 `backend-rust/.sqlx/`，
-构建时可设 `SQLX_OFFLINE=true` 不依赖数据库 schema；修改 `queries/*.sql` 后需在合成库上重新生成：
+后续 Cargo 命令均在 `backend-rust/` 内运行；仅传 `--manifest-path` 不会让 rustup 从目标
+manifest 的目录选择工具链。固定查询位于 `queries/` 与各模块的 `sql/`，离线元数据在 `.sqlx/`。
+`SQLX_OFFLINE=true` 构建不依赖数据库 schema；修改固定 SQL 后，在已迁移的合成库重新生成：
 
 ```powershell
 # 需要已迁移的合成库（DATABASE_URL 指向 lycoris_rust）
-cargo sqlx prepare --manifest-path backend-rust/Cargo.toml -- --all-targets
+Remove-Item Env:SQLX_OFFLINE -ErrorAction SilentlyContinue
+cargo sqlx prepare -- --all-targets
 ```
 
 运行只从环境变量读取配置，`DATABASE_URL` 与 `REDIS_URL` 无默认值。例如（PowerShell）：
@@ -270,7 +271,8 @@ cargo sqlx prepare --manifest-path backend-rust/Cargo.toml -- --all-targets
 ```powershell
 $env:DATABASE_URL = "postgres://lycoris:lycoris_local_test@127.0.0.1:55432/lycoris_rust"
 $env:REDIS_URL    = "redis://127.0.0.1:56379"
-cargo run --manifest-path backend-rust/Cargo.toml
+$env:SQLX_OFFLINE = "true"
+cargo run --locked
 ```
 
 普通启动只校验迁移已应用；空库需显式 `cargo run -- --migrate`。健康检查
@@ -393,11 +395,13 @@ avatars 与匿名 markers 读取在 Redis 不可用时仍可读（不加载会�
 只连接回环地址上的合成测试服务；失败不做静默跳过。
 
 ```powershell
-# 一步完成：迁移合成开发库、校验 .sqlx 离线元数据、SQLX_OFFLINE 构建、fmt / clippy / test
-pwsh backend-rust/scripts/check-rust.ps1
+# 在 backend-rust 目录一步完成：迁移合成库、校验 .sqlx、离线构建、fmt / clippy / test
+pwsh ./scripts/check-rust.ps1
 
-# 或直接运行（默认指向下方合成测试服务）
-cargo test --manifest-path backend-rust/Cargo.toml
+# 或在 backend-rust 目录直接运行（合成服务已启动并迁移）
+$env:SQLX_OFFLINE = "true"
+$env:RUST_TEST_THREADS = "4"
+cargo test --locked
 ```
 
 可用 `TEST_DATABASE_URL` / `TEST_REDIS_URL` 覆盖测试地址，但脚本在**执行任何 `database create`
@@ -435,7 +439,7 @@ cargo test --manifest-path backend-rust/Cargo.toml
   [../docs/rust-migration/schema-baseline.sql](../docs/rust-migration/schema-baseline.sql)
   逐字一致（6 张表、无数据）；本轮未新增任何迁移或唯一索引。
 - 普通启动只做只读校验，确认所需迁移已应用且校验和一致，**不会自动执行 DDL**；
-  空库需显式运行 `cargo run --manifest-path backend-rust/Cargo.toml -- --migrate`。
+  空库需在 `backend-rust/` 内显式运行 `cargo run --locked -- --migrate`。
 - **禁止把初始建表重复用于已有库**。已有生产库的接管尚未自动化，将在后续阶段专项设计并
   验证（对照恢复库、逐表校验、回退演练）；本轮不得对已有库执行 `0001_baseline.sql`。
 
@@ -448,8 +452,7 @@ cargo test --manifest-path backend-rust/Cargo.toml
 - `OptionalUser` 提取器用于私有点位 detail 与 `markers` 图片读取，按数据库当前身份构造真实
   `Viewer`；`avatars` 读取不加载会话。图片上传只建 `PENDING` 提案，审批/清理复用
   `MediaService` 事务、授权与缓存失效。
-- 阶段 3 最终验收与推送由温晓完成，本工作树不单独声称全阶段完成。
-- `OptionalUser` 提取器已用于私有点位 detail 与 `markers` 图片读取；`avatars` 读取不加载会话。
+- 阶段 3 已由温晓完成本地验收，发布演练继续按阶段 4 执行。
 - 固定查询使用 SQLx 编译期宏（`queries/*.sql` + `.sqlx` 离线元数据），用户值全部 bind；
   仅临时测试库名等真正动态 SQL 使用运行期 `AssertSqlSafe`。`.sqlx` 已在本工作树生成并校验。
 - 不包含应用容器，不接入生产，不保存真实数据；不操作 `lycoris-restore-review` 容器。
