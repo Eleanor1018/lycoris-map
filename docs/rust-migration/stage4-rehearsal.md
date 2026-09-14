@@ -226,6 +226,80 @@
 | `tests/test_tools.py` / `check-rehearsal self-test` | **35 tests, 0 failures/errors** |
 | 新增：坏 dump/media/database 零副作用；合法顺序恢复；snapshot 拒绝覆盖 | 通过 |
 
+## 完整矩阵实跑（2026-09-14，集成镜像已交付）
+
+工作目录（实际解析路径）：`C:/Users/Nora/AppData/Local/Temp/opencode/rehearsal-pg1711`。
+报告位于该目录 `reports/`（同名重跑追加 `-N`，历史失败保留）；汇总 `reports/rehearsal-summary.json`。
+
+### 版本/镜像/产物
+
+- Rust：`lycoris-rust-stage4:local`，imageId `sha256:51776d6b0f3a9bd93d4a5f0a35595fc1df0a3285a2a4dbb38118eb1e8fa0875a`，User `10001:10001`。
+- Java：`eclipse-temurin:21-jre`，imageId `sha256:a80c51f2d09a3e7e00d521f1c817bbceb6b3be94109b4a784d46078099882dda`，User `10001:10001`；JAR `demo-1.0.3.jar` size 70301331 / sha256 `3fc8d8f4f01ad4d97cd07a2b2b134e97ad3fb1f278453b5daa3101d9242c8b7a`。
+- PG17 `17.11`/PostGIS `3.6.4`（仅 `postgis`）；PG18 `18.6`/PostGIS `3.6.4`；Redis `8.10.1`；Nginx `1.30.4`。
+
+### 步骤与结果（均 `ok`）
+
+| generation | 步骤 | 结果 |
+| --- | --- | --- |
+| — | `uid-check`（Linux 命名卷 UID10001 互读） | UID_J=UID_R=10001，MODE 644（非 777），java↔rust 互读一致 |
+| — | `seed --recreate`（新 runId，四类） | users 20 / markers 5000 / translations 7500 / favorites 180 / edit 10 / image 20 |
+| java g1 | `switch --to java --db pg17` + `flow java-baseline` | Java PG17 写入（建点/编辑审核/收藏/头像）通过 |
+| — | `upgrade --recreate` | PG17→PG18 六表/序列指纹一致 |
+| java g2 | `switch --to java --db pg18` + `flow java-pg18` | 旧 g1 Cookie 重放 401；读回 PG17 数据/头像；PG18 继续写入 |
+| — | `adopt`（Rust `--check-baseline`/`--adopt-baseline`） | 通过，登记 0001 checksum |
+| rust g3 | `switch --to rust` + `flow rust-writes` | Rust 注册新用户/改密/新点位/**原文(zh)编辑审核**/图片上传+审核/收藏/头像；媒体 sha256 记录。**首轮仅验证原文编辑，未新增 en 译文**（见下方补充矩阵） |
+| java g4 | `switch --to java --db pg18` + `flow rollback-verify` | 回退 Java 用 **Rust 新建账号改密后口令真实登录成功**；读 Rust 数据与媒体 sha256 一致；Java 继续写入且 ID 序列推进；旧 Cookie（含最初 Java g1）重放 `[401,401,401]` |
+| — | `db-rollback --recreate` | 冻结写者后 PG18 最新**原样** dump 恢复 PG17 `back`，六表/序列/媒体一致（`restoreMode=raw`） |
+| java g5 | `switch --to java --db back` + `flow java-pg18` | Java 在回退库继续读写；重放 `[401,401,401]` |
+| rust g6 | `switch --to rust`（最终） | 入口留 Rust(PG18)；重放 `[401,401,401,401]`（含最初 Java Cookie）均 401 |
+| — | `probe` | health 200 / me 401 / nearby 200，四类可读 |
+
+### 数据/媒体摘要（最终 PG18 `lycoris_rehearsal_up`）
+
+- 业务表：users 21、map_markers 5004、map_marker_translations 7500、marker_favorites 183、marker_edit_proposals 14、marker_image_proposals 21。
+- 类别（公开 APPROVED / 有图）：accessible_toilet 1195/31、friendly_clinic 1191/31、baby_room 1191/30、self_definition 1191/30；legacy elevator 4、parking 3、ramp 2。
+- 头像/点位图片经共享上传卷由 Java/Rust 双端读写并按 sha256 校验（flow 报告记录）。
+
+### 配置实测（`switch` 记录的 `targetConfig`）
+
+- Java：UID10001、2CPU/512MiB、`SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=10`、SSL 关闭、缓存 on；BCrypt 10（`PasswordConfig.java` 默认 + 库中 `$2a$10$` 前缀）。
+- Rust：UID10001、2CPU/512MiB、`BCRYPT_COST=10`、`DB_MAX_CONNECTIONS=10`、`DB_STATEMENT_TIMEOUT_MS=20000`、`DB_LOCK_TIMEOUT_MS=5000`、`PASSWORD_MAX_CONCURRENCY=2`、`MEDIA_MAX_CONCURRENCY=1`。
+
+### 失败返工记录（保留）
+
+- `uid-check` 首跑失败（命名卷 root 属主）：改为 root 一次性 `chown 10001:10001 /vol`（0750，非 777）后通过。
+- 历史 `up-deps-2..7`（`compose config` 未带 `--profile apps`）、`upgrade-3`（并行误操作）、`flow-java-pg18-3`（旧 state 残留，已由 `seed` 新 runId 修复）、`switch-java-g2/g5`（generation 复用拒绝）等失败报告均保留。
+
+### 后续
+
+正式性能矩阵（配对基线快照/恢复 + idle/read/login/upload 两后端）待温晓客户端窗口结束后授权；本轮不跑正式 perf，不再切换，入口保持 Rust(PG18)。
+
+## 补充矩阵计划（待执行，本轮只备工具/测试）
+
+首轮矩阵在**译文、收藏、PG17 back 读取**上有缺口，完整矩阵暂不通过：
+
+1. **真实译文新增**：`rust-writes` 增加 `language=en` 译文提案 → 管理员审批 → `GET /api/markers/{id}?lang=en`
+   与 `?lang=zh` 分别断言准确 title/description，并记录 translationId/source_hash（只读 DB 证据）；Java(PG18)、
+   Java(PG17 back) 均须真实 HTTP 读取同译文与源文。
+2. **收藏显式核验**：收藏从图片上传中拆出为显式操作；Rust、Java(PG18)、Java(PG17 back) 均 `GET /api/me/favorites`
+   断言含目标 id；并 `GET /api/me` 断言 publicId/avatarUrl 与新建用户一致。
+3. **PG17 back 真实读取**：`db-final-verify` 改为在 Java back 上真实登录 Rust 改密账号、核对用户/点位/译文/收藏/媒体
+   后再继续写入；不把 PG18 读取当作 PG17 已读。
+4. **精确内容核对**：rollback/db-final 用 state 中准确 title/description/category/sourceLanguage 及译文值断言，
+   不再只用 `startswith`/仅 200。
+
+补充矩阵从**当前 Rust(PG18) g6** 继续：Rust 译文/收藏/新身份验证 → Java PG18 → 最新 dump 恢复 PG17 back →
+Java back 读写 → 再留 Rust(PG18)；generation 严格递增，不从旧 seed 覆盖已验收 Rust 写入。
+
+### 本轮工具小修（未切换/未跑矩阵/未跑 perf）
+
+- `http_flows`：新增 en 译文提案+审批与 en/zh 内容断言、translationId/source_hash 只读记录、显式收藏与
+  `/api/me` 核对；`db-final-verify` 复用 Rust 写入核对并继续写入；媒体 sha256 校验保留。
+- `benchmark-http`：预热并发 `min(2, --concurrency)`（两后端一致），记录 warmup total/success/error/成功率，
+  零成功或线程异常拒绝进入正式测量；`--out` 已存在则拒绝覆盖，默认报告同名自动追加 `-N`。
+- `uidcheck`：卷已存在拒绝复用；只清理本次创建的卷，清理失败报告；世界可写按 `mode & 0o002` 判断；
+  校验写入/互读/stat 退出码。
+
 ## 交付物
 
 `backend-rust/rehearsal/`：`guard.py`、`common.py`、`switching.py`、`db_rehearsal.py`、

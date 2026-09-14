@@ -550,5 +550,103 @@ class TestBaselineRestoreOrder(unittest.TestCase):
             self._assert_preflight_only(calls)
 
 
+class TestHttpFlowAssertions(unittest.TestCase):
+    def test_marker_fields_match_and_mismatch(self) -> None:
+        import http_flows
+
+        expected = {
+            "id": 1,
+            "title": "t",
+            "description": "d",
+            "category": "accessible_toilet",
+            "sourceLanguage": "zh",
+        }
+        http_flows._assert_marker_fields(dict(expected), expected, where="x")
+        for field in ("title", "description", "category", "sourceLanguage"):
+            bad = dict(expected)
+            bad[field] = "WRONG"
+            with self.assertRaises(http_flows.FlowError):
+                http_flows._assert_marker_fields(bad, expected, where="x")
+
+    def test_favorites_parsing_forms(self) -> None:
+        import http_flows
+
+        class Resp:
+            def __init__(self, payload):
+                self.status = 200
+                self._payload = payload
+
+            def json(self):
+                return self._payload
+
+        class C:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def request(self, *a, **k):
+                return Resp(self.payload)
+
+        self.assertEqual(http_flows._favorites(C([1, 2, 3])), [1, 2, 3])
+        self.assertEqual(http_flows._favorites(C({"data": [{"id": 7}]})), [7])
+
+    def test_upload_image_info_stable_512(self) -> None:
+        info = bench_core.upload_image_info()
+        self.assertEqual((info["width"], info["height"]), (512, 512))
+        self.assertEqual(info, bench_core.upload_image_info())
+
+    def test_media_refs_strict(self) -> None:
+        import http_flows
+
+        media = {"avatarUrl": "/uploads/avatars/a.png", "markerImageUrl": "/uploads/markers/m.png"}
+        me = {"avatarUrl": "/uploads/avatars/a.png"}
+        zh = {"markImage": "/uploads/markers/m.png"}
+        http_flows._assert_media_refs(zh, me, media, where="x")
+        with self.assertRaises(http_flows.FlowError):
+            http_flows._assert_media_refs({"markImage": "/uploads/markers/other.png"}, me, media, where="x")
+        with self.assertRaises(http_flows.FlowError):
+            http_flows._assert_media_refs(zh, {"avatarUrl": "/uploads/avatars/other.png"}, media, where="x")
+        with self.assertRaises(http_flows.FlowError):
+            http_flows._assert_media_refs(zh, {}, media, where="x")
+
+    def test_required_media_rejects_missing(self) -> None:
+        import http_flows
+
+        with self.assertRaises(http_flows.FlowError):
+            http_flows._required_media({})
+        with self.assertRaises(http_flows.FlowError):
+            http_flows._required_media({"media": {"avatarUrl": "a"}, "mediaHashes": {}})
+        media, hashes = http_flows._required_media(
+            {
+                "media": {"avatarUrl": "a", "markerImageUrl": "b"},
+                "mediaHashes": {"avatarSha256": "h1", "markerImageSha256": "h2"},
+            }
+        )
+        self.assertEqual(media["avatarUrl"], "a")
+        self.assertEqual(hashes["markerImageSha256"], "h2")
+
+
+class TestUidModeCheck(unittest.TestCase):
+    def test_world_writable_detection(self) -> None:
+        import uidcheck
+
+        self.assertEqual(uidcheck._parse_mode("UID_J=10001\nMODE_J=644", "MODE_J"), 0o644)
+        for mode in ("666", "777", "662"):
+            with self.assertRaises(uidcheck.UidCheckError):
+                uidcheck._parse_mode(f"MODE_J={mode}", "MODE_J")
+        with self.assertRaises(uidcheck.UidCheckError):
+            uidcheck._parse_mode("UID_J=10001", "MODE_J")
+
+    def test_volume_name_guard(self) -> None:
+        import uidcheck
+
+        original = uidcheck.VOLUME_NAME
+        uidcheck.VOLUME_NAME = "some-other-volume"
+        try:
+            with self.assertRaises(uidcheck.UidCheckError):
+                uidcheck._volume("inspect", "some-other-volume")
+        finally:
+            uidcheck.VOLUME_NAME = original
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

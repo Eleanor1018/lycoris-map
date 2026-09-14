@@ -222,22 +222,40 @@ def main(argv: list[str] | None = None) -> int:
     meta["startingDataset"] = starting_state
 
     try:
+        warmup_facts = None
         if warmup > 0 and args.scenario != "idle":
+            warm_concurrency = min(2, args.concurrency)
             warm_stats, warm_stuck = bench_core.run_workers(
                 scenario=args.scenario,
                 base_url=args.entry,
                 duration=warmup,
-                concurrency=2,
+                concurrency=warm_concurrency,
                 seed=args.seed,
                 marker_ids=marker_ids,
                 usernames=usernames,
                 password=DEFAULT_USER_PASSWORD,
                 request_timeout=args.request_timeout,
             )
+            total = warm_stats.total
+            success = warm_stats.success
+            warmup_facts = {
+                "concurrency": warm_concurrency,
+                "requestsTotal": total,
+                "success": success,
+                "error": total - success,
+                "successRate": round(success / total, 4) if total else None,
+                "byStatus": warm_stats.by_status,
+                "networkErrors": warm_stats.network_errors,
+            }
+            meta["warmup"] = warmup_facts
             if warm_stuck:
                 raise bench_core.BenchError(f"预热线程未结束：{warm_stuck}")
             if warm_stats.fatal_errors:
                 raise bench_core.BenchError(f"预热出现异常：{warm_stats.fatal_errors[:3]}")
+            if total == 0 or success == 0:
+                raise bench_core.BenchError(
+                    "预热零成功（或零请求），拒绝进入正式测量；不隐藏非 200"
+                )
         rounds: list[bench_core.RoundResult] = []
         growth = []
         for index in range(repeats):
@@ -293,9 +311,21 @@ def main(argv: list[str] | None = None) -> int:
         "summary": summary,
         "endingDataset": bench_core.dataset_state(args.work_dir, pg_user),
     }
-    out = args.out or (args.work_dir / "reports" / f"bench-{args.backend}-{args.scenario}.json")
+    if args.out:
+        out = args.out
+        if out.exists():
+            print(f"[bench] FAIL: 报告 {out} 已存在，拒绝覆盖；请换文件名", file=sys.stderr)
+            return 1
+    else:
+        base = args.work_dir / "reports" / f"bench-{args.backend}-{args.scenario}.json"
+        out = base
+        index = 2
+        while out.exists():
+            out = base.with_name(f"{base.stem}-{index}{base.suffix}")
+            index += 1
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    meta["reportPath"] = str(out)
     print(f"[bench] summary {json.dumps(summary, ensure_ascii=False)}")
     print(f"[bench] 报告 {out}")
     return 0

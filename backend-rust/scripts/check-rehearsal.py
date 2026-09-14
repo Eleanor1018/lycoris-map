@@ -44,12 +44,14 @@ REHEARSAL_DIR = CRATE_ROOT / "rehearsal"
 if str(REHEARSAL_DIR) not in sys.path:
     sys.path.insert(0, str(REHEARSAL_DIR))
 
+import bench_core  # noqa: E402
 import common  # noqa: E402
 import db_rehearsal  # noqa: E402
 import guard  # noqa: E402
 import http_flows  # noqa: E402
 import switching  # noqa: E402
 import synthetic_media  # noqa: E402
+import uidcheck  # noqa: E402
 
 for _stream in (sys.stdout, sys.stderr):
     try:
@@ -689,6 +691,31 @@ def cmd_restore_baseline(ctx: Ctx, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_uid_check(ctx: Ctx, args: argparse.Namespace) -> int:
+    report = ctx.start("uid-check")
+    try:
+        ctx.guard()
+        _, _, user = ctx.pg("pg18")
+        java_image = ctx.env.get("JAVA_REHEARSAL_IMAGE", "") or "eclipse-temurin:21-jre"
+        rust_image = ctx.env.get("RUST_REHEARSAL_IMAGE", "")
+        if not rust_image:
+            raise RuntimeError("未设置 RUST_REHEARSAL_IMAGE")
+        report.facts.update(
+            uidcheck.run_uid_volume_check(
+                java_image=java_image, rust_image=rust_image, report=report
+            )
+        )
+    except Exception as exc:  # noqa: BLE001
+        report.fail(str(exc))
+        report.write()
+        log(f"[uid-check] FAIL: {exc}")
+        return 1
+    path = report.write()
+    log(f"[uid-check] OK {report.facts.get('observed')}")
+    log(f"[uid-check] 报告 {path}")
+    return 0
+
+
 def cmd_adopt(ctx: Ctx, args: argparse.Namespace) -> int:
     report = ctx.start("adopt-baseline")
     try:
@@ -878,6 +905,16 @@ def cmd_switch(ctx: Ctx, args: argparse.Namespace) -> int:
             switching.start_backend(ctx.work_dir, target)
             if target == "java":
                 _verify_java_secret(ctx)
+            # 记录受测容器实际配置（白名单 env、用户、限制、镜像 ID）。
+            container = (
+                common.JAVA_CONTAINER if target == "java" else common.RUST_CONTAINER
+            )
+            report.add(
+                "targetConfig",
+                bench_core.verify_target_config(
+                    container, target, "on", user=ctx.env.get("PG_REHEARSAL_USER", "")
+                ),
+            )
 
         deps = switching.SwitchDeps(
             freeze=lambda: switching.freeze_entry(ctx.work_dir),
@@ -943,6 +980,7 @@ def cmd_flow(ctx: Ctx, args: argparse.Namespace) -> int:
             phase=args.phase,
             base_url=entry,
             work_dir=ctx.work_dir,
+            pg_user=ctx.env.get("PG_REHEARSAL_USER", ""),
             admin_username=SYNTH_ADMIN_USERNAME,
             admin_password=SYNTH_USER_PASSWORD,
             admin_second=SYNTH_SECOND_PASSWORD,
@@ -1126,10 +1164,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--rust-image", help="覆盖 Rust 镜像")
     p.set_defaults(func=cmd_adopt)
 
+    p = sub.add_parser("uid-check", help="UID10001 命名卷互读核验")
+    p.set_defaults(func=cmd_uid_check)
+
     p = sub.add_parser("snapshot-baseline", help="保存配对性能基线（完整新增写入验证后）")
     p.add_argument("--label", required=True, help="基线标签 [A-Za-z0-9_-]")
     p.set_defaults(func=cmd_snapshot_baseline)
-
     p = sub.add_parser("restore-baseline", help="恢复配对性能基线（仅既有 up 库与 uploads）")
     p.add_argument("--label", required=True, help="基线标签 [A-Za-z0-9_-]")
     p.set_defaults(func=cmd_restore_baseline)
