@@ -1,0 +1,12 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="117.478" height="117.478" viewBox="0 0 117.478 117.478" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Pin">
+<path id="Pingradient" d="M41.5424 19.3275C32.1932 23.4069 24.5986 30.6771 20.1152 39.8395L58.7391 58.7391L41.5424 19.3275Z" fill="url(#paint0_radial_0_21)"/>
+<circle id="Pin_2" cx="58.7391" cy="58.7391" r="9.5" fill="#0C79FE" stroke="white" stroke-width="3"/>
+</g>
+<defs>
+<radialGradient id="paint0_radial_0_21" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(58.7391 58.7391) rotate(-30) scale(43)">
+<stop stop-color="#3478F6"/>
+<stop offset="1" stop-color="#3478F6" stop-opacity="0"/>
+</radialGradient>
+</defs>
+</svg>

@@ -1,18 +1,4 @@
-/*
- * Font loading for the S1 shell.
- *
- * Fredoka (logo, 500) and Roboto (nav, 500) are self-hosted through
- * `@fontsource` packages. Noto Sans 400 is loaded for the S1 heading token; the
- * 500 heading weight is added in S2 together with the real Figma title styles,
- * so no unused face is shipped now.
- *
- * SF Pro is intentionally NOT bundled: `--ui-font-body` only requests Apple
- * system fonts (`-apple-system` / `BlinkMacSystemFont`) and falls back to
- * Roboto/Noto Sans elsewhere.
- *
- * Chinese glyph coverage is deferred to S2 with a language/unicode-range split
- * for Noto Sans SC; S1 does not ship a full CJK font set.
- */
+/* Figma: Fredoka 500, Roboto 400/500, Noto Sans 400. SF Pro and CJK use the local system fonts; no proprietary font is redistributed. */
 @import '@fontsource/fredoka/500.css';
 @import '@fontsource/roboto/400.css';
 @import '@fontsource/roboto/500.css';

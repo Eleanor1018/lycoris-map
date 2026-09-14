@@ -14,6 +14,7 @@ const buttonVariants = cva(
     {
         variants: {
             variant: {
+                figma: '',
                 default: 'bg-(--ui-brand-deep) text-(--ui-on-brand) hover:bg-(--ui-brand-deep)/90',
                 outline:
                     'border border-(--ui-brand-deep)/30 bg-transparent text-(--ui-brand-deep) hover:bg-(--ui-selected)',
@@ -21,6 +22,7 @@ const buttonVariants = cva(
                 link: 'text-(--ui-brand-deep) underline-offset-4 hover:underline',
             },
             size: {
+                figma: '',
                 default: 'h-(--ui-control-height) rounded-(--ui-control-radius) px-5 text-base',
                 sm: 'h-9 rounded-(--ui-control-radius) px-4 text-sm',
                 lg: 'h-12 rounded-(--ui-control-radius) px-6 text-base',
