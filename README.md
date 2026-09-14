@@ -52,9 +52,10 @@ APK 包含运行所需的 JavaScript 和文档资源，**不需要启动 Metro**
 开发者快速了解项目：[程序架构](./docs/architecture.md)。
 
 - frontend： React(Typescript)
-- backend: Spring-Boot(Java)
+- backend-rust：Rust + Axum + SQLx（默认后端；无 ORM）
+- backend：已弃用的 Java / Spring Boot 实现，保留供现有线上与回退参考
 - mobile: React Native（TypeScript，包含 Android / iOS 原生桥接）
-- SQL: PostgreSQL（PostGIS 可选）
+- 数据库：PostgreSQL + PostGIS；Redis 用于会话、缓存与限流
 
 ## 开源协议
 
@@ -62,89 +63,63 @@ APK 包含运行所需的 JavaScript 和文档资源，**不需要启动 Metro**
 
 ## 克隆与初始化
 
-本仓库已采用单仓库（Monorepo）结构，`backend` / `frontend` / `mobile` 都在同一个仓库中。
+本仓库已采用单仓库（Monorepo）结构，`backend-rust` / `frontend` / `mobile` 都在同一个仓库中；`backend` 为旧 Java 实现。
 
 ### 1. 准备环境并获取代码
 
 | 组件 | 本仓库的要求 |
 | --- | --- |
 | JavaScript | Node.js 22（至少 22.12.0）或 Node.js 20（至少 20.19.4），以及随 Node 安装的 npm；同时满足 Vite 7 和 React Native 0.83.1 的要求。 |
-| 后端 | JDK 21，设置 `JAVA_HOME`；Maven Wrapper 会下载 Maven 3.9.12 和项目依赖，无需另装 Maven。 |
-| 数据库 | PostgreSQL 与 `psql` 工具；项目使用 `lycoris` 数据库。PostGIS 可按需要安装，当前附近查询使用普通经纬度字段与 SQL 距离计算。 |
-| 缓存与会话 | Redis；下面提供 Docker 启动示例，也可使用本机 Redis。当前 Spring Boot 配置会自动启用 Redis 会话，开发环境也需要启动 Redis。 |
+| 后端 | rustup；进入 `backend-rust/` 后按 `rust-toolchain.toml` 使用 Rust 1.98.1。启动器需要 Python 3.10+；Windows 原生编译需 Visual Studio C++ Build Tools。后端不再要求 JDK/Maven；Android 构建仍需要其 Java 工具链。 |
+| 数据库 | 本地 Compose 固定 PostgreSQL 18.6 + PostGIS 3.6.4；附近查询使用 PostGIS 候选筛选与距离计算。 |
+| 缓存与会话 | 本地 Compose 固定 Redis 8.10.1；登录会话需要 Redis。 |
 | Android | Android Studio、Android SDK Platform 36、Build-Tools 36.0.0、NDK 27.1.12297006；模拟器或开启 USB 调试的 Android 设备。 |
 | iOS | macOS、完整 Xcode、Ruby/Bundler 与 CocoaPods；详细要求见 [iOS 指南](./mobile/IOS.md)。 |
 
-以下示例获取包含本 README 所述功能的 `feature/ui-redesign` 分支：
+以下示例获取包含本 README 所述功能的 `refactor/rust-backend` 分支：
 
 ```bash
-git clone --branch feature/ui-redesign https://github.com/Eleanor1018/lycoris.git
-cd lycoris
+git clone --branch refactor/rust-backend https://github.com/Eleanor1018/lycoris-map.git
+cd lycoris-map
 ```
 
 已有仓库时切换到该分支再更新；本机配置和依赖分别安装，不要复制其他机器的 `node_modules`。
 
 ```bash
-git switch feature/ui-redesign
+git switch refactor/rust-backend
 git pull
 ```
 
 以下各节从仓库根目录开始操作。后端、网页和 Metro 分别保留在独立终端运行。
 
-### 2. 后端：数据库、配置与依赖
+### 2. 后端：Rust、数据库与本地启动
 
-启动 PostgreSQL，使用有建库权限的数据库账号创建本地开发库。下面以本机 `postgres` 账号为例，按提示输入自己设置的数据库口令：
+**仓库与本地默认后端为 `backend-rust/`（Axum + SQLx）。** `backend/` 的 Java 实现已退出默认开发流程，保留源码与原运维文件供现有线上服务和回退参考；本次没有切换线上 API。
 
-```bash
-psql -h localhost -U postgres -d postgres -c "CREATE DATABASE lycoris;"
-```
-
-如果数据库已经存在，跳过建库。若要使用 PostGIS，先安装与 PostgreSQL 匹配的扩展包，再由有权限的账号执行；当前版本的地图查询不要求此扩展：
+从仓库根目录启动本地 PostgreSQL / PostGIS 与 Redis（需要 Docker），首次复制配置；已有 `.env` 时保留自己的配置：
 
 ```bash
-psql -h localhost -U postgres -d lycoris -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+docker compose -f backend-rust/compose.test.yml up -d
+python backend-rust/scripts/check-services.py
+cp backend-rust/.env.example backend-rust/.env
 ```
 
-Redis 可使用本机服务，或启动一个只绑定本机端口的开发容器：
+Windows PowerShell 可用 `Copy-Item backend-rust/.env.example backend-rust/.env` 完成首次复制。Python 使用 3.10 或更新版本；macOS / Linux 如只有 `python3`，将命令中的 `python` 替换为 `python3`。
+
+示例连接本机 `55432` 的 `lycoris_rust` 数据库与 `56379` 的 Redis。修改 `backend-rust/.env` 可选用自己的本地数据库和上传目录。新库第一次启动前显式执行迁移，然后启动服务：
 
 ```bash
-docker run --name lycoris-redis -p 127.0.0.1:6379:6379 -d redis:7-alpine
+python backend-rust/scripts/run-local.py --migrate
+python backend-rust/scripts/run-local.py
 ```
 
-如果已创建该容器，下次使用 `docker start lycoris-redis`。随后准备后端配置：
+日常只需第二条命令。启动器读取 `.env`，已有进程环境变量优先，并在正确的 Rust 工具链目录运行 `cargo run --locked`，默认使用 SQLx 离线元数据。首次运行会下载和编译依赖。
 
-```bash
-cd backend
-cp .env.example .env
-```
+默认服务地址为 `http://127.0.0.1:8080`；访问 `/health/ready` 检查数据库与 Redis 是否就绪，访问 `/api/markers/public` 查看 JSON。新开发库返回空列表正常。普通启动只检查迁移状态，不自动建表或修改结构；已有 Java 数据库应按 [Rust 基线接管说明](./backend-rust/README.md) 先检查和接管，不能当空库重复初始化。
 
-编辑 `backend/.env` 中的 `DB_URL`、`DB_USERNAME`、`DB_PASSWORD`，使它们对应自己的开发库；同时核对 `REDIS_HOST`、`REDIS_PORT` 和 `REDIS_PASSWORD`。不要沿用模板口令。
+Web 通过 Vite 的同源代理访问 `/api` 和 `/uploads`。示例 `WRITE_ALLOWED_ORIGINS` 允许本机 5173 端口；若 Vite 改端口或域名，需把实际页面来源加入白名单并重启 Rust，否则登录等写操作会被拒绝。原生 App 真机联调还需显式设置 `SERVER_HOST=0.0.0.0` 并使用电脑的局域网地址。
 
-- 将模板中的 `SPRING_SESSION_STORE_TYPE` 设为 `redis`，并保持 Redis 可连接。当前 Spring Boot 3.5 的会话自动配置不以该变量的 `none` 值作为禁用开关。
-- `MARKER_CACHE_REDIS_ENABLED` 和 `REGISTER_RATE_LIMIT_REDIS_ENABLED` 分别控制点位缓存与注册限流的 Redis 使用，不能关闭 Redis 会话。
-- 本地 HTTP 调试保留 `SERVER_SSL_ENABLED=false`、`SESSION_COOKIE_SECURE=false`、`SESSION_COOKIE_SAME_SITE=lax`，并将 CORS 来源保留为本地网页地址。
-
-**Spring Boot 和 Maven 不会自动读取 `.env`。** 以下命令显式将它作为 Java properties 导入；使用模板的 `KEY=value` 格式，值不额外包裹引号。操作系统环境变量也可提供这些配置。
-
-macOS / Linux：
-
-```bash
-./mvnw spring-boot:run '-Dspring-boot.run.arguments=--spring.config.import=optional:file:.env[.properties]'
-```
-
-Windows PowerShell：
-
-```powershell
-.\mvnw.cmd spring-boot:run '-Dspring-boot.run.arguments=--spring.config.import=optional:file:.env[.properties]'
-```
-
-首次运行会解析并下载后端依赖。默认监听 `http://localhost:8080`；可访问 `http://localhost:8080/api/markers/public` 检查 JSON 响应，空开发库返回空列表是正常的。
-
-上述命令使用默认 `application.yml`。仓库另提供可选的 `application-local.yml`，需要其本地限流等设置时，在启动命令后追加 `'-Dspring-boot.run.profiles=local'`。
-
-当前 `ddl-auto=update` 会为**空的开发库**创建实体表。已有数据库升级前先备份并停止旧后端，再按 [数据库迁移说明](./backend/deploy/migrations/README.md) 依次核对 `2026-09-05-bugfix-versions.sql` 和 `2026-09-06-marker-translations.sql`；这些脚本修改既有表，不能作为空库建表脚本。生产环境的约束、外键和索引应按迁移说明单独核对。
-
-后端检查和打包可在 `backend/` 执行 `./mvnw verify`（Windows 为 `.\mvnw.cmd verify`）。仓库的 `docker-compose.local.yml` 只定义后端和 Redis，仍依赖宿主机 PostgreSQL；它不是完整的数据库初始化方案。
+详细配置、测试命令和 Linux 发布演练说明见 [Rust 后端说明](./backend-rust/README.md)。`compose.test.yml` 是本地开发/测试依赖，`compose.release.yml` 是发布演练配置，均不作为线上部署命令。
 
 ### 3. 网页：安装依赖并启动
 
@@ -162,7 +137,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-按终端显示的地址打开网页，默认是 `http://localhost:5173`。Vite 将 `/api` 和 `/uploads` 代理到 `http://localhost:8080`；自定义代理目标时，在启动 Vite 的**进程环境**中设置 `VITE_BACKEND_URL`。若本机存在配置的 HTTPS 证书与私钥，Vite 会自动使用 HTTPS，以终端输出为准。
+按终端显示的地址打开网页，默认是 `http://localhost:5173`。Vite 将 `/api` 和 `/uploads` 代理到 `http://127.0.0.1:8080`；自定义代理目标时，在启动 Vite 的**进程环境**中设置 `VITE_BACKEND_URL`。若本机存在配置的 HTTPS 证书与私钥，Vite 会自动使用 HTTPS，以终端输出为准。
 
 构建和检查：
 

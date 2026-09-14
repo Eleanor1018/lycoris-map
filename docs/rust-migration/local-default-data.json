@@ -1,0 +1,75 @@
+{
+  "source": [
+    "lycoris-rust-rehearsal-pg18",
+    "lycoris_rehearsal_up"
+  ],
+  "target": [
+    "lycoris-rust-postgres",
+    "lycoris_local"
+  ],
+  "database": {
+    "tables": {
+      "map_markers": {
+        "count": 5007,
+        "md5": "953e18e2e45ed7a3fcf4ad80aeae650a"
+      },
+      "users": {
+        "count": 22,
+        "md5": "9e89ac114242bfa3465012d5d8c2a221"
+      },
+      "marker_favorites": {
+        "count": 186,
+        "md5": "96eaa118116be2ab47fbb795846fce0d"
+      },
+      "map_marker_translations": {
+        "count": 7501,
+        "md5": "91fce6456093a9f87047f92d50ef4fbd"
+      },
+      "marker_edit_proposals": {
+        "count": 18,
+        "md5": "40f59671d885de6e97f09d04da81a209"
+      },
+      "marker_image_proposals": {
+        "count": 22,
+        "md5": "19a1a75e43ea725584b2e18e36a00778"
+      },
+      "_sqlx_migrations": {
+        "count": 2,
+        "md5": "9308fc5ce832f96faeb05976717efb0b"
+      }
+    },
+    "sequences": [
+      {
+        "sequencename": "map_marker_translations_id_seq",
+        "last_value": 10001
+      },
+      {
+        "sequencename": "map_markers_id_seq",
+        "last_value": 5008
+      },
+      {
+        "sequencename": "marker_edit_proposals_id_seq",
+        "last_value": 18
+      },
+      {
+        "sequencename": "marker_favorites_id_seq",
+        "last_value": 186
+      },
+      {
+        "sequencename": "marker_image_proposals_id_seq",
+        "last_value": 22
+      },
+      {
+        "sequencename": "users_id_seq",
+        "last_value": 22
+      }
+    ]
+  },
+  "media_count": 158,
+  "media_manifest_sha256": "c2d3fe5c5d91031bd9af2e20048ae289c3bc7ca094ea8a8eb6c8ed86efc76b45",
+  "dump_sha256": "3d5718f4e1dfc117b2167971389a05f12bdff77718483384ed60caf675e5ebfa",
+  "source_unchanged": true,
+  "target_matches_source": true,
+  "uploads": "backend-rust/uploads/local-default",
+  "config": "backend-rust/.env"
+}

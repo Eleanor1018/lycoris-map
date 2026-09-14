@@ -51,9 +51,10 @@ If this small light helps someone through a difficult night, everything we have 
 Developer overview: [Architecture (Chinese)](./docs/architecture.md).
 
 - `frontend`: React and TypeScript
-- `backend`: Spring Boot and Java
+- `backend-rust`: Rust, Axum, and SQLx (default backend; no ORM)
+- `backend`: deprecated Java / Spring Boot source, retained for current production and rollback reference
 - `mobile`: React Native and TypeScript, with Android / iOS native bridges
-- Database: PostgreSQL, with optional PostGIS
+- Database: PostgreSQL with PostGIS; Redis for sessions, caching, and rate limiting
 
 ## License
 
@@ -61,89 +62,63 @@ This project is open source under the [MIT License](./LICENSE).
 
 ## Clone and initialize
 
-This is a monorepo: `backend`, `frontend`, and `mobile` are all in the same repository.
+This monorepo contains `backend-rust`, `frontend`, and `mobile`; `backend` holds the legacy Java implementation.
 
 ### 1. Prerequisites and source code
 
 | Component | Repository requirements |
 | --- | --- |
 | JavaScript | Node.js 22, at least 22.12.0, or Node.js 20, at least 20.19.4, with npm. These satisfy both Vite 7 and React Native 0.83.1. |
-| Backend | JDK 21 with `JAVA_HOME` configured. The Maven Wrapper downloads Maven 3.9.12 and project dependencies; a separate Maven installation is unnecessary. |
-| Database | PostgreSQL and the `psql` CLI; the examples use a database named `lycoris`. PostGIS is optional: current nearby queries use ordinary coordinate columns and SQL distance calculations. |
-| Cache and sessions | Redis, installed locally or started with the Docker example below. The current Spring Boot configuration automatically enables Redis sessions, so Redis is also required for this development setup. |
+| Backend | rustup with Rust 1.98.1 pinned in `backend-rust/rust-toolchain.toml`; Python 3.10+ for the launcher. Native Windows builds require Visual Studio C++ Build Tools. JDK/Maven are no longer backend requirements; Android builds still need their Java toolchain. |
+| Database | Local Compose pins PostgreSQL 18.6 with PostGIS 3.6.4. Nearby queries use PostGIS candidate filtering and distance calculation. |
+| Cache and sessions | Local Compose pins Redis 8.10.1. Login sessions require Redis. |
 | Android | Android Studio, Android SDK Platform 36, Build-Tools 36.0.0, NDK 27.1.12297006, and an emulator or an Android device with USB debugging enabled. |
 | iOS | macOS, full Xcode, Ruby/Bundler, and CocoaPods. See the [iOS guide](./mobile/IOS.md) for detailed requirements. |
 
-The examples check out `feature/ui-redesign`, which contains the features described in this README:
+The examples check out `refactor/rust-backend`, which contains the features described in this README:
 
 ```bash
-git clone --branch feature/ui-redesign https://github.com/Eleanor1018/lycoris.git
-cd lycoris
+git clone --branch refactor/rust-backend https://github.com/Eleanor1018/lycoris-map.git
+cd lycoris-map
 ```
 
 For an existing checkout, switch to that branch and update it. Install dependencies and configure each machine separately; do not copy `node_modules` from another computer.
 
 ```bash
-git switch feature/ui-redesign
+git switch refactor/rust-backend
 git pull
 ```
 
 Start each section below from the repository root. Keep the backend, web server, and Metro running in separate terminals.
 
-### 2. Backend: database, configuration, and dependencies
+### 2. Backend: Rust, database, and local startup
 
-Start PostgreSQL and create a local development database using an account with permission to create databases. This example uses the local `postgres` account; enter your own database password when prompted:
+**`backend-rust/` (Axum + SQLx) is the repository and local default.** The Java implementation in `backend/` is deprecated for new development. Its source and operations files remain available for the existing production service and rollback reference. This change does not switch the production API.
 
-```bash
-psql -h localhost -U postgres -d postgres -c "CREATE DATABASE lycoris;"
-```
-
-Skip this command if the database already exists. To use PostGIS, first install the extension package matching your PostgreSQL installation, then run the following with an authorized database account. Current map queries do not require the extension:
+From the repository root, start PostgreSQL / PostGIS and Redis with Docker. Copy the environment template only on first setup; preserve an existing `.env`:
 
 ```bash
-psql -h localhost -U postgres -d lycoris -c "CREATE EXTENSION IF NOT EXISTS postgis;"
+docker compose -f backend-rust/compose.test.yml up -d
+python backend-rust/scripts/check-services.py
+cp backend-rust/.env.example backend-rust/.env
 ```
 
-Use a local Redis service, or start a development container bound only to the local interface:
+On Windows PowerShell, use `Copy-Item backend-rust/.env.example backend-rust/.env` for the initial copy. Use Python 3.10 or later; replace `python` with `python3` on systems that use that executable name.
+
+The template uses the local `lycoris_rust` database on port `55432` and Redis on `56379`. Edit `backend-rust/.env` to select another local database or upload directory. Explicitly migrate a new database once, then start the service:
 
 ```bash
-docker run --name lycoris-redis -p 127.0.0.1:6379:6379 -d redis:7-alpine
+python backend-rust/scripts/run-local.py --migrate
+python backend-rust/scripts/run-local.py
 ```
 
-If the container already exists, use `docker start lycoris-redis` next time. Prepare the backend configuration:
+Use only the second command for daily development. The launcher loads `.env`, gives existing process environment variables precedence, and runs `cargo run --locked` in the pinned Rust toolchain directory with SQLx offline metadata enabled by default. The first run downloads and compiles dependencies.
 
-```bash
-cd backend
-cp .env.example .env
-```
+The default address is `http://127.0.0.1:8080`. Check `/health/ready` for database and Redis readiness, or `/api/markers/public` for JSON; an empty list is normal for a new database. Normal startup checks migration state without changing the schema. Existing Java databases require the [Rust baseline check and adoption procedure](./backend-rust/README.md) before migration.
 
-Edit `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD` in `backend/.env` for your development database, and check `REDIS_HOST`, `REDIS_PORT`, and `REDIS_PASSWORD`. Replace the template password with your own.
+Web requests to `/api` and `/uploads` use the Vite same-origin proxy. The template's `WRITE_ALLOWED_ORIGINS` allows local port 5173. Add the actual page origin and restart Rust if the Vite port or hostname changes; otherwise browser writes, including login, are rejected. For native clients on physical devices, explicitly set `SERVER_HOST=0.0.0.0` and use the computer's LAN address.
 
-- Set the template's `SPRING_SESSION_STORE_TYPE` to `redis` and keep Redis reachable. The current Spring Boot 3.5 session auto-configuration does not treat this variable's `none` value as a disable switch.
-- `MARKER_CACHE_REDIS_ENABLED` and `REGISTER_RATE_LIMIT_REDIS_ENABLED` control Redis use for place caching and registration rate limiting, respectively; they do not disable Redis sessions.
-- For local HTTP development, keep `SERVER_SSL_ENABLED=false`, `SESSION_COOKIE_SECURE=false`, and `SESSION_COOKIE_SAME_SITE=lax`, with your local web origin allowed by CORS.
-
-**Spring Boot and Maven do not automatically load `.env`.** These commands explicitly import it as a Java properties file. Use the template's `KEY=value` format without additional quotes around values. Operating-system environment variables can also provide these settings.
-
-macOS / Linux:
-
-```bash
-./mvnw spring-boot:run '-Dspring-boot.run.arguments=--spring.config.import=optional:file:.env[.properties]'
-```
-
-Windows PowerShell:
-
-```powershell
-.\mvnw.cmd spring-boot:run '-Dspring-boot.run.arguments=--spring.config.import=optional:file:.env[.properties]'
-```
-
-The first run downloads the backend dependencies. The default address is `http://localhost:8080`. Open `http://localhost:8080/api/markers/public` to check for a JSON response; an empty list is normal for a new development database.
-
-These commands use the default `application.yml`. The repository also provides an optional `application-local.yml`; append `'-Dspring-boot.run.profiles=local'` to the startup command when you want its local rate-limit and related settings.
-
-The current `ddl-auto=update` setting creates entity tables in an **empty development database**. Before upgrading an existing database, back it up and stop the old backend. Then follow the [database migration guide](./backend/deploy/migrations/README.md), checking `2026-09-05-bugfix-versions.sql` before `2026-09-06-marker-translations.sql`. These scripts alter existing tables and are not an empty-database schema installer. Check production constraints, foreign keys, and indexes separately as described in the migration guide.
-
-Run `./mvnw verify` from `backend/` to check and package the backend, or `.\mvnw.cmd verify` on Windows. The repository's `docker-compose.local.yml` defines only the backend and Redis; PostgreSQL must already be running on the host. It does not initialize the entire database environment.
+See the [Rust backend guide](./backend-rust/README.md) for configuration, tests, and Linux release rehearsal. `compose.test.yml` supplies local development/test dependencies; `compose.release.yml` is a release rehearsal configuration. Neither is a production deployment command.
 
 ### 3. Web: install dependencies and start Vite
 
@@ -161,7 +136,7 @@ Edit `frontend/.env.local`, keeping `VITE_API_BASE_URL=` empty for local develop
 npm run dev
 ```
 
-Open the address printed in the terminal, normally `http://localhost:5173`. Vite proxies `/api` and `/uploads` to `http://localhost:8080`. To change the proxy target, set `VITE_BACKEND_URL` in the **environment of the process that starts Vite**. If the configured local certificate and key files exist, Vite automatically uses HTTPS; follow the address printed in the terminal.
+Open the address printed in the terminal, normally `http://localhost:5173`. Vite proxies `/api` and `/uploads` to `http://127.0.0.1:8080`. To change the proxy target, set `VITE_BACKEND_URL` in the **environment of the process that starts Vite**. If the configured local certificate and key files exist, Vite automatically uses HTTPS; follow the address printed in the terminal.
 
 Build and lint:
 
