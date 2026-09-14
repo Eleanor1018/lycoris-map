@@ -1,0 +1,25 @@
+# Lycoris 阶段 4 演练用 PG17.11 + PostGIS 3.6.4 来源/回退镜像（精简）。
+#
+# 依据
+#   - base digest 由温晓核对并拉取：postgres:17.11-bookworm@sha256:051f7b7b…（本地已打 tag）。
+#   - PGDG 候选 postgresql-17-postgis-3 = 3.6.4+dfsg-2.pgdg12+1（温晓 apt-cache policy 证实）。
+#   - 只安装应用真正需要的 postgis 扩展；不默认 topology/tiger/geocoder，
+#     避免为旧 17.5/3.5 fixture 引入扩展配置表排除逻辑。
+#
+# 可覆写：--build-arg PG_BASE=<同 digest 可信镜像源>（例如 docker.m.daocloud.io 前缀）。
+
+ARG PG_BASE=postgres:17.11-bookworm@sha256:051f7b7b3abdd564d5d1bd1e8c4b9c1b6e77087d1dd22020ede611c096a272e0
+FROM ${PG_BASE}
+
+ARG POSTGIS_PKG_VERSION=3.6.4+dfsg-2.pgdg12+1
+
+USER root
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        "postgresql-17-postgis-3=${POSTGIS_PKG_VERSION}" \
+        "postgresql-17-postgis-3-scripts=${POSTGIS_PKG_VERSION}"; \
+    rm -rf /var/lib/apt/lists/*
+
+# 仅创建 postgis 扩展（应用真正需要的）；不使用扩展的 topology/tiger。
+COPY pg17-init/10-postgis-only.sql /docker-entrypoint-initdb.d/10-postgis-only.sql

@@ -13,6 +13,6 @@ compose.override.yml
 *.log
 /tmp/
 
-# Python 测试缓存（scripts/ 下的边界自测）
+# Python 测试/演练工具编译缓存（scripts/ 边界自测与演练工具，不提交）
 __pycache__/
 *.pyc
