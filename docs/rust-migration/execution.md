@@ -175,3 +175,10 @@ Nora 于 2026-09-14 授权完成计划阶段 0、0.5、1、2、3。分支 `refac
 - 温晓直接运行该 release 镜像，经真实 TCP 独立执行原阶段三契约流程，**43 个接口模板、64 条断言全部通过**，报告 `work/stage4-http-report.json`。复核脚本保留原 64 条断言，记录原始脚本 SHA-256 与本次镜像 ID。
 - 温晓另建 UUID 合成库，在真实 release 服务外持有点位表排他锁：GET 与 PATCH 均返回 503，带允许来源 CORS 与服务端 UUID；两次超时合计 0.324 秒。失败 PATCH 后原版本和内容不变；解锁后 PATCH 与 GET 均 200，共 7 条检查通过。首次审核夹具漏填非空 `last_edited_by_owner` 导致建数失败，修正夹具后通过，未改产品；失败与通过报告分别保存在 `work/stage4-timeout-http-fixture-failure.json`、`work/stage4-timeout-http.json`。
 - 上述均为本地合成环境验收。完整应用/数据库切换、客户端与公平性能矩阵继续执行，尚未据此标记阶段 4 完成。
+
+### 阶段 4：既有 Web / Android 客户端独立验收
+
+- 温晓直接操作既有 Web 与 Android 客户端，API 使用本地合成演练的 Rust(PG18) g6。真实登录、发现列表、类别/图片筛选、搜索、点位图片、地图点位跳转均通过；Web 新增的收藏与修改的签名在 Android 实际读到，地图弹窗显示 Saved。
+- Web OSM 底图和点位弹窗实际显示，导航链接目标坐标核对正确。Android 使用占位测试地图配置，底图瓦片未显示；点位覆盖层、弹窗、照片和收藏状态正常。未启动真实外部导航。
+- 原 Android debug APK 构建成功，既有 Jest 完整套件 19 suites / 123 tests 通过。第一次负载较高时有一项超时，保留失败记录；停止本任务模拟器与 Metro 后完整重跑通过。设备流程另行真实操作，没有以构建或单元测试代替。
+- 详见 [客户端记录](stage4-clients.md)。23 份原始日志、JSON、XML 与截图已归档到本地任务 `outputs/rust-migration-verification/stage4/`，逐文件 SHA-256 清单为 `accepted-evidence-manifest.json`。本次只提交验收文档；完整回退补充矩阵与性能仍待完成，阶段 4 未完成、未推送。
