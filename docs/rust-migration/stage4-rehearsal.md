@@ -300,6 +300,45 @@ Java back 读写 → 再留 Rust(PG18)；generation 严格递增，不从旧 see
 - `uidcheck`：卷已存在拒绝复用；只清理本次创建的卷，清理失败报告；世界可写按 `mode & 0o002` 判断；
   校验写入/互读/stat 退出码。
 
+## 补充矩阵实跑（2026-09-14，Docker 恢复后）
+
+首轮矩阵在**真实 en 译文、收藏显式核验、PG17 back 读取**上有缺口；本轮已用修正后工具实跑补齐。
+起点实际状态：run `55a35afa4465`、Rust(PG18) g6、入口 Rust；合成用户 2 签名 `Rust stage 4 Web review`、
+收藏 369 均在 `_up`。不 reseed、不覆盖第一轮报告（新报告自动 `-N`）。
+
+| generation | 步骤 | 报告 | 结果 |
+| --- | --- | --- | --- |
+| rust g6 | `flow rust-writes` | `flow-rust-writes-2.json` | Rust 新建账号+改密、新点位、真实 **en 译文提案+审批**、中文源文、显式收藏、头像、512 点位图片；严格记录 en translationId/sourceHash、zh/en 内容、URL+sha256 |
+| java g7 | `switch --to java --db pg18` | `switch-java-g7-2.json` | 旧 Cookie 重放 `[401,401,401,401,401]`（含最初 Java g1） |
+| java g7 | `flow rollback-verify` | `flow-rollback-verify-2.json` | Java 用 Rust 改密账号**真实登录**；`/api/me` publicId/avatarUrl 与记录严格相等；zh/en 精确内容、`markImage==已审批URL`、收藏含目标 id、媒体 sha256 一致；继续 Java 写入 |
+| — | `db-rollback --recreate` | `db-rollback-5.json` | 冻结两写者后 PG18 最新**原样** dump 恢复新 PG17 `back`（`restoreMode=raw`）；六表/序列指纹与媒体 sha256 一致（**比较时点 t0 = 恢复瞬间，早于后续 back 写入**） |
+| java g8 | `switch --to java --db back` | `switch-java-g8.json` | 旧 Cookie 重放 `[401,401,401,401,401]` |
+| java g8 | `flow db-final-verify` | `flow-db-final-verify.json` | Java(PG17 back) 真实登录 Rust 改密账号，核对 Rust 全部新数据/译文/收藏/媒体/身份后**继续写入**（新点位+审批+收藏） |
+| rust g9 | `switch --to rust` | `switch-rust-g9.json` | 最终入口 Rust(PG18)；旧 Cookie 重放 `[401,401,401,401,401,401]` |
+| — | `uid-check` | `uid-check-3.json` | 独占 Linux 命名卷：Java/Rust 镜像同 UID10001 互写互读，mode 644（非 777），卷名守卫与仅清理本次创建 |
+| — | `probe` | `probe-3.json` | health 200 / me 401 / nearby 200 |
+
+### 最终数据与数据库选择
+
+- 活动数据库（入口 Rust g9）：**PG18 `lycoris_rehearsal_up`**，计数 users 22、markers 5006、
+  translations 7501、favorites 186、image_proposals 22；Web 合成用户 2 签名与收藏 369 保留。
+- PG17 `lycoris_rehearsal_back`：计数 users 22、markers 5007、favorites 187（比 up 多 1 点位/1 收藏，
+  来自 `db-final-verify` 在 back 上的**恢复后**继续写入）。
+- **指纹比较时点**：`db-rollback-5` 在 t0（恢复完成瞬间）核对 PG18 up 最新状态与 back 一致；
+  之后 Java back 继续写入使 back 与 up 产生差异是预期行为。矩阵完成后活动库选择 up（Rust g9），
+  back 保留其自身后续写入，两者**不再完全相同**。
+- en 译文证据：`map_marker_translations` 该新译文行 language=en（如 id 10001）含真实 source_hash，
+  记录在 `flow-rust-writes-2.json`；zh 源文与 en 译文经 Rust/Java(PG18)/Java(PG17 back) 三处真实 HTTP 读取。
+
+### 工具小修（本轮）
+
+- `http_flows`：en 译文提案+审批与 en/zh 内容断言、translationId/source_hash 只读记录、显式收藏、
+  `/api/me` 与 `markImage` 严格 URL 相等、媒体 URL/hash 必需（缺即失败）；`db-final-verify` 复用并继续写入。
+- `bench_core`：PG 连接采样（client backend，排除自身，active/nonActive）；各比较指标零有效样本即失败、
+  部分缺失记 `sampleCounts/missingCounts`；PG 失败计数；`stop_collect` join 上限覆盖两次 exec。
+- `benchmark-http`：`--out` 既存在负载前拒绝，默认报告同名 `-N`；预热 `min(2,--concurrency)` 且零成功拒绝。
+- `uidcheck`：预存在卷拒绝、仅清理本次创建、`mode & 0o002` 判世界可写、退出码校验。
+
 ## 交付物
 
 `backend-rust/rehearsal/`：`guard.py`、`common.py`、`switching.py`、`db_rehearsal.py`、
@@ -336,10 +375,10 @@ Java back 读写 → 再留 Rust(PG18)；generation 严格递增，不从旧 see
 
 ## 当前待补（不得记为通过）
 
-- **真实 en 译文/收藏补充矩阵**：首轮 `rust-writes` 实际只验证原文(zh)编辑，未新增 en 译文；
-  补充矩阵（用修正后 `rust-writes` 新建账号/改点/en 译文审批/收藏/媒体，再 Java PG18→PG17 back 读取）
-  **本轮尚未执行**，待 Docker 引擎恢复后运行。
-- **正式性能矩阵**（idle/warm read/login/upload × 两后端 × 3 轮，配对基线快照/恢复）：未执行。
+- ~~真实 en 译文/收藏补充矩阵~~：**已执行**（见「补充矩阵实跑」，报告 `flow-rust-writes-2`、
+  `flow-rollback-verify-2`、`db-rollback-5`、`flow-db-final-verify` 等）。
+- **正式性能矩阵**（idle/warm read/login/upload × 两后端 × 3 轮，配对基线快照/恢复）：**未执行**，
+  待温晓安静窗口授权；不自行开始，另一工作树仍在小规模编译/测试。
 
 ## 路由/路径更正
 
