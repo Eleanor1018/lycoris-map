@@ -50,8 +50,12 @@ COPY scripts ./scripts
 FROM source AS builder
 
 # 依赖下载只写入构建缓存挂载，不进入最终镜像层；`--locked` 严格按 Cargo.lock 构建。
-RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
-    cargo build --release --locked --bin lycoris-backend
+# `/app/target` 挂载为专用 BuildKit 缓存供后续增量编译（RUN 结束即卸载、不进入镜像层），
+# 因此同一步把 release 二进制复制到缓存之外的 `/out`，供 runtime 阶段 COPY。
+RUN --mount=type=cache,id=lycoris-rust-release-builder-target,target=/app/target,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    cargo build --release --locked --bin lycoris-backend \
+    && install -D -m 0755 /app/target/release/lycoris-backend /out/lycoris-backend
 
 # ---------------------------------------------------------------------------
 FROM source AS test
@@ -81,7 +85,7 @@ RUN set -eux; \
     install -d -o "${APP_UID}" -g "${APP_GID}" -m 0750 /var/lib/lycoris/uploads; \
     mkdir -p /etc/ssl/certs
 
-COPY --from=builder /app/target/release/lycoris-backend /usr/local/bin/lycoris-backend
+COPY --from=builder /out/lycoris-backend /usr/local/bin/lycoris-backend
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 # 监听与目录默认值：容器内必须监听所有接口；上传目录为持久卷挂载点。

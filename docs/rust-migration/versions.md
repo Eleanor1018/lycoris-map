@@ -810,7 +810,8 @@ powershell -NoProfile -Command "$env:RUST_TEST_THREADS='2'; & backend-rust/scrip
 来源：官方 registry 公共 manifest 经 SHA256 核对；BuildKit 在受限网络下对镜像站直接 HEAD 会
 回 401（不代表不存在），本次实际构建以本地已按 digest 缓存的镜像完成，未使用旧镜像冒充。
 
-实际构建与测试（2026-09-14，Windows Docker Desktop，Linux 容器；仅回环合成服务）：
+早期构建与测试（2026-09-14 第一轮，Windows Docker Desktop，Linux 容器；仅回环合成服务；
+旧记录，已被下方“整合后最终发布验收”取代，保留作历史）：
 
 ```
 docker compose -f backend-rust/compose.release.yml build app test
@@ -855,6 +856,27 @@ python backend-rust/scripts/verify-release-linux.py --build --test-count 171 \
 温晓独立复跑：第三轮 Python 边界测试 10/10 通过，随后运行发布验收工具，无重建、无人工填写
 测试计数；健康探针、非 root/只读根、持久卷写入及重启保留、SIGTERM 0、不可写目录负向原因均
 通过。独立 JSON 保存在本地任务 `work/stage4-release-independent.json`，阶段最终归档时收录。
+
+#### 整合后最终发布验收（2026-09-14；发布基础 / 运行参数 / 入口 CLI 整合后）
+
+```
+docker compose -f backend-rust/compose.release.yml build app negative test
+docker compose -f backend-rust/compose.release.yml run --rm test
+python backend-rust/scripts/verify-release-linux.py \
+  --evidence docs/rust-migration/release-linux-evidence.json --test-count 216
+```
+
+- Linux 全量：**216** 项通过、0 失败 0 跳过（61 单元含 9 项健康检查 + 28 认证 + 28 基线与 CLI +
+  5 数据库运行参数 + 11 基础集成 + 8 点位 HTTP + 17 公开读取 + 17 写入事务 + 16 媒体存储 +
+  8 媒体业务 + 17 媒体 HTTP）；`cargo fmt`、离线 `cargo check --all-targets`、
+  `cargo clippy -D warnings` 均通过；`RUST_TEST_THREADS=2`/`CARGO_BUILD_JOBS=2`，单次串行，无重跑掩盖。
+- 最终 app 镜像 `sha256:51776d6b…`（linux/amd64），release 二进制 `sha256:1be6aa15…`；稳定本机标签由
+  标准命令添加：`docker tag lycoris-rust-release-app:local lycoris-rust-stage4:local`。
+- 运行验收：guard、`--migrate`（仅合成 `lycoris_rust`）、只读根/cap_drop ALL/no-new-privileges/
+  tmpfs、非 root、`--healthcheck`（ready 与 public read）、上传卷写读与重启持久、SIGTERM 退出 0、
+  负向退出 1 且原因 `无法准备上传根目录` 均通过；默认保留上传/测试缓存卷。
+- 边界：以上仅为本地 Linux 合成环境验收，**不代表阶段 4 全部完成或生产已部署**；真实前后端流程、
+  性能测量、切换/回退与生产切流另行记录。
 
 剩余项/边界：
 
