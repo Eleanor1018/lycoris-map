@@ -1,0 +1,36 @@
+{
+  "task": "stage4-linux-release-basics",
+  "project": "lycoris-rust-release",
+  "targets": {
+    "database_host": "host.docker.internal",
+    "database_port": 55432,
+    "database_name": "lycoris_rust",
+    "redis_host": "host.docker.internal",
+    "redis_port": 56379
+  },
+  "test_count": 171,
+  "checks": {
+    "app_image_id": "sha256:5d2fcb91a50a17e1b92337e154eb188fbd49ec684b4c06a3452805cd68cfc893",
+    "negative_image_id": "sha256:4246992b7b59cbbead2c7ad9882cf1ac9603167b3e7b0d34652e29c51c8ba7f3",
+    "runner_guards": "ok",
+    "migrate": "lycoris_rust only",
+    "container_id": "d30fb9177edb8faad723dfb86b20f07239dbd341f3ef8bb9f6ddf9cfab4ec7ba",
+    "readonly_rootfs": true,
+    "cap_drop_all": true,
+    "no_new_privileges": true,
+    "tmpfs_tmp": true,
+    "healthcheck_ready": "ok",
+    "healthcheck_public_read": "ok",
+    "uid": "10001",
+    "gid": "10001",
+    "binary_sha256": "6b31407c7424deaaa7d416b91e703cbd9ef81e024a73df03743ae5463cd7da1d",
+    "readonly_root_write_denied": true,
+    "uploads_writable": true,
+    "sigterm_exit_code": 0,
+    "upload_persisted_after_restart": true,
+    "negative_failed_exit_code": 1,
+    "negative_reason": "无法准备上传根目录",
+    "result": "ok"
+  },
+  "removed_volumes": []
+}

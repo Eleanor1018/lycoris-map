@@ -7,6 +7,7 @@
 //! - [`cli`]：命令行参数解析（互斥、拒绝未知参数）；
 //! - [`config`]：环境变量配置，错误信息不泄露连接串密码；
 //! - [`error`]：显式的四类响应体与错误类型；
+//! - [`healthcheck`]：容器健康检查/探针（标准库 HTTP GET，不读取数据库配置）；
 //! - [`media`]：图片存储与读取核心（头像/点位图片共用，不含路由与授权）；
 //! - [`multipart`]：上传用的 multipart 读取辅助与媒体错误映射；
 //! - [`migrate`]：内嵌迁移基线与启动只读校验；
@@ -26,6 +27,7 @@ pub mod cli;
 pub mod config;
 pub mod dto;
 pub mod error;
+pub mod healthcheck;
 pub mod media;
 pub mod migrate;
 pub mod modules;

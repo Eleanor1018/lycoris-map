@@ -761,6 +761,116 @@ powershell -NoProfile -Command "$env:RUST_TEST_THREADS='2'; & backend-rust/scrip
   Migrator，在 `ensure_migrations_table` 之后确定性失败，断言 `_sqlx_migrations` 不存在且业务
   行/序列不变。
 
+### 阶段 4：Linux 发布基础（2026-09-14，工作树 `work/rust-release-20260914`，起点 `d780e58`）
+
+本改动实现阶段 4 第 1 项：可复现的 Linux release 容器与可实际执行的 Linux 验收入口。范围仅
+`backend-rust/` 与 `docs/rust-migration/`；未改 Java/前端/服务器/生产备份/真实 uploads，未
+`add`/`commit`/`push`。未操作 `lycoris-restore-review`、roboparty 或恢复库；Docker 仅操作
+`lycoris-rust-release*` 前缀的项目、容器、网络与卷。
+
+新增/修改：
+
+- `backend-rust/Dockerfile`：四阶段 `source`/`builder`/`test`/`runtime`。builder 固定
+  `rust:1.98.1-slim-trixie` + `SQLX_OFFLINE=true` + `cargo build --release --locked --bin` +
+  `CARGO_BUILD_JOBS=2`；runtime 基于 `debian:trixie-slim`，`USER 10001:10001`，只复制 release
+  二进制与系统 CA；`[profile.release] strip = true`，不启用 `panic=abort`、不设 `target-cpu=native`。
+- `backend-rust/.dockerignore`：排除 `uploads/`、`.env`、`target/`、备份与仓库元数据。
+- `backend-rust/src/healthcheck.rs`（新）：`--healthcheck [path]` 标准库 HTTP 探针。**只取首个 `LF`
+  之前**的状态行（要求状态行完整结束），版本严格 `HTTP/1.0|HTTP/1.1` + 3 位状态码，2xx 才通过；
+  状态行之后的二进制响应体不参与 UTF-8 解析；连接、写、读共用同一 3s deadline（写超时取剩余时间）；
+  可选路径拒绝空白/控制符与超长并补前导 `/`；非法 `SERVER_PORT` 直接失败、不静默回落；含 9 项纯本地 TCP 单测。
+- `backend-rust/src/main.rs` / `src/lib.rs`：在装配配置前处理 `--healthcheck`，保持独立、不侵入迁移。
+- `backend-rust/scripts/run-linux-tests.sh`（新）：容器内 Linux 测试运行器，顺序
+  `cargo fmt --all -- --check` → `SQLX_OFFLINE=true cargo check --all-targets --locked` →
+  `cargo clippy --all-targets --locked -- -D warnings` → `cargo test --locked`。**固定合成 fixture 安全
+  边界**：监听 `127.0.0.1:55432/:56379`、上游 `host.docker.internal:55432/:56379`、测试 URL 固定回环，
+  任何其它 host/port/query/监听/URL 覆写在**任何网络访问与 DDL 之前**失败；`RUST_TEST_THREADS`/
+  `CARGO_BUILD_JOBS` 只接受 1 或 2（未设置默认 2，拒绝 0/非法/超出）；`--check-config` 只做校验。
+- `backend-rust/scripts/tcp-forward.rs`（新）：仅标准库 TCP 回环转发器（`rustc -O` 编译，无 apt）。
+  转发器**自身强制**回环监听与固定上游（`host.docker.internal` 的 55432/56379，端口须一致）。
+- `backend-rust/scripts/test-runner-guards.sh`（新）：边界小测试，用 `--check-config` 与非法转发器
+  配置证明非法上游/监听/并发在任何网络或 DDL 前失败。
+- `backend-rust/compose.release.yml`（新）：本地演练，`read_only`、`tmpfs /tmp`、`cap_drop ALL`、
+  `no-new-privileges`、上传命名卷、回环端口 `127.0.0.1:18091`；仅复用合成 PG55432/Redis56379。
+  test 服务挂载本项目专用增量缓存卷 `lycoris-rust-release-test-target` 与
+  `lycoris-rust-release-test-cargo-registry`（不与其它工作树共享 target/registry）。
+- `backend-rust/scripts/verify-release-linux.py`（新）：宿主侧运行验证。执行任何 compose/`--migrate`
+  前先校验目标只指向合成 fixture（无 query/fragment/覆写）；负向前确认镜像与依赖就绪并要求失败原因
+  匹配上传目录不可写；默认只 `down` 保留卷，`--remove-test-volumes` 才删精确自有卷；错误脱敏；
+  可写 JSON 证据。
+
+镜像 digest（温晓经官方 registry Bearer manifest 核对；Dockerfile/compose 默认 `tag@digest`，
+受限网络用同 digest 镜像站覆盖）：
+
+| 镜像 | 官方 manifest digest | linux/amd64 |
+| --- | --- | --- |
+| `rust:1.98.1-slim-trixie` | `sha256:ce84a5edd80c5f91e05c5533b1e53eb1da54028f33734dc06aa6b49fa190462d` | `sha256:a2de23e559fd8afd260d22beb00f3987073ea0dcc2ba2646cccdaeda6a62a095` |
+| `debian:trixie-slim` | `sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132` | `sha256:abc9cb88a5587630d7f915f47b23b0668fe250fbfc6457aa4d52b534c1bbf73f` |
+
+来源：官方 registry 公共 manifest 经 SHA256 核对；BuildKit 在受限网络下对镜像站直接 HEAD 会
+回 401（不代表不存在），本次实际构建以本地已按 digest 缓存的镜像完成，未使用旧镜像冒充。
+
+实际构建与测试（2026-09-14，Windows Docker Desktop，Linux 容器；仅回环合成服务）：
+
+```
+docker compose -f backend-rust/compose.release.yml build app test
+docker compose -f backend-rust/compose.release.yml run --rm test
+docker compose -f backend-rust/compose.release.yml run --rm --entrypoint bash test \
+  /app/scripts/test-runner-guards.sh
+python backend-rust/scripts/verify-release-linux.py --build --test-count 171 \
+  --evidence docs/rust-migration/release-linux-evidence.json
+```
+
+结果：
+
+- release 构建：`cargo build --release --locked` 成功（首轮约 5m34s，`CARGO_BUILD_JOBS=2`）；
+  runtime 镜像 `Config.User=10001:10001`、ENTRYPOINT 为二进制、`HEALTHCHECK` 为 `--healthcheck`。
+  本轮 app 镜像 `sha256:5d2fcb91a50a17e1b92337e154eb188fbd49ec684b4c06a3452805cd68cfc893`，
+  release 二进制 `sha256:6b31407c7424deaaa7d416b91e703cbd9ef81e024a73df03743ae5463cd7da1d`。
+- 运行器边界 guard：`test-runner-guards.sh` 15 项全部通过（非法上游/带 query/其它端口/非回环监听/
+  测试 URL 覆写、线程 0/3/abc、非法 `CARGO_BUILD_JOBS`、转发器三类非法配置，均在网络/DDL 前失败）。
+- Linux 全量测试：**171** 项通过、0 失败 0 跳过（**51** 单元含 **9** 项健康检查 + 28 认证 +
+  9 基础集成 + 8 点位 HTTP + 17 公开读取 + 17 写入事务 + 16 媒体存储 + 8 媒体业务 + 17 媒体 HTTP），
+  `RUST_TEST_THREADS=2`；`cargo fmt`、离线 `cargo check --all-targets`、`cargo clippy -D warnings` 均通过。
+  复跑验证增量缓存：第二次 `cargo check`/`clippy`/`test` 分别 0.40s/0.25s/0.38s（无重编译）。
+  记录一次复跑偶发失败并定位（2026-09-14）：第二次全量中
+  `migrate_cli_applies_baseline_to_empty_database` 失败，断言位于 `tests/integration.rs:275`
+  且只打印子进程 **stderr**；而 `lycoris-backend` 的 tracing 默认写 **stdout**，故错误正文未显示。
+  定位证据：用已构建的 release 二进制对 5 个全新合成库直接执行 `--migrate`，**5/5 退出码 0**，
+  日志均为 `配置加载完成` → `迁移完成`（每个约 0.8s）；SQLx 0.9.0 的 Postgres migrator 加锁为
+  `SELECT pg_advisory_lock($1)`（源码注释明确“不会返回直到获得锁”），且锁 id 由**当前数据库名**
+  CRC 生成（`sqlx-postgres-0.9.0/src/migrate.rs`），因此跨库并发不会互斥、锁等待只会阻塞而不会
+  快速失败。这些证据不能确定该次非零退出的根因，也不足以排除产品缺陷。失败时另一工作树
+  `rehearsal-*` 栈正在运行，集成套件耗时 30.28s（正常约 5s），资源或连接争用是待验证的解释。
+  宿主物理内存约 16 GiB、Docker VM 配额 8 GiB，合成 PG 限额 1 GiB。5 次直连未复现，第三次
+  全量 171/171 通过。整合验收将串行跑完整门禁，并补齐失败时子进程 stdout/stderr 诊断。
+- 运行验证（`scripts/verify-release-linux.py --build --test-count 171 --evidence …`）：目标校验通过；
+  容器 `healthy`；`/health/ready` 与 `/api/markers/public` 探针通过；`uid=10001 gid=10001`；
+  只读根不可写、上传卷可写；`stop`（SIGTERM）后退出码 0；重启后停机前写入的上传文件仍可读；
+  负向（只读根且 `UPLOAD_DIR` 不可创建）退出码 1，原因匹配 `无法准备上传根目录`。
+  JSON 证据：`docs/rust-migration/release-linux-evidence.json`。
+- runtime 镜像内容核对：无 `/app`、无 `target/`、无 `.env`，`/var/lib/lycoris/uploads` 属主为
+  `lycoris:lycoris`（10001:10001）。
+
+温晓独立复跑：第三轮 Python 边界测试 10/10 通过，随后运行发布验收工具，无重建、无人工填写
+测试计数；健康探针、非 root/只读根、持久卷写入及重启保留、SIGTERM 0、不可写目录负向原因均
+通过。独立 JSON 保存在本地任务 `work/stage4-release-independent.json`，阶段最终归档时收录。
+
+剩余项/边界：
+
+- Linux 侧仅执行离线 SQLx 编译与全部 `cargo test`；SQLx CLI 0.9.0 的**在线**元数据
+  `cargo sqlx prepare --check` 仍由 Windows `check-rust.ps1` 门禁补充。
+- `compose.release.yml` 为本地演练，不是正式生产配置；生产卷授权、TMPDIR、密钥与迁移策略另定。
+- 已有库接管、PG 大版本升级、性能测量属阶段 4 其它子项，不在本记录范围。
+
+### 阶段 4 发布入口整合验收
+
+发布基础与基线接管合并后，命令行由同一解析器分发；健康检查不再通过扫描参数绕过互斥检查。
+苏瑶完成 `--healthcheck [path]`、重复/冲突/多余参数测试，并为迁移 CLI 失败增加退出码及
+stdout/stderr 诊断。无数据库配置时帮助和探针均按各自模式工作。苏瑶实测：57 项单元、9 项基础
+集成、28 项基线接管（含新增 3 项二进制命令测试）通过，fmt/clippy/离线 check 通过。
+温晓独立复跑 6 项 CLI 单元及 2 项二进制健康检查用例通过；该轮未重复整套门禁，待运行参数整合。
+
 ## 备注
 
 第二轮收尾后新增 2 项，测试集合共 191 项；该轮按改动范围复跑基线接管 25 项和基础迁移 9 项，

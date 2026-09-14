@@ -274,8 +274,8 @@ async fn migrate_cli_applies_baseline_to_empty_database() {
         .expect("启动 lycoris-backend --migrate 失败");
     assert!(
         output.status.success(),
-        "迁移 CLI 退出码非零: {}",
-        String::from_utf8_lossy(&output.stderr)
+        "迁移 CLI 退出码非零\n{}",
+        common::cli_failure_diagnostics(&output)
     );
 
     let pool = temp.connect_pool().await;

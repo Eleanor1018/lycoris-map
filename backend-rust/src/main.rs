@@ -4,7 +4,8 @@
 //!
 //! 普通启动只校验迁移已应用且不执行 DDL；`--migrate` 对空库执行 SQLx 迁移后退出；
 //! `--check-baseline` 只读预检已有库结构；`--adopt-baseline` 核对接管已有库并登记真实
-//! 基线校验和后退出。参数互斥，未知参数直接失败，不会误启动服务。
+//! 基线校验和后退出；`--healthcheck [path]` 只做一次本地 HTTP 探针后退出，不读取数据库配置。
+//! 参数互斥，未知参数直接失败，不会误启动服务。
 
 use std::net::SocketAddr;
 use std::process::ExitCode;
@@ -16,29 +17,43 @@ use lycoris_backend::baseline;
 use lycoris_backend::cli::{self, Command};
 use lycoris_backend::config::Config;
 use lycoris_backend::error::AppError;
+use lycoris_backend::healthcheck;
 use lycoris_backend::migrate;
 use sqlx::postgres::PgPoolOptions;
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    init_tracing();
-    match run().await {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(err) => {
-            tracing::error!("启动失败: {err}");
-            ExitCode::FAILURE
+    // 只在入口解析一次，随后按命令分发，避免重复解析或绕过互斥/未知参数校验。
+    let command = match cli::parse(std::env::args().skip(1)) {
+        Ok(command) => command,
+        Err(error) => {
+            eprintln!("参数错误: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    match command {
+        Command::Help => {
+            println!("{}", cli::USAGE);
+            ExitCode::SUCCESS
+        }
+        // 健康检查不初始化 tracing、不读取数据库配置、不构建 Router。
+        Command::Healthcheck(path) => healthcheck::run(path),
+        command => {
+            init_tracing();
+            match run(command).await {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(err) => {
+                    tracing::error!("启动失败: {err}");
+                    ExitCode::FAILURE
+                }
+            }
         }
     }
 }
 
-async fn run() -> Result<(), AppError> {
-    let command = cli::parse(std::env::args().skip(1))?;
-    if command == Command::Help {
-        println!("{}", cli::USAGE);
-        return Ok(());
-    }
-
+async fn run(command: Command) -> Result<(), AppError> {
     let config = Config::from_env()?;
     // 只记录“已加载”，不打印连接串或其参数。
     tracing::info!("配置加载完成");
@@ -70,7 +85,7 @@ async fn run() -> Result<(), AppError> {
             tracing::info!("基线预检通过");
             return Ok(());
         }
-        Command::Serve | Command::Help => {}
+        Command::Serve | Command::Help | Command::Healthcheck(_) => {}
     }
 
     // 普通启动只读校验，不自动执行 DDL。

@@ -1,0 +1,37 @@
+# 构建上下文排除项：绝不把真实上传、环境文件、构建产物或备份放进镜像。
+# 说明：Dockerfile 只 COPY 显式列出的源码目录，这里的规则是额外防线，避免误加 `COPY . .`。
+
+# 构建产物
+target/
+**/target/
+
+# 真实上传与本地运行数据
+uploads/
+**/uploads/
+tmp/
+/tmp/
+
+# 环境与密钥
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# 日志与备份
+*.log
+backups/
+**/backups/
+**/*.dump
+**/*.sql.gz
+**/*.tar
+**/*.tar.gz
+
+# 仓库元数据与本地编排文件
+.git/
+.gitignore
+.gitattributes
+compose*.yml
+
+# 文档（无需进入镜像）
+*.md

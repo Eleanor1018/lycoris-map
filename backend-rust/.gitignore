@@ -12,3 +12,7 @@ compose.override.yml
 # 日志与临时文件
 *.log
 /tmp/
+
+# Python 测试缓存（scripts/ 下的边界自测）
+__pycache__/
+*.pyc

@@ -38,7 +38,8 @@ Spring Boot 服务承担。
 | `src/routes/` | HTTP 处理器：`auth`、`admin`（账号）、`admin_markers`（阶段 3 图片提案/清理）、`avatar`（3 个头像路由）、`uploads`（受控读取） |
 | `src/migrate.rs` | 内嵌迁移、`--migrate` 执行、已有库建表守卫与启动只读校验 |
 | `src/baseline/` | 已有库基线预检与接管：`expected`（已审查基线的结构期望）、`inspect`（只读目录核对/计数/历史读取）、`adopt`（`--check-baseline`/`--adopt-baseline`） |
-| `src/cli.rs` | 命令行参数解析（`--migrate`/`--check-baseline`/`--adopt-baseline` 互斥，拒绝未知参数） |
+| `src/cli.rs` | 命令行参数解析（迁移、基线接管与健康检查命令互斥，拒绝未知参数） |
+| `src/healthcheck.rs` | 容器健康检查/探针 `--healthcheck [path]`（标准库 HTTP GET，仅读状态行；非法 `SERVER_PORT`/路径直接失败） |
 | `migrations/0001_baseline.sql` | 从 `docs/rust-migration/schema-baseline.sql` 精确派生 |
 | `.sqlx/` | SQLx 离线元数据，`SQLX_OFFLINE=true` 时无需数据库即可编译 |
 | `tests/integration.rs` | 基础工程真实 PG / Redis 集成测试（临时建库并清理） |
@@ -53,6 +54,13 @@ Spring Boot 服务承担。
 | `scripts/check-rust.ps1` | 迁移合成开发库、校验离线元数据、离线构建并跑 fmt / clippy / test |
 | `compose.test.yml` | 隔离测试依赖：PostgreSQL 18.6 + PostGIS 3.6.4、Redis 8.10.1 |
 | `scripts/check-services.py` | 启动并校验上述两个容器及精确版本（仅标准库） |
+| `Dockerfile` | 多阶段发布镜像：`source`/`builder`/`test`/`runtime`（Rust 1.98.1、离线 release、非 root） |
+| `.dockerignore` | 构建上下文排除 `uploads/`、`.env`、`target/`、备份与仓库元数据 |
+| `compose.release.yml` | 本地 Linux 发布演练（只读根、tmpfs、cap_drop、非 root、上传持久卷、回环端口） |
+| `scripts/run-linux-tests.sh` | 容器内测试运行器（fmt / 离线 SQLx 全 targets / clippy / 全部 cargo test；固定合成 fixture，线程 1..2） |
+| `scripts/tcp-forward.rs` | 仅标准库的 TCP 回环转发器（`rustc -O`；自身强制回环监听与固定上游） |
+| `scripts/test-runner-guards.sh` | 运行器/转发器安全边界小测试（非法上游/监听/并发在任何网络或 DDL 前失败） |
+| `scripts/verify-release-linux.py` | 宿主侧运行验证（目标校验/就绪/非 root/只读根/持久化/SIGTERM/负向，仅标准库，可写 JSON 证据） |
 
 ## 已实现路由（43 个既有契约模板全部挂载；`/health/live`、`/health/ready` 探针另列）
 
@@ -436,6 +444,111 @@ cargo test --locked
 时默认 4，避免 1 GB 测试 PG 在并行建库时 OOM；显式正整数会覆盖该默认值。请勿在多个工作树
 同时运行整套门禁，避免共享测试 PG OOM。正常 UUID 临时子库由各用例自行创建与清理，脚本不按
 前缀枚举或批量删除。
+
+## Linux 发布基础（阶段 4）
+
+阶段 4 的 Linux 发布基础提供多阶段 `Dockerfile`、离线 release 构建、非 root 只读运行，以及
+可在真实 Linux 上执行的测试/运行验收入口。生产切流、已有库接管、PG 大版本升级与性能测量
+不在本小节范围。
+
+### 镜像与可复现性
+
+| 项目 | 值 |
+| --- | --- |
+| builder / test | `rust:1.98.1-slim-trixie` + `rust-toolchain.toml` 精确固定 Rust `1.98.1` |
+| runtime | `debian:trixie-slim`，`USER 10001:10001`，仅复制 release 二进制与 CA 证书 |
+| 构建 | `SQLX_OFFLINE=true` + `cargo build --release --locked`，`CARGO_BUILD_JOBS=2` |
+| 发布画像 | `[profile.release] strip = true`；不启用 `panic=abort`、不设 `target-cpu=native` |
+
+已核对基础镜像 digest（2026-09-14，温晓经官方 registry Bearer manifest 逐层核对）：
+
+| 镜像 | 官方 manifest digest | linux/amd64 |
+| --- | --- | --- |
+| `rust:1.98.1-slim-trixie` | `sha256:ce84a5edd80c5f91e05c5533b1e53eb1da54028f33734dc06aa6b49fa190462d` | `sha256:a2de23e559fd8afd260d22beb00f3987073ea0dcc2ba2646cccdaeda6a62a095` |
+| `debian:trixie-slim` | `sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132` | `sha256:abc9cb88a5587630d7f915f47b23b0668fe250fbfc6457aa4d52b534c1bbf73f` |
+
+`Dockerfile`/`compose.release.yml` 默认即 `官方 tag @ digest`。受限网络下用**同一 digest** 的
+镜像站地址覆盖，不改变实际版本：
+
+```powershell
+$env:RUST_BUILDER_IMAGE = "docker.m.daocloud.io/library/rust@sha256:ce84a5edd80c5f91e05c5533b1e53eb1da54028f33734dc06aa6b49fa190462d"
+$env:RUNTIME_IMAGE       = "docker.m.daocloud.io/library/debian@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132"
+```
+
+### 构建与 Linux 测试（可复用 runner）
+
+```powershell
+# 在 backend-rust/ 内运行；构建 release 运行镜像与独立 test stage
+docker compose -f compose.release.yml build app test
+
+# 真实 Linux 全量：fmt / 离线 SQLx 全 targets 编译 / clippy / 全部 cargo test
+docker compose -f compose.release.yml run --rm test
+```
+
+`scripts/run-linux-tests.sh` 为容器内运行器，顺序为 `cargo fmt --all -- --check` →
+`SQLX_OFFLINE=true cargo check --all-targets --locked` →
+`cargo clippy --all-targets --locked -- -D warnings` → `cargo test --locked`。
+
+- **固定合成 fixture（安全边界）**：监听固定 `127.0.0.1:55432`/`:56379`，上游固定
+  `host.docker.internal:55432`/`:56379`，测试 URL 固定回环该 fixture；任何其它 host/port/query、
+  监听或 URL 覆写都在**任何网络访问与 DDL 之前**失败。`scripts/tcp-forward.rs` 自身也强制
+  回环监听与固定上游。`scripts/test-runner-guards.sh` 用 `--check-config` 与非法的转发器配置
+  证明这些边界（含 `env`/`tcp-forward` 小测试）。**只连合成服务**，不连 `lycoris-restore-review`。
+- **并发**：`RUST_TEST_THREADS`/`CARGO_BUILD_JOBS` 只接受 `1` 或 `2`（未设置默认 2；拒绝 0/非法/超出）。
+- **增量编译缓存**：test 服务挂载本项目专用命名卷 `lycoris-rust-release-test-target:/app/target`
+  与 `lycoris-rust-release-test-cargo-registry:/usr/local/cargo/registry`，复跑复用增量编译，
+  不共享其它工作树目标、也不从外部 target 复制产物。
+
+```powershell
+# 运行器安全边界自测（容器内，不访问网络/DDL）
+docker compose -f compose.release.yml run --rm --entrypoint bash test /app/scripts/test-runner-guards.sh
+```
+
+### 运行验证
+
+```powershell
+# 端到端：目标校验、运行器边界、就绪/读接口、非 root、只读根、上传卷可写、
+# SIGTERM(0)、重启持久、负向启动失败（原因必须为上传目录不可写）
+python scripts/verify-release-linux.py --build --test-count 171 `
+  --evidence ../docs/rust-migration/release-linux-evidence.json
+```
+
+运行加固（`compose.release.yml`）：`read_only: true`、`tmpfs /tmp`、`cap_drop: [ALL]`、
+`no-new-privileges:true`、命名卷 `lycoris-rust-release-uploads:/var/lib/lycoris/uploads`，
+端口仅绑定 `127.0.0.1:18091`。`HEALTHCHECK` 调用 `lycoris-backend --healthcheck`
+（默认 `/health/ready`，真实 HTTP GET：只读首个 `LF` 前的状态行、要求 `HTTP/1.0|1.1` + 3 位码、
+连接/写/读共用同一 3s deadline，不解析响应体）。
+
+`verify-release-linux.py` 的边界：
+
+- **目标校验先于一切 Docker 操作**：任何 compose/`--migrate` 前，先校验 `RELEASE_DATABASE_URL`
+  只指向 `host.docker.internal:55432/lycoris_rust`、`RELEASE_REDIS_URL` 只指向
+  `host.docker.internal:56379`（无 query/fragment/其它覆写）；校验通过后把**已验证值显式写入
+  子进程 env** 并设 `COMPOSE_DISABLE_ENV_FILE=1`，使项目 `.env` 无法隐式替换实际传给 Compose 的 URL。
+  非法目标在任何 Docker 操作前直接失败，不自动迁移。
+- **只清理本次真正启动的演练**：目标非法、镜像/依赖缺失或 guard 失败时不发起 `down`/删卷
+  （不会关闭其它正在运行的同项容器）；默认只 `down` 保留卷，删除须显式 `--remove-test-volumes`
+  （只删精确自有名）。`--keep` 保留容器/网络/卷。
+- 负向前先确认镜像与合成 PG/Redis 就绪，且失败原因必须匹配 `无法准备上传根目录`；
+  镜像缺失或依赖断开不会被当作通过。
+- `--evidence` 写入失败会返回非零（不以 0 掩盖未保存）；错误信息对连接串脱敏、截断 driver 日志。
+
+```powershell
+# Python 边界针对性测试（fake runner 记录调用次数，不触发真实 Docker）
+python scripts/test_verify_release_linux.py
+```
+
+> **Linux 卷授权**：命名卷首次挂载会继承镜像内 `/var/lib/lycoris/uploads` 的 `10001:10001`，
+> 无需额外操作。若改用**宿主机绑定目录**，必须先 `chown 10001:10001` 且 `chmod 0750`
+> （上传根由服务用户独占写，其他本地用户不可写）再挂载，否则非 root 进程无法写入。只读根下
+> `TMPDIR=/tmp` 必须由受控 tmpfs/临时目录提供（compose 已挂载受限 `/tmp`）。
+
+**边界**：`compose.release.yml` 仅为本地演练，复用温晓授权的合成 PG/Redis，其 `DATABASE_URL`/
+`REDIS_URL` 默认值是合成地址而**非生产配置**；镜像不含 `uploads/.env/target/备份`；ENTRYPOINT
+不自动迁移/接管（`--migrate` 仅演练时显式调用，且仅指向 synthetic `lycoris_rust`）；不操作
+`lycoris-restore-review` 或其它 Docker 项目。真实 Linux 构建、**171** 项测试与运行验证证据见
+[版本记录](../docs/rust-migration/versions.md)与
+[release-linux-evidence.json](../docs/rust-migration/release-linux-evidence.json)。
 
 ## 连接与数据目录
 

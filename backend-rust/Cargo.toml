@@ -70,3 +70,8 @@ bcrypt = "0.19.3"
 base64 = "0.22.1"
 # 仅测试：构造中途出错的请求体流，验证 JSON 读取失败为 400 而非 413。
 futures-util = "0.3"
+
+# release 发布镜像只做符号 strip 以缩小产物体积，不改变优化级别、不启用 panic=abort，
+# 也不设置 target-cpu=native，保持与既有行为一致。
+[profile.release]
+strip = true

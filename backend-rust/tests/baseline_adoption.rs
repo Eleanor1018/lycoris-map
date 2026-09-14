@@ -8,7 +8,7 @@ mod common;
 
 use std::time::Duration;
 
-use common::{TempDatabase, test_redis_url};
+use common::{TempDatabase, cli_failure_diagnostics, test_redis_url};
 use lycoris_backend::baseline::expected::{BASELINE_TABLES, BASELINE_VERSION};
 use lycoris_backend::baseline::{
     self, BaselineDiff, DEFAULT_LOCK_TIMEOUT, DataCounts, HistoryReport, adopt_baseline_with,
@@ -926,8 +926,8 @@ async fn cli_adopt_and_check_baseline_are_wired() {
         .expect("运行 --check-baseline 失败");
     assert!(
         check.status.success(),
-        "--check-baseline 应对一致结构退出 0: {}",
-        String::from_utf8_lossy(&check.stderr)
+        "--check-baseline 应对一致结构退出 0\n{}",
+        cli_failure_diagnostics(&check)
     );
     assert!(
         !history_exists(&pool).await,
@@ -942,12 +942,19 @@ async fn cli_adopt_and_check_baseline_are_wired() {
         .expect("运行 --adopt-baseline 失败");
     assert!(
         adopt.status.success(),
-        "--adopt-baseline 应成功: {}",
-        String::from_utf8_lossy(&adopt.stderr)
+        "--adopt-baseline 应成功\n{}",
+        cli_failure_diagnostics(&adopt)
     );
     assert_eq!(applied_rows(&pool).await.len(), 1);
     pool.close().await;
     drop(temp);
+}
+
+/// 服务是否真正启动（`tracing` 默认写 stdout，必须同时检查两路输出）。
+fn started_service(output: &std::process::Output) -> bool {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    stdout.contains("HTTP 服务已启动") || stderr.contains("HTTP 服务已启动")
 }
 
 #[tokio::test]
@@ -960,11 +967,12 @@ async fn cli_rejects_unknown_and_conflicting_arguments() {
         .env_remove("REDIS_URL")
         .output()
         .expect("运行未知参数失败");
-    assert!(!unknown.status.success(), "未知参数必须失败");
     assert!(
-        !String::from_utf8_lossy(&unknown.stderr).contains("HTTP 服务已启动"),
-        "未知参数不得启动服务"
+        !unknown.status.success(),
+        "未知参数必须失败\n{}",
+        cli_failure_diagnostics(&unknown)
     );
+    assert!(!started_service(&unknown), "未知参数不得启动服务");
 
     let conflicting = std::process::Command::new(bin)
         .args(["--migrate", "--adopt-baseline"])
@@ -972,7 +980,113 @@ async fn cli_rejects_unknown_and_conflicting_arguments() {
         .env_remove("REDIS_URL")
         .output()
         .expect("运行互斥参数失败");
-    assert!(!conflicting.status.success(), "互斥参数必须失败");
+    assert!(
+        !conflicting.status.success(),
+        "互斥参数必须失败\n{}",
+        cli_failure_diagnostics(&conflicting)
+    );
+    assert!(!started_service(&conflicting), "互斥参数不得启动服务");
+}
+
+#[tokio::test]
+async fn cli_healthcheck_rejects_extra_or_conflicting_commands() {
+    let bin = env!("CARGO_BIN_EXE_lycoris-backend");
+    for case in [
+        vec!["--healthcheck", "--migrate"],
+        vec!["--migrate", "--healthcheck"],
+        vec!["--healthcheck", "/health/ready", "--adopt-baseline"],
+        vec!["--healthcheck", "--healthcheck"],
+        vec!["--healthcheck", "/health/ready", "extra"],
+    ] {
+        let output = std::process::Command::new(bin)
+            .args(&case)
+            .env_remove("DATABASE_URL")
+            .env_remove("REDIS_URL")
+            .output()
+            .expect("运行 healthcheck 参数组合失败");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !output.status.success(),
+            "{case:?} 必须因参数错误失败\n{}",
+            cli_failure_diagnostics(&output)
+        );
+        assert!(
+            stderr.contains("参数错误"),
+            "{case:?} 应在解析阶段失败而非进入探针\n{}",
+            cli_failure_diagnostics(&output)
+        );
+        assert!(
+            !stderr.contains("healthcheck:") && !started_service(&output),
+            "{case:?} 不得执行探针或启动服务\n{}",
+            cli_failure_diagnostics(&output)
+        );
+    }
+}
+
+#[tokio::test]
+async fn cli_healthcheck_runs_without_database_config() {
+    // 取一个刚释放、确定无人监听的本地端口，避免误连其他服务。
+    let port = {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("绑定回环端口失败");
+        listener.local_addr().expect("读取端口失败").port()
+    };
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_lycoris-backend"))
+        .args(["--healthcheck", "/health/ready"])
+        .env_remove("DATABASE_URL")
+        .env_remove("REDIS_URL")
+        .env("SERVER_PORT", port.to_string())
+        .output()
+        .expect("运行 --healthcheck 失败");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    // 健康检查不得读取数据库/Redis 配置；失败只因探针连不上而非缺少连接串。
+    assert!(
+        !stdout.contains("DATABASE_URL") && !stderr.contains("DATABASE_URL"),
+        "健康检查不得读取 DATABASE_URL\n{}",
+        cli_failure_diagnostics(&output)
+    );
+    assert!(
+        !stdout.contains("REDIS_URL") && !stderr.contains("REDIS_URL"),
+        "健康检查不得读取 REDIS_URL\n{}",
+        cli_failure_diagnostics(&output)
+    );
+    assert!(
+        stderr.contains("healthcheck:"),
+        "应实际执行探针并报告失败\n{}",
+        cli_failure_diagnostics(&output)
+    );
+    assert!(
+        !started_service(&output),
+        "健康检查不得启动 HTTP 服务\n{}",
+        cli_failure_diagnostics(&output)
+    );
+    assert!(
+        !output.status.success(),
+        "端口无监听时探针必须非零退出\n{}",
+        cli_failure_diagnostics(&output)
+    );
+}
+
+#[tokio::test]
+async fn cli_help_prints_usage_without_starting_service() {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_lycoris-backend"))
+        .arg("--help")
+        .env_remove("DATABASE_URL")
+        .env_remove("REDIS_URL")
+        .output()
+        .expect("运行 --help 失败");
+    assert!(
+        output.status.success(),
+        "--help 应成功退出\n{}",
+        cli_failure_diagnostics(&output)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("用法:"),
+        "--help 应打印用法\n{}",
+        cli_failure_diagnostics(&output)
+    );
+    assert!(!started_service(&output), "--help 不得启动服务");
 }
 
 #[tokio::test]
@@ -984,7 +1098,11 @@ async fn cli_check_baseline_fails_on_incompatible_database() {
         .env("REDIS_URL", test_redis_url())
         .output()
         .expect("运行 --check-baseline 失败");
-    assert!(!output.status.success(), "不兼容库的预检应非零退出");
+    assert!(
+        !output.status.success(),
+        "不兼容库的预检应非零退出\n{}",
+        cli_failure_diagnostics(&output)
+    );
 }
 
 #[test]

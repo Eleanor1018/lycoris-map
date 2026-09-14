@@ -44,6 +44,19 @@ pub fn test_redis_url() -> String {
     std::env::var("TEST_REDIS_URL").unwrap_or_else(|_| DEFAULT_TEST_REDIS_URL.to_string())
 }
 
+/// 组装受控 CLI 失败诊断：退出状态 + stdout + stderr。
+///
+/// `tracing` 默认写 stdout，失败根因可能只出现在 stdout；只看 stderr 会掩盖真实原因。
+pub fn cli_failure_diagnostics(output: &std::process::Output) -> String {
+    format!(
+        "退出状态: {:?}（code={:?}）\nstdout:\n{}\nstderr:\n{}",
+        output.status,
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    )
+}
+
 /// 精确判断主机是否为回环地址（不匹配用户名/查询里出现的 "localhost" 等子串）。
 pub fn host_is_loopback(host: &str) -> bool {
     host.eq_ignore_ascii_case("localhost")
