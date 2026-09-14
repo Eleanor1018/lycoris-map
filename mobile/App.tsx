@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { StatusBar, StyleSheet } from 'react-native';
 import {
   NavigationContainer,
@@ -13,7 +13,7 @@ import {
 } from 'react-native-safe-area-context';
 import { Icon, MD3LightTheme, PaperProvider, Text } from 'react-native-paper';
 import { AuthProvider } from './src/auth/AuthProvider';
-import { DocsScreen } from './src/screens/DocsScreen';
+import { DiscoverScreen } from './src/screens/DiscoverScreen';
 import { MapScreen } from './src/screens/MapScreen';
 import { MeScreen, type MePanel } from './src/screens/MeScreen';
 import { colors } from './src/theme/colors';
@@ -41,8 +41,8 @@ type MapsStackParamList = {
   };
 };
 
-type DocsStackParamList = {
-  DocsHome: undefined;
+type DiscoverStackParamList = {
+  DiscoverHome: undefined;
 };
 
 type MeStackParamList = {
@@ -56,7 +56,7 @@ type MeStackParamList = {
 
 type RootTabParamList = {
   maps: NavigatorScreenParams<MapsStackParamList> | undefined;
-  docs: NavigatorScreenParams<DocsStackParamList> | undefined;
+  discover: NavigatorScreenParams<DiscoverStackParamList> | undefined;
   me: NavigatorScreenParams<MeStackParamList> | undefined;
 };
 
@@ -82,10 +82,10 @@ const tabRoutes: AppRoute[] = [
     unfocusedIcon: 'map-outline',
   },
   {
-    key: 'docs',
-    title: '文档',
-    focusedIcon: 'file-document',
-    unfocusedIcon: 'file-document-outline',
+    key: 'discover',
+    title: '发现',
+    focusedIcon: 'compass',
+    unfocusedIcon: 'compass-outline',
   },
   {
     key: 'me',
@@ -108,7 +108,7 @@ const MePanelRouteMap: Record<
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const MapsStack = createNativeStackNavigator<MapsStackParamList>();
-const DocsStack = createNativeStackNavigator<DocsStackParamList>();
+const DiscoverStack = createNativeStackNavigator<DiscoverStackParamList>();
 const MeStack = createNativeStackNavigator<MeStackParamList>();
 
 const stackScreenOptions = {
@@ -143,11 +143,41 @@ function MapsStackNavigator() {
   );
 }
 
-function DocsStackNavigator() {
+function DiscoverHomeRoute({
+  navigation,
+}: {
+  navigation: {
+    getParent: () => {
+      navigate: (name: keyof RootTabParamList, params?: unknown) => void;
+    } | null;
+  };
+}) {
+  const isFocused = useIsFocused();
+  const { language } = useLanguage();
+  const lastRequest = useRef(0);
   return (
-    <DocsStack.Navigator screenOptions={stackScreenOptions}>
-      <DocsStack.Screen name="DocsHome" component={DocsScreen} />
-    </DocsStack.Navigator>
+    <DiscoverScreen
+      key={language}
+      isActive={isFocused}
+      onOpenMap={() => navigation.getParent()?.navigate('maps', {
+        screen: 'MapsHome', params: { focusRequest: null },
+      })}
+      onOpenMarker={target => {
+        lastRequest.current = Math.max(Date.now(), lastRequest.current + 1);
+        navigation.getParent()?.navigate('maps', {
+          screen: 'MapsHome',
+          params: { focusRequest: { ...target, requestId: lastRequest.current } },
+        });
+      }}
+    />
+  );
+}
+
+function DiscoverStackNavigator() {
+  return (
+    <DiscoverStack.Navigator screenOptions={stackScreenOptions}>
+      <DiscoverStack.Screen name="DiscoverHome" component={DiscoverHomeRoute} />
+    </DiscoverStack.Navigator>
   );
 }
 
@@ -288,6 +318,7 @@ function AppTabs() {
           tabRoutes.find(item => item.key === route.name) ?? tabRoutes[0];
         return {
           headerShown: false,
+          tabBarAccessibilityLabel: t(tab.title),
           // eslint-disable-next-line react/no-unstable-nested-components
           tabBarIcon: ({ focused, color, size }) => (
             <Icon
@@ -324,7 +355,7 @@ function AppTabs() {
       }}
     >
       <Tab.Screen name="maps" component={MapsStackNavigator} />
-      <Tab.Screen name="docs" component={DocsStackNavigator} />
+      <Tab.Screen name="discover" component={DiscoverStackNavigator} />
       <Tab.Screen name="me" component={MeStackNavigator} />
     </Tab.Navigator>
   );

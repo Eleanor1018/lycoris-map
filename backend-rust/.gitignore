@@ -1,0 +1,19 @@
+# Rust 构建产物
+/target/
+**/target/
+/target-spatial/
+
+# 本地环境与覆盖
+.env
+.env.*
+!.env.example
+compose.override.yml
+*.local.yml
+
+# 日志与临时文件
+*.log
+/tmp/
+
+# Python 测试/演练工具编译缓存（scripts/ 边界自测与演练工具，不提交）
+__pycache__/
+*.pyc

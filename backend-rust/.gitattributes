@@ -1,0 +1,5 @@
+# 统一换行，避免跨平台检出的 CRLF 改变 SQLx 迁移文件校验和。
+*.sql text eol=lf
+*.rs text eol=lf
+*.toml text eol=lf
+*.sh text eol=lf

@@ -1,0 +1,31 @@
+{
+  "artifacts": {
+    "compatibility": "C:\\Users\\Nora\\AppData\\Local\\Temp\\opencode\\rehearsal-pg1711\\reports\\stage5-java-compatibility-2.json",
+    "compatibilityCopy": "C:\\Users\\Nora\\Documents\\Codex\\2026-09-12\\wen\\work\\rust-rehearsal-worktree\\docs\\rust-migration\\stage5-java-compatibility-2.json"
+  },
+  "error": null,
+  "facts": {
+    "copiedReports": [
+      "stage5-baseline.json",
+      "stage5-configure-2.json",
+      "stage5-configure.json",
+      "stage5-finalize.json",
+      "stage5-java-compatibility-2.json",
+      "stage5-java-compatibility.json",
+      "stage5-java-crud.json",
+      "stage5-migrate-2.json",
+      "stage5-migrate-3.json",
+      "stage5-migrate.json",
+      "stage5-verify-0002-2.json",
+      "stage5-verify-0002.json",
+      "stage5-verify-data-java.json",
+      "stage5-verify-data-rust.json"
+    ]
+  },
+  "gitHead": "ca36a8ed65e22c99c107654a6f5370eb4cd1372d",
+  "ok": true,
+  "status": "ok",
+  "step": "stage5-finalize",
+  "timestamp": "2026-09-14T13:16:40.502059+00:00",
+  "workDir": "C:\\Users\\Nora\\AppData\\Local\\Temp\\opencode\\rehearsal-pg1711"
+}

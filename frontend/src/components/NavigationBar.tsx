@@ -39,7 +39,7 @@ export default function NavigationBar() {
     const navItems: NavItem[] = useMemo(
         () => [
             { label: t("地图"), to: '/maps' },
-            { label: t("文档"), to: '/documents' },
+            { label: t("发现"), to: '/discover' },
             { label: t("关于"), to: '/about' },
         ],
         [t]

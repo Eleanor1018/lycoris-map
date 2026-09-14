@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM marker_favorites\nWHERE user_public_id = $1\n  AND marker_id = $2\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ff8debef0357036f49b988b75117f78f10ba9a8d2c7c410ac612751186b142f8"
+}

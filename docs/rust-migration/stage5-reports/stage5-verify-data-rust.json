@@ -1,0 +1,51 @@
+{
+  "artifacts": {},
+  "error": null,
+  "facts": {
+    "backendFacts": {
+      "backend": "rust",
+      "containerUser": "10001:10001",
+      "generation": 21,
+      "imageId": "sha256:d074e39c56769dd4fb5878d14592183552de9d7567b490f22b5a5b1179dc4664",
+      "imageTag": "lycoris-rust-stage5:local",
+      "jarSha256": null,
+      "namespace": "lycoris:rust:rehearsal:55a35afa4465:g21",
+      "singleBackend": {
+        "entryConfPointsToTarget": true,
+        "entryMeStatus": 401,
+        "nonTargetPortClosed": true,
+        "targetBackend": "rust"
+      }
+    },
+    "verified": {
+      "enDescription": "English translation for rehearsal 1789387510",
+      "enTitle": "Rehearsal Rust EN 1789387510",
+      "favoriteIds": [
+        5005,
+        5006
+      ],
+      "meAvatarUrl": "/uploads/avatars/avatar-27e22c55-3c34-433d-aa8b-3f92a30db31a-6f82ea4e-244c-49a1-90c9-c96c4514ac27.jpg",
+      "mePublicId": "27e22c55-3c34-433d-aa8b-3f92a30db31a",
+      "verifiedMedia": {
+        "avatar": {
+          "bytes": 1803,
+          "sha256": "26f1f080009f83bc5c5459d567d742ba5b02a227b901d7cae98ee02d8a71aeb9",
+          "url": "/uploads/avatars/avatar-27e22c55-3c34-433d-aa8b-3f92a30db31a-6f82ea4e-244c-49a1-90c9-c96c4514ac27.jpg"
+        },
+        "markerImage": {
+          "bytes": 19923,
+          "sha256": "b2bec128691faf557f54681fb2fac8914bd0fb4c40c0cab3b8df81afdeb2b2bb",
+          "url": "/uploads/markers/proposal-marker-5005-87a0a77f-1900-4fe9-a44f-826148ce54c1.jpg"
+        }
+      },
+      "zhMarkImage": "/uploads/markers/proposal-marker-5005-87a0a77f-1900-4fe9-a44f-826148ce54c1.jpg",
+      "zhTitle": "Rehearsal Rust marker edited 1789387510"
+    }
+  },
+  "gitHead": "ca36a8ed65e22c99c107654a6f5370eb4cd1372d",
+  "ok": true,
+  "status": "ok",
+  "step": "stage5-verify-data-rust",
+  "timestamp": "2026-09-14T13:14:18.378005+00:00",
+  "workDir": "C:\\Users\\Nora\\AppData\\Local\\Temp\\opencode\\rehearsal-pg1711"
+}

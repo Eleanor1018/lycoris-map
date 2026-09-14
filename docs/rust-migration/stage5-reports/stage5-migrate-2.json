@@ -1,0 +1,17 @@
+{
+  "artifacts": {},
+  "error": "--migrate 未成功；入口保持冻结，不启动旧 stage4 Rust",
+  "facts": {
+    "frozen": true,
+    "migrateExit": 1,
+    "migrateStderr": "",
+    "migrateStdout": "\u001b[2m2026-09-14T13:13:11.807229Z\u001b[0m \u001b[31mERROR\u001b[0m \u001b[2mlycoris_backend\u001b[0m\u001b[2m:\u001b[0m 启动失败: 配置错误: 缺少必需的环境变量 REDIS_URL\n",
+    "snapshotPreflight": true
+  },
+  "gitHead": "ca36a8ed65e22c99c107654a6f5370eb4cd1372d",
+  "ok": false,
+  "status": "failed",
+  "step": "stage5-migrate",
+  "timestamp": "2026-09-14T13:13:12.023663+00:00",
+  "workDir": "C:\\Users\\Nora\\AppData\\Local\\Temp\\opencode\\rehearsal-pg1711"
+}

@@ -1,0 +1,36 @@
+{
+  "artifacts": {},
+  "error": null,
+  "facts": {
+    "businessComparison": {
+      "differences": [],
+      "equal": true
+    },
+    "locationColumn": {
+      "generated": "s",
+      "indexes": [
+        "idx_map_markers_location_gist|CREATE INDEX idx_map_markers_location_gist ON public.map_markers USING gist (location) WHERE (is_public AND ((review_status)::text = 'APPROVED'::text) AND (location IS NOT NULL))",
+        "idx_map_markers_legacy_null|CREATE INDEX idx_map_markers_legacy_null ON public.map_markers USING btree (category, id) WHERE (is_public AND ((review_status)::text = 'APPROVED'::text) AND (location IS NULL))"
+      ],
+      "type": "geography(Point,4326)"
+    },
+    "migrationRows": [
+      {
+        "checksum": "8dbe74b7a0ec1ba8a6ffe28bfefadebfb39ac223b4522fcfd90de50a4feb8bbb8421341390ac0fce84527989739c3391",
+        "success": true,
+        "version": 1
+      },
+      {
+        "checksum": "d1262eb9356b1e99b788ddea741a191d84aa30d567b0ec106d32dcc3e3a7a236ba9d1caceede93a4bfdd30a205a35cd5",
+        "success": true,
+        "version": 2
+      }
+    ]
+  },
+  "gitHead": "ca36a8ed65e22c99c107654a6f5370eb4cd1372d",
+  "ok": true,
+  "status": "ok",
+  "step": "stage5-verify-0002",
+  "timestamp": "2026-09-14T13:13:52.064527+00:00",
+  "workDir": "C:\\Users\\Nora\\AppData\\Local\\Temp\\opencode\\rehearsal-pg1711"
+}

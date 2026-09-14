@@ -1,0 +1,77 @@
+[package]
+name = "lycoris-backend"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98.1"
+publish = false
+description = "Lycoris Rust 后端（Axum + SQLx）"
+
+[lib]
+name = "lycoris_backend"
+path = "src/lib.rs"
+
+[[bin]]
+name = "lycoris-backend"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.8.9", features = ["multipart"] }
+bytes = "1"
+# 复用 tower-http/axum body limit 的 `LengthLimitError` 类型，沿 source 链识别真实超限。
+http-body-util = "0.1.5"
+image = { version = "0.25.10", default-features = false, features = [
+    "gif",
+    "jpeg",
+    "png",
+    "webp",
+] }
+sqlx = { version = "0.9.0", default-features = false, features = [
+    "postgres",
+    "runtime-tokio",
+    "tls-rustls",
+    "chrono",
+    "uuid",
+    "json",
+    "macros",
+    "migrate",
+] }
+tokio = { version = "1.53.1", features = [
+    "fs",
+    "io-util",
+    "macros",
+    "net",
+    "rt-multi-thread",
+    "signal",
+    "time",
+] }
+tower = { version = "0.5.3", features = ["util"] }
+tower-http = { version = "0.7.1", features = ["cors", "limit", "timeout"] }
+# 阶段 2 头像/阶段 3 图片上传：multipart 读取与文件流式响应体。
+# axum `multipart` 提供 multer 解析；`tokio-util::io::ReaderStream` 包装文件句柄。
+tokio-util = { version = "0.7.19", features = ["io"] }
+fred = { version = "10.1.0", features = ["i-scripts"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+thiserror = "2.0.20"
+chrono = { version = "0.4.45", features = ["serde"] }
+chrono-tz = "0.10.4"
+uuid = { version = "1.26.1", features = ["v4"] }
+sha2 = "0.11.0"
+tempfile = "3.27.0"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+# 阶段 2 认证：Cookie 解析/生成、历史 BCrypt 兼容。
+# 均为温晓锁定的候选版本，仅加入不降级已有依赖。
+cookie = "0.18.2"
+bcrypt = "0.19.3"
+
+[dev-dependencies]
+# 仅测试：解码 Java 生成的合成 BCrypt 向量（password 列 base64）。
+base64 = "0.22.1"
+# 仅测试：构造中途出错的请求体流，验证 JSON 读取失败为 400 而非 413。
+futures-util = "0.3"
+
+# release 发布镜像只做符号 strip 以缩小产物体积，不改变优化级别、不启用 panic=abort，
+# 也不设置 target-cpu=native，保持与既有行为一致。
+[profile.release]
+strip = true

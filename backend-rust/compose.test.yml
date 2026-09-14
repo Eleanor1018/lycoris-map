@@ -1,0 +1,63 @@
+# Lycoris Rust 后端 — 隔离测试依赖（阶段 0.5）
+#
+# 用途：仅启动 PostgreSQL 18.6 + PostGIS 3.6.4 与 Redis 8.10.1 两个依赖容器，
+#       供 Rust 集成测试使用；不包含任何应用容器。
+# 限制：端口只绑定 127.0.0.1；数据卷前缀 lycoris-rust；容器名固定为
+#       lycoris-rust-postgres / lycoris-rust-redis，脚本只操作这两个容器。
+#       禁止操作 lycoris-restore-review（温晓的私有恢复验收环境）。
+# 镜像：默认使用上游官方地址；如直连受限，可通过 PG_TEST_IMAGE / REDIS_TEST_IMAGE
+#       覆盖为经 digest 校验的镜像站地址（见 README.md）。
+# 版本：镜像 digest 必须与 docs/rust-migration/versions.md 记录一致。
+
+name: lycoris-rust-test
+
+services:
+  postgres:
+    image: ${PG_TEST_IMAGE:-postgis/postgis:18-3.6@sha256:60f6ad1d21ea86a67d47780b9a0d1e1d200500f62b19293fa834d0dea80b8677}
+    container_name: lycoris-rust-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lycoris
+      POSTGRES_PASSWORD: lycoris_local_test
+      POSTGRES_DB: lycoris_rust
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      # PostgreSQL 18 官方镜像要求挂载到 /var/lib/postgresql，
+      # 数据实际写入其下 PGDATA 子目录（/var/lib/postgresql/18/docker）。
+      - lycoris-rust-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "lycoris", "-d", "lycoris_rust"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  redis:
+    image: ${REDIS_TEST_IMAGE:-redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5}
+    container_name: lycoris-rust-redis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:56379:6379"
+    volumes:
+      - lycoris-rust-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+volumes:
+  lycoris-rust-postgres-data:
+    name: lycoris-rust-postgres-data
+  lycoris-rust-redis-data:
+    name: lycoris-rust-redis-data
