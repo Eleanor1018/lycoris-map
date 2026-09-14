@@ -14,8 +14,9 @@ use std::time::Duration;
 use axum::http::{HeaderValue, Uri};
 use chrono_tz::Tz;
 
-/// 默认 HTTP 监听端口，与 Java 的 18080 区分。
-pub const DEFAULT_SERVER_PORT: u16 = 18081;
+/// 正式本地默认 HTTP 监听端口：与 Web/App 现有 8080 对齐；Rust 成为本地默认后端后无需改客户端代理。
+/// 测试/演练 compose 与 Dockerfile 均显式声明端口，不受本默认值影响。
+pub const DEFAULT_SERVER_PORT: u16 = 8080;
 
 /// 默认点位可用性时区（与 Java `app.availability-zone` 一致）。
 pub const DEFAULT_AVAILABILITY_ZONE: Tz = chrono_tz::Asia::Shanghai;

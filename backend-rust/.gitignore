@@ -14,6 +14,9 @@ compose.override.yml
 *.log
 /tmp/
 
+# 本地启动产生的上传媒体（正式本地启动会写入用户图片，不提交）
+/uploads/
+
 # Python 测试/演练工具编译缓存（scripts/ 边界自测与演练工具，不提交）
 __pycache__/
 *.pyc
