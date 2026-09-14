@@ -39,6 +39,11 @@ pnpm dev          # 另外提供 pnpm build / typecheck / format:check / test:un
 
 本工程不包含 ESLint 或 lint 脚本，类型检查为 TypeScript 7 strict。
 
+S1 另有本地验证入口（包含在当前 S1 构建产物中，约定本机使用且不发布；非产品页面，S1 构建不可部署；正式地图与账号流程在 S2/S4）：
+
+- `/__dev/map-spike`：200 个固定合成上海点位的地图生命周期验证（常驻 Leaflet 实例、语言/面板/字段更新/增删与更新耗时）。
+- `/__dev/qa`：本机浏览器诊断（375×812 固定 CSS 视口 iframe；开发会话表单走真实 `/api/login`、`/api/me`、头像 Blob、`/api/logout`，不注册、不改密码、不硬编码凭据）。
+
 首次配置、数据库启动与显式迁移步骤见 [README](README.md#克隆与初始化)。普通启动不自动执行 DDL。
 
 重构阶段 0 至 5 已完成本地验收：43 个 API 契约模板、223 项 Linux 检查、64 条真实 TCP 断言，以及 PG 升级、媒体核对、Java 应用回退、Web/Android 和空间查询验证。该数字对应阶段 5 的已保存证据，本轮启动入口的检查单独记录于 `docs/rust-migration/local-default.md`（仅本地）。

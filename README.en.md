@@ -160,6 +160,18 @@ pnpm test:unit
 
 Static output is written to `frontend/dist/`. The project has no ESLint or lint script; type boundaries are enforced by TypeScript 7 strict.
 
+### S1 development verification entries (not product pages; the S1 build is not deployable)
+
+S1 delivers only the engineering foundation and verification tools; the real map and account flows arrive in S2 and S4. The following paths are **included in the current S1 build output** (they are not dev-server-only and are not excluded from a production build), but are agreed to be used locally and not published, and they are not shippable features:
+
+| Path | Purpose |
+| --- | --- |
+| `/` | Status screen: backend `/health/live` and `/health/ready` connectivity with retry |
+| `/__dev/map-spike` | Map lifecycle verification: 200 fixed **synthetic** Shanghai points, a persistent Leaflet instance, language/panel/field-update/add-remove controls and an update cost reading |
+| `/__dev/qa` | Local browser diagnostics: a 375×812 fixed CSS viewport iframe preview plus a dev session form (real `/api/login`, `/api/me`, avatar Blob, `/api/logout`; no registration, no password change, no hardcoded credentials) |
+
+These diagnostics ship no deployment scripts, and the S1 build/static output is **not a deployable artefact**. Release and traffic switching belong to later tasks.
+
 ### 3.1 Legacy web app (frontend-old, archived reference)
 
 `frontend-old` is the pre-refactor web app: React 19.2 + TypeScript 5.9 + Vite 7 + MUI + Leaflet, with Cypress specs. It exists only for rollback and behaviour comparison, and its install and build commands belong to that project:

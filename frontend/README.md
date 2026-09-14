@@ -1,6 +1,6 @@
 # Lycoris Web v2（`frontend/`）
 
-Web v2 新工程，当前处于 **S1 工程基础** 阶段：只有工程外壳与后端连通状态屏，Figma 页面在后续阶段实现。
+Web v2 新工程，当前处于 **S1 工程基础** 阶段：工程外壳、后端连通状态屏、地图生命周期验证和本机浏览器诊断入口。Figma 页面在后续阶段实现，**本 S1 构建不可部署**。
 
 ## 环境与命令
 
@@ -26,9 +26,10 @@ pnpm test:unit
 
 ```text
 src/
-  app/                 启动、Providers、错误边界
-  features/map/        S1 后端连通状态屏
-  shared/api/          transport、ApiError、各接口 DTO/schema
+  app/                 启动、Providers、错误边界、S1 dev pathname 入口
+  features/map/        S1 状态屏、地图模块（MapCanvas、coords、合成点位）、/__dev/map-spike
+  features/dev/        S1 浏览器诊断页 /__dev/qa
+  shared/api/          transport、ApiError、各接口 DTO/schema、session
   shared/query/        查询键约定（public / private）
   shared/i18n/         LanguageProvider 与 zh/en 词条
   shared/auth/         authEpoch 纯模块
@@ -36,6 +37,33 @@ src/
   shared/ui/           定制的 shadcn 原语
   styles/              tokens.css、fonts.css、global.css
 ```
+
+## S1 开发验证入口（不是产品页面）
+
+| 路径               | 用途                                                                                                           |
+| ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `/`                | S1 状态屏：后端 `/health/live`、`/health/ready` 连通性与重试                                                   |
+| `/__dev/map-spike` | 地图生命周期验证：200 个**固定合成**上海点位、常驻 Leaflet 实例、语言/面板/字段更新/增删按钮、更新的下一帧耗时 |
+| `/__dev/qa`        | 本机浏览器诊断：375×812 固定 CSS 视口 iframe 预览 + 开发会话表单                                               |
+
+这些入口由 `src/app/devRoutes.tsx` 按 `window.location.pathname` 切换，**S2 引入真实 Router 时替换**。它们**包含在当前 S1 构建产物中**（不是仅 dev server 存在，也未在生产构建里被排除），但约定只在本机使用、不对外发布。
+
+### `/__dev/map-spike`
+
+- 默认 OSM 底图 `https://tile.openstreetmap.org/{z}/{x}/{y}.png`，保留 OpenStreetMap 署名，不做预取或离线下载，不引入第二套地图引擎、Mapbox 密钥或聚合库。
+- 200 个点位是**合成样本**（`src/features/map/syntheticMarkers.ts`），id/version 固定、标题有 zh/en，不代表真实设施，也不是历史数据；用 `CircleMarker` 示意，**不是最终 Figma 图标**。
+- 地图模块不按 `language`/面板/筛选/登录状态设 `key`：语言与点位变化只更新 props。地图实例标识用 `WeakMap<LeafletMap, string>` + `L.stamp` 记录，重放 effect 不会伪造新实例。
+- 页面展示点数、实例标识、center/zoom，以及一次字段更新到下一动画帧的耗时。该耗时是本机合成样本的**观测值，不是 GPU 或完整地图渲染的性能结论**。
+
+### `/__dev/qa`
+
+- 只提供 **375×812** 一个固定 iframe 尺寸，避免对桌面窗口产生大幅横向溢出。iframe 用真实 CSS 视口尺寸，仅做响应式检查，**不是 iPhone 设备模拟，也不缩放截图冒充手机视口**。
+- 开发会话表单是 S1 本机诊断工具，不是产品账号 UI（正式登录在 S4）：
+    - 操作者自行输入合成 username/password → 真实 `POST /api/login`，随后 `GET /api/me`（取 AuthEnvelope 的 `data`）、`GET /api/me/avatar`（Blob）、`POST /api/me/avatar`（仅 `file` 字段，合成图片）、`POST /api/logout` 并确认 `/api/me` 返回 401。
+    - **不注册账号、不改密码、不硬编码任何凭据或真实用户数据。**
+    - 密码不落 localStorage、不打印、不写 URL，提交后立即从组件状态清空。
+    - 会话响应受 authEpoch 保护：旧 `/me`、旧头像、旧上传结果不会恢复旧用户；登录 A→B、当前 401、退出都会撤销旧头像 object URL、取消并删除旧 scope 私有查询，公开缓存保留。
+    - 登录/退出/上传等操作串行执行，进行中禁用输入与 file 选择。
 
 ## 图标与 UI 资产
 
