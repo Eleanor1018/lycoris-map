@@ -2,7 +2,7 @@
  * Minimal fetch adapter over the real Rust backend contract.
  *
  * Contract notes (verified in `backend/src`):
- * - Browsers use HttpOnly cookies, so every request sends `credentials: 'include'`.
+ * - Cookie requests default to include; public-only reads can explicitly omit credentials.
  * - `AbortSignal` is passed straight to `fetch`.
  * - Bodies are parsed by `parseBody`: JSON, text, or empty. A 200/204 with an
  *   empty body resolves to `undefined` (e.g. favorite add/remove, logout).
@@ -28,6 +28,8 @@ export type RequestOptions = {
     /** Explicit headers merged after defaults. */
     headers?: Record<string, string>
     signal?: AbortSignal
+    /** Public-only endpoints must not inherit an existing owner's Cookie session. */
+    credentials?: 'include' | 'omit'
     /** Base URL override; defaults to the same-origin proxy. */
     baseUrl?: string
 }
@@ -129,7 +131,7 @@ export async function request(path: string, options: RequestOptions = {}): Promi
         response = await fetch(url, {
             method: options.method ?? 'GET',
             headers,
-            credentials: 'include',
+            credentials: options.credentials ?? 'include',
             ...(body === undefined ? {} : { body }),
             ...(options.signal ? { signal: options.signal } : {}),
         })

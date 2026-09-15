@@ -21,8 +21,8 @@ export const openTimeSchema = z.string()
 export const markerSchema = z.object({
     id: safeInteger,
     version: safeInteger,
-    lat: z.number(),
-    lng: z.number(),
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
     category: markerCategorySchema,
     title: z.string(),
     description: z.string().nullable(),
