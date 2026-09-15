@@ -2,6 +2,7 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { placeFixtureServer } from './src/features/dev/placeFixtureServer.ts'
 
 /**
  * Local development only. The frontend never carries a server target or secrets.
@@ -20,7 +21,7 @@ const LOCAL_BACKEND = 'http://127.0.0.1:8080'
 const DEV_PORT = 5173
 
 export default defineConfig({
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), placeFixtureServer()],
     build: {
         rolldownOptions: {
             output: {
