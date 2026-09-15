@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { parsePanel, type Panel } from './types'
-type ReturnState = { owner: string; focusId: string }
+type ReturnState = { owner: string; focusId: string; replaceClose: boolean }
 function readReturnState(value: unknown): ReturnState | null {
     if (!value || typeof value !== 'object' || !('owner' in value) || !('focusId' in value))
         return null
     return typeof value.owner === 'string' && typeof value.focusId === 'string'
-        ? { owner: value.owner, focusId: value.focusId }
+        ? {
+              owner: value.owner,
+              focusId: value.focusId,
+              replaceClose: 'replaceClose' in value && value.replaceClose === true,
+          }
         : null
 }
 export function usePanelRoute(design: boolean) {
@@ -17,21 +21,32 @@ export function usePanelRoute(design: boolean) {
     const field = design ? 'screen' : 'panel'
     const panel = parsePanel(new URLSearchParams(location.search).get(field))
     const open = useCallback(
-        (next: Panel, focusId = '') => {
+        (next: Panel, focusId = '', replace = false) => {
             if (next === panel) return
             const params = new URLSearchParams(location.search)
             if (next === 'initial') params.delete(field)
             else params.set(field, next)
+            const previous = readReturnState(location.state)
+            const finishingPicker = panel === 'contribute' && next === 'contribute-form'
+            const ownedPicker = previous?.owner === owner.current
             navigate(
                 { pathname: location.pathname, search: params.toString(), hash: location.hash },
-                { state: { owner: owner.current, focusId } },
+                {
+                    // Picking and composing are one contribution flow in browser history.
+                    replace: replace || finishingPicker,
+                    state: {
+                        owner: owner.current,
+                        focusId,
+                        replaceClose: finishingPicker && !ownedPicker,
+                    },
+                },
             )
         },
         [field, location, navigate, panel],
     )
     const close = useCallback(() => {
         const state = readReturnState(location.state)
-        if (state?.owner === owner.current) {
+        if (state?.owner === owner.current && !state.replaceClose) {
             restoreFocus.current = state.focusId
             void navigate(-1)
         } else {

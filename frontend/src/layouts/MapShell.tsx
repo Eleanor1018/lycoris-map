@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Map as LeafletMap } from 'leaflet'
 import { useNavigate } from 'react-router'
 import { MobileSheet } from './MobileSheet'
@@ -10,6 +10,7 @@ import { DesktopPanel } from './DesktopPanel'
 import { usePanelRoute } from './usePanelRoute'
 import type { DesignSample, Panel, Snap } from './types'
 import './map-shell.css'
+import { emptyContributionDraft, type ContributionDraft } from './ContributionForm'
 const navigation: { panel: Panel; label: string; icon: FigmaIconName }[] = [
     { panel: 'search', label: 'Search', icon: 'navSearch' },
     { panel: 'bookmarks', label: 'Bookmarks', icon: 'navBookmarks' },
@@ -20,12 +21,20 @@ const navigation: { panel: Panel; label: string; icon: FigmaIconName }[] = [
 export function MapShell({ sample }: { sample?: DesignSample }) {
     const { panel, open, close, location } = usePanelRoute(Boolean(sample))
     const mobile = useMobileLayout()
+    const contributionOpen = panel === 'contribute-form' || (mobile && panel === 'contribute')
+    useEffect(() => {
+        if (mobile && panel === 'contribute') open('contribute-form', 'nav-contribute', true)
+    }, [mobile, panel, open])
     const viewportHeight = useViewportHeight()
     const navigate = useNavigate()
     const mobileFixture = Boolean(sample) && location.pathname === '/__design/mobile'
     const params = new URLSearchParams(location.search)
     const snapValue = params.get(mobileFixture ? 'screen' : 'snap')
-    const snap: Snap = snapValue === 'half' || snapValue === 'full' ? snapValue : 'collapsed'
+    const snap: Snap = contributionOpen
+        ? 'full'
+        : snapValue === 'half' || snapValue === 'full'
+          ? snapValue
+          : 'collapsed'
     const [dragHeight, setDragHeight] = useState<number | null>(null)
     const sheetHeight =
         dragHeight ??
@@ -50,6 +59,25 @@ export function MapShell({ sample }: { sample?: DesignSample }) {
     const [search, setSearch] = useState('')
     const [bookmarksSearch, setBookmarksSearch] = useState('')
     const [language, setLanguage] = useState<'en' | 'zh'>('en')
+    const [contributionDraft, setContributionDraft] =
+        useState<ContributionDraft>(emptyContributionDraft)
+    const [contributionPoint, setContributionPoint] = useState<{ lat: number; lng: number } | null>(
+        null,
+    )
+    const picking = panel === 'contribute' && !mobile
+    const selectPoint = useCallback(
+        (point: { lat: number; lng: number } | null) => {
+            setContributionPoint(point)
+            open('contribute-form', 'nav-contribute')
+        },
+        [open],
+    )
+    const contribution = {
+        draft: contributionDraft,
+        onChange: setContributionDraft,
+        point: contributionPoint,
+        close,
+    }
     return (
         <main
             lang="en"
@@ -61,7 +89,26 @@ export function MapShell({ sample }: { sample?: DesignSample }) {
             data-snap={snap}
         >
             {sample ? (
-                <div className="design-map" aria-hidden="true">
+                <div
+                    className="design-map"
+                    aria-hidden={!picking || undefined}
+                    role={picking ? 'button' : undefined}
+                    tabIndex={picking ? 0 : undefined}
+                    aria-label={
+                        picking ? 'Choose contribution location in design preview' : undefined
+                    }
+                    onClick={picking ? () => selectPoint(null) : undefined}
+                    onKeyDown={
+                        picking
+                            ? (event) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                      event.preventDefault()
+                                      selectPoint(null)
+                                  }
+                              }
+                            : undefined
+                    }
+                >
                     {mobile ? (
                         <div className="mobile-map-crop">
                             <img className="mobile-map-image" src={sample.maps.mobile} alt="" />
@@ -86,7 +133,7 @@ export function MapShell({ sample }: { sample?: DesignSample }) {
                     )}
                 </div>
             ) : (
-                <MapSurface onMap={onMap} />
+                <MapSurface onMap={onMap} onPick={picking ? selectPoint : undefined} />
             )}
             {!mobile && (
                 <aside className="desktop-nav" aria-label="Main navigation">
@@ -96,9 +143,17 @@ export function MapShell({ sample }: { sample?: DesignSample }) {
                             <DesignButton
                                 key={item.panel}
                                 id={`nav-${item.panel}`}
-                                className={`nav-row ${panel === item.panel ? 'selected' : ''}`}
-                                aria-current={panel === item.panel ? 'page' : undefined}
-                                onClick={() => open(item.panel, `nav-${item.panel}`)}
+                                className={`nav-row ${panel === item.panel || (panel === 'contribute-form' && item.panel === 'contribute') ? 'selected' : ''}`}
+                                aria-current={
+                                    panel === item.panel ||
+                                    (panel === 'contribute-form' && item.panel === 'contribute')
+                                        ? 'page'
+                                        : undefined
+                                }
+                                onClick={() => {
+                                    if (item.panel === 'contribute') setContributionPoint(null)
+                                    open(item.panel, `nav-${item.panel}`)
+                                }}
                             >
                                 <FigmaIcon name={item.icon} />
                                 <span>
@@ -138,6 +193,7 @@ export function MapShell({ sample }: { sample?: DesignSample }) {
                     setLanguage={setLanguage}
                     open={open}
                     close={close}
+                    contribution={contribution}
                 />
             )}
             {mobile && (
@@ -152,6 +208,7 @@ export function MapShell({ sample }: { sample?: DesignSample }) {
                     close={close}
                     dragHeight={dragHeight}
                     setDragHeight={setDragHeight}
+                    contribution={contributionOpen ? contribution : undefined}
                 />
             )}
             <div className="map-tools top-tools" inert={mobile && sheetTop < 142}>
@@ -172,10 +229,14 @@ export function MapShell({ sample }: { sample?: DesignSample }) {
                 <div className="map-tools mobile-tools" inert={sheetTop < 240}>
                     <IconButton icon="radar" size={20} label="Find nearby" available={false} />
                     <IconButton
+                        id="mobile-contribute"
                         icon="mobileContribute"
                         size={20}
                         label="Contribute"
-                        available={false}
+                        onClick={() => {
+                            setContributionPoint(null)
+                            open('contribute-form', 'mobile-contribute')
+                        }}
                     />
                 </div>
             ) : (

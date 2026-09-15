@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-const query = '(max-width: 1023px)'
+const query = '(max-width: 767px)'
 function subscribe(callback: () => void) {
     const media = window.matchMedia?.(query)
     media?.addEventListener('change', callback)
@@ -8,7 +8,7 @@ function subscribe(callback: () => void) {
 export function useMobileLayout() {
     return useSyncExternalStore(
         subscribe,
-        () => window.matchMedia?.(query).matches ?? window.innerWidth < 1024,
+        () => window.matchMedia?.(query).matches ?? window.innerWidth < 768,
         () => false,
     )
 }

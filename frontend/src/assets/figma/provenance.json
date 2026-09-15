@@ -285,5 +285,19 @@
         "nodeId": "54:1669",
         "sha256": "13d21ce8fcaee26970c672c0ea696feff7400938a41e72d9ed02cb4f106f4923",
         "bytes": 8011
+    },
+    {
+        "file": "upload.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "74:4725",
+        "sha256": "282569fecdb812540736328e9ab3125c33ffa79db25616bd1b12a17bfce76442",
+        "bytes": 461
+    },
+    {
+        "file": "send.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "74:4741",
+        "sha256": "0d76ac697009b06516a014af09aa832fd1edade29e3a4f86d61e536715da41c1",
+        "bytes": 313
     }
 ]

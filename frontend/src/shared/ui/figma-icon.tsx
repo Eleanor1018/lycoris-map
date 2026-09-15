@@ -31,6 +31,8 @@ import mobileShare from '@/assets/figma/mobile-share.svg'
 import mobileMicrophone from '@/assets/figma/mobile-microphone.svg'
 import mobileChevronDark from '@/assets/figma/mobile-chevron-dark.svg'
 import mobileChevronBlue from '@/assets/figma/mobile-chevron-blue.svg'
+import upload from '@/assets/figma/upload.svg'
+import send from '@/assets/figma/send.svg'
 
 const icons = {
     navSearch,
@@ -66,6 +68,8 @@ const icons = {
     mobileMicrophone,
     mobileChevronDark,
     mobileChevronBlue,
+    upload,
+    send,
 }
 export type FigmaIconName = keyof typeof icons
 

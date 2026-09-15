@@ -1,6 +1,6 @@
 # Lycoris Web v2（`frontend/`）
 
-Web v2 新工程，当前已实现 **S2 设计外壳**：对应 Figma 的 7 个桌面状态、4 个手机状态、常驻 OSM 地图与面板导航。S2 由温晓亲自编码，使用 Figma MCP 原始资产和 Computer Use 逐屏核对。真实地点、搜索、账号及贡献等业务接入属于后续阶段；当前仅供本机开发与验收。
+Web v2 新工程，当前已实现 **S2 设计外壳**：对应 Figma 的 8 个桌面状态、5 个手机状态、常驻 OSM 地图与面板导航。S2 由温晓亲自编码，使用 Figma MCP 原始资产和 Computer Use 逐屏核对。真实地点、搜索、账号及贡献提交等业务接入属于后续阶段；当前仅供本机开发与验收。
 
 ## 环境与命令
 
@@ -42,19 +42,25 @@ src/
 
 ## 页面与设计验收
 
-正常入口 `/`（兼容 `/maps`）使用真实 OSM 瓦片，不放入 Figma 的样本账号、距离、地点、照片或模拟点。面板使用 `?panel=search|bookmarks|languages|settings|contribute|details`；手机吸附高度使用 `?snap=collapsed|half|full`。关闭面板和浏览器返回/前进保留已有 query、hash 和搜索草稿，切换屏宽不重新创建地图。
+正常入口 `/`（兼容 `/maps`）使用真实 OSM 瓦片，不放入 Figma 的样本账号、距离、地点、照片或模拟点。面板使用 `?panel=search|bookmarks|languages|settings|contribute|contribute-form|details`；手机吸附高度使用 `?snap=collapsed|half|full`。关闭面板和浏览器返回/前进保留已有 query、hash 和搜索草稿，切换屏宽不重新创建地图。
 
-| 仅开发环境的路径                    | 用途                                                                                          |
-| ----------------------------------- | --------------------------------------------------------------------------------------------- |
-| `/__design/desktop?screen=initial`  | 桌面原稿比对，可选 initial / search / bookmarks / languages / settings / contribute / details |
-| `/__design/mobile?screen=collapsed` | 手机原稿比对，可选 collapsed / half / full / details                                          |
-| `/__dev/status`                     | 后端 `/health/live`、`/health/ready` 连通状态                                                 |
-| `/__dev/map-spike`                  | S1 的 200 个固定合成点位及地图生命周期诊断                                                    |
-| `/__dev/qa`                         | S1 本机 Cookie 会话、头像与固定手机视口验证                                                   |
+| 仅开发环境的路径                    | 用途                                                                                                            |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `/__design/desktop?screen=initial`  | 桌面原稿比对，可选 initial / search / bookmarks / languages / settings / contribute / contribute-form / details |
+| `/__design/mobile?screen=collapsed` | 手机原稿比对，可选 collapsed / half / full / contribute-form / details                                          |
+| `/__dev/status`                     | 后端 `/health/live`、`/health/ready` 连通状态                                                                   |
+| `/__dev/map-spike`                  | S1 的 200 个固定合成点位及地图生命周期诊断                                                                      |
+| `/__dev/qa`                         | S1 本机 Cookie 会话、头像与固定手机视口验证                                                                     |
 
 这些开发页面由 `import.meta.env.DEV` 隔离并按需加载；生产构建不包含其组件、样本地图/照片或诊断词条。画稿样本与正常入口共用 `MapShell`、`DesktopPanel`、`MobileSheet`，不是整页截图。
 
 Figma 基准：[Lycoris v2](https://www.figma.com/design/nmsiDbbgm0LG0CSwXUSLPW/Lycoris-v2-design?node-id=9-397)。桌面基准为 1440×1024，手机为 375×812，手机系统栏与设备边框不复制为网页。已额外检查 390/430/768/1024 宽度与短视口滚动。手机手柄支持拖动、点击及方向键/Home/End；详情关闭、输入法 Escape 和焦点返回有相应处理。
+
+桌面和平板采用侧边栏布局（宽度 ≥768px），手机采用底部面板（≤767px）。搜索框由圆角外框整体显示焦点；手机空 Bookmarks 与 Settings 之间保留 13px，有收藏时保持原稿卡片排布。
+
+贡献入口对应 [桌面表单 72:2369](https://www.figma.com/design/nmsiDbbgm0LG0CSwXUSLPW/Lycoris-v2-design?node-id=72-2369) 与 [手机表单 74:4744](https://www.figma.com/design/nmsiDbbgm0LG0CSwXUSLPW/Lycoris-v2-design?node-id=74-4744)：桌面/平板先显示气泡，点击地图后打开表单；拖动地图不会触发表单，键盘可在地图上按 Enter 选择中心。手机点击笔按钮直接打开。关闭表单退出本次贡献流程，切换屏宽保留草稿与已选坐标。
+
+当前表单支持本次页面会话内的标题、类别、描述、时间及本地照片选择；重新打开仍保留草稿，刷新后清空。手机直接进入时尚未选择坐标，不假定为用户当前位置。Submit 保持 `aria-disabled`，不发送创建或上传请求；认证、手机坐标确认、校验和真实提交属于 S5。
 
 布局、色值、图标按原稿实现；**尚不能宣称所有文字像素一致**：Figma 的 SF Pro 与本机 SF 系统字体存在字宽差异。Fredoka、Roboto、Noto Sans 的所用 Latin 字重自托管，SF 使用本机系统字体，不把下载的 SF 字体打包分发。中英文完整业务切换留在 S6。
 

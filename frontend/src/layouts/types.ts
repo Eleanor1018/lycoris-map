@@ -5,6 +5,7 @@ export const panels = [
     'languages',
     'settings',
     'contribute',
+    'contribute-form',
     'details',
 ] as const
 export type Panel = (typeof panels)[number]

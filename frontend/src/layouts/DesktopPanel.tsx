@@ -1,6 +1,7 @@
 import { FigmaIcon } from '@/shared/ui/figma-icon'
 import { CategoryBadge, DesignButton, IconButton, NearbyCards, SearchField } from './primitives'
 import type { DesignSample, Panel } from './types'
+import { ContributionForm, type ContributionFormProps } from './ContributionForm'
 
 type Props = {
     panel: Panel
@@ -13,11 +14,18 @@ type Props = {
     setLanguage: (value: 'en' | 'zh') => void
     open: (panel: Panel, focusId?: string) => void
     close: () => void
+    contribution?: Omit<ContributionFormProps, 'mobile'>
 }
 
 export function DesktopPanel(props: Props) {
     const { panel, sample, close, open } = props
     if (panel === 'initial') return null
+    if (panel === 'contribute-form' && props.contribution)
+        return (
+            <section className="desktop-panel panel-contribute-form" aria-label="Contribute">
+                <ContributionForm {...props.contribution} />
+            </section>
+        )
     if (panel === 'contribute')
         return (
             <div className="contribution-bar">

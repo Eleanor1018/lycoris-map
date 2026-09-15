@@ -3,7 +3,13 @@ import { useEffect, type RefCallback } from 'react'
 import { MapContainer, TileLayer, useMap } from 'react-leaflet'
 import L, { type Map as LeafletMap } from 'leaflet'
 const CENTER: [number, number] = [31.2304, 121.4737]
-export function MapSurface({ onMap }: { onMap: RefCallback<LeafletMap> }) {
+export function MapSurface({
+    onMap,
+    onPick,
+}: {
+    onMap: RefCallback<LeafletMap>
+    onPick?: ((point: { lat: number; lng: number }) => void) | undefined
+}) {
     return (
         <MapContainer
             ref={onMap}
@@ -21,8 +27,48 @@ export function MapSurface({ onMap }: { onMap: RefCallback<LeafletMap> }) {
                 }
             />
             <MapLifecycle />
+            <MapPick onPick={onPick} />
         </MapContainer>
     )
+}
+function MapPick({
+    onPick,
+}: {
+    onPick: ((point: { lat: number; lng: number }) => void) | undefined
+}) {
+    const map = useMap()
+    useEffect(() => {
+        const container = map.getContainer()
+        const oldLabel = container.getAttribute('aria-label')
+        container.setAttribute(
+            'aria-label',
+            onPick ? 'Map. Click a location, or press Enter to choose the map center.' : 'Map',
+        )
+        const restoreLabel = () => {
+            if (oldLabel === null) container.removeAttribute('aria-label')
+            else container.setAttribute('aria-label', oldLabel)
+        }
+        if (!onPick) return restoreLabel
+        const choose = (point: L.LatLng) => {
+            const { lat, lng } = point.wrap()
+            onPick({ lat, lng })
+        }
+        const click = (event: L.LeafletMouseEvent) => choose(event.latlng)
+        const keyboard = (event: KeyboardEvent) => {
+            if (event.key === 'Enter' && event.target === map.getContainer()) {
+                event.preventDefault()
+                choose(map.getCenter())
+            }
+        }
+        map.on('click', click)
+        map.getContainer().addEventListener('keydown', keyboard)
+        return () => {
+            map.off('click', click)
+            map.getContainer().removeEventListener('keydown', keyboard)
+            restoreLabel()
+        }
+    }, [map, onPick])
+    return null
 }
 function MapLifecycle() {
     const map = useMap()

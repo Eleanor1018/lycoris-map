@@ -3,6 +3,7 @@ import { FigmaIcon } from '@/shared/ui/figma-icon'
 import { PlaceMeta, PlaceSummary, ShareButton } from './DesktopPanel'
 import { CategoryBadge, DesignButton, IconButton, NearbyCards, SearchField } from './primitives'
 import type { DesignSample, Snap } from './types'
+import { ContributionForm, type ContributionFormProps } from './ContributionForm'
 
 export function MobileSheet({
     snap,
@@ -15,6 +16,7 @@ export function MobileSheet({
     close,
     dragHeight,
     setDragHeight,
+    contribution,
 }: {
     snap: Snap
     setSnap: (value: Snap) => void
@@ -26,12 +28,14 @@ export function MobileSheet({
     close: () => void
     dragHeight: number | null
     setDragHeight: (height: number | null) => void
+    contribution?: Omit<ContributionFormProps, 'mobile'> | undefined
 }) {
     const sheet = useRef<HTMLElement>(null)
     const gesture = useRef<{ id: number; y: number; height: number; moved: boolean } | null>(null)
     const suppressClick = useRef(false)
+    const expandedPanel = detail || Boolean(contribution)
     const cycle = () =>
-        detail
+        expandedPanel
             ? close()
             : setSnap(snap === 'collapsed' ? 'half' : snap === 'half' ? 'full' : 'collapsed')
     const begin = (event: PointerEvent<HTMLButtonElement>) => {
@@ -62,7 +66,7 @@ export function MobileSheet({
         if (!current || current.id !== event.pointerId) return
         if (current.moved) {
             suppressClick.current = true
-            if (detail) {
+            if (expandedPanel) {
                 if (event.clientY - current.y > 48) close()
             } else {
                 const height = current.height + current.y - event.clientY
@@ -81,16 +85,22 @@ export function MobileSheet({
     return (
         <section
             ref={sheet}
-            className={`mobile-sheet ${detail ? 'mobile-detail' : ''}`}
+            className={`mobile-sheet ${detail ? 'mobile-detail' : ''} ${contribution ? 'mobile-contribution' : ''}`}
             data-snap={snap}
-            aria-label={detail ? 'Details' : 'Search positions'}
+            aria-label={contribution ? 'Contribute' : detail ? 'Details' : 'Search positions'}
             style={dragHeight === null ? undefined : { height: dragHeight }}
         >
             <DesignButton
                 id="sheet-handle"
                 className="sheet-handle"
-                aria-label={detail ? 'Close details' : `Change panel height (${snap})`}
-                aria-expanded={detail || snap !== 'collapsed'}
+                aria-label={
+                    contribution
+                        ? 'Close contribution panel'
+                        : detail
+                          ? 'Close details'
+                          : `Change panel height (${snap})`
+                }
+                aria-expanded={expandedPanel || snap !== 'collapsed'}
                 onPointerDown={begin}
                 onPointerMove={move}
                 onPointerUp={finish}
@@ -109,7 +119,7 @@ export function MobileSheet({
                     if (['ArrowUp', 'ArrowDown', 'Home', 'End', 'Escape'].includes(event.key)) {
                         event.preventDefault()
                         event.stopPropagation()
-                        if (detail) {
+                        if (expandedPanel) {
                             if (
                                 event.key === 'ArrowDown' ||
                                 event.key === 'Escape' ||
@@ -128,8 +138,13 @@ export function MobileSheet({
             >
                 <span />
             </DesignButton>
-            <div className="sheet-scroll" key={detail ? 'detail' : snap}>
-                {detail ? (
+            <div
+                className="sheet-scroll"
+                key={contribution ? 'contribution' : detail ? 'detail' : snap}
+            >
+                {contribution ? (
+                    <ContributionForm {...contribution} mobile />
+                ) : detail ? (
                     <div className="mobile-detail-content">
                         {sample && (
                             <>
