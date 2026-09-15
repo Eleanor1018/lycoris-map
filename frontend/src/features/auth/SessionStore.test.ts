@@ -5,6 +5,8 @@ import { ApiError } from '@/shared/api/ApiError'
 import { privateKeys } from '@/shared/query/keys'
 import { SessionStore } from './SessionStore'
 import type { User } from '@/shared/api/users'
+import { waitFor } from '@testing-library/react'
+import { sessionEventKey } from './SessionStore'
 
 vi.mock('@/shared/api/session', () => ({
     fetchMe: vi.fn(),
@@ -43,6 +45,39 @@ beforeEach(() => {
     vi.mocked(api.logout).mockImplementation(async () => {
         server = null
     })
+})
+it('revalidates storage notifications once and never trusts a broadcast identity', async () => {
+    const client = new QueryClient(),
+        store = new SessionStore(client),
+        stop = store.connect()
+    try {
+        await waitFor(() => expect(store.getSnapshot().user?.publicId).toBe('A'))
+        const scope = store.getSnapshot().scope!
+        client.setQueryData(privateKeys.created(scope, 'en'), ['private A'])
+        server = account('B')
+        const payload = JSON.stringify({
+            type: 'session',
+            source: 'other-tab',
+            id: 'change-1',
+            publicId: 'untrusted-C',
+        })
+        window.dispatchEvent(
+            new StorageEvent('storage', { key: sessionEventKey, newValue: payload }),
+        )
+        await waitFor(() => expect(store.getSnapshot().user?.publicId).toBe('B'))
+        expect(client.getQueryData(privateKeys.created(scope, 'en'))).toBeUndefined()
+        const calls = vi.mocked(api.fetchMe).mock.calls.length
+        window.dispatchEvent(
+            new StorageEvent('storage', { key: sessionEventKey, newValue: payload }),
+        )
+        await Promise.resolve()
+        expect(api.fetchMe).toHaveBeenCalledTimes(calls)
+        await store.logout()
+        const event = JSON.parse(localStorage.getItem(sessionEventKey)!) as Record<string, unknown>
+        expect(Object.keys(event).sort()).toEqual(['id', 'source', 'type'])
+    } finally {
+        stop()
+    }
 })
 it('clears only the old private scope on logout and refuses late private results', async () => {
     const client = new QueryClient(),
@@ -146,4 +181,72 @@ it('current protected 401 invalidates its scope', async () => {
     ).rejects.toMatchObject({ status: 401 })
     expect(store.isCurrent(scope)).toBe(false)
     expect(store.getSnapshot().status).toBe('anonymous')
+})
+
+it('a queued logout from A cannot delete the newer B Cookie session', async () => {
+    const first = new SessionStore(new QueryClient()),
+        second = new SessionStore(new QueryClient())
+    await first.refresh()
+    await second.refresh()
+    const finish = deferred<User | null>(),
+        entered = deferred<void>()
+    vi.mocked(api.login).mockImplementation(async () => {
+        entered.resolve()
+        const user = await finish.promise
+        server = user
+        return user
+    })
+    const login = first.login({ username: 'B', password: 'synthetic-only' })
+    await entered.promise
+    const logout = second.logout()
+    const rejected = expect(logout).rejects.toMatchObject({ name: 'AbortError' })
+    second.externalChange()
+    finish.resolve(account('B'))
+    await login
+    await rejected
+    expect(api.logout).not.toHaveBeenCalled()
+    expect(server?.publicId).toBe('B')
+})
+it('does not submit an old password form after the preflight scope changes', async () => {
+    const store = new SessionStore(new QueryClient())
+    await store.refresh()
+    const response = deferred<User | null>(),
+        entered = deferred<void>()
+    vi.mocked(api.fetchMe).mockImplementationOnce(async () => {
+        entered.resolve()
+        return response.promise
+    })
+    const changing = store.changePassword({
+        oldPassword: 'synthetic-old',
+        newPassword: 'synthetic-new',
+    })
+    const rejected = expect(changing).rejects.toMatchObject({ name: 'AbortError' })
+    await entered.promise
+    store.externalChange()
+    response.resolve(server)
+    await rejected
+    expect(api.changePassword).not.toHaveBeenCalled()
+})
+it('aborts a blocking private request as soon as logout is requested', async () => {
+    const store = new SessionStore(new QueryClient())
+    await store.refresh()
+    const scope = store.getSnapshot().scope!,
+        entered = deferred<void>()
+    let signal!: AbortSignal
+    const read = store.runPrivate(
+        scope,
+        (s) =>
+            new Promise<void>((_, reject) => {
+                signal = s
+                entered.resolve()
+                s.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+            }),
+    )
+    const rejected = expect(read).rejects.toMatchObject({ name: 'AbortError' })
+    await entered.promise
+    const logout = store.logout()
+    expect(signal.aborted).toBe(true)
+    await rejected
+    await logout
+    expect(store.getSnapshot().user).toBeNull()
 })

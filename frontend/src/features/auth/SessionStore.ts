@@ -198,6 +198,7 @@ export class SessionStore {
         task: (signal: AbortSignal) => Promise<T>,
         parentSignal?: AbortSignal,
     ): Promise<T> => {
+        if (this.snapshot.busy) throw aborted()
         this.assertCurrent(scope, parentSignal)
         const controller = new AbortController()
         this.reads.add(controller)
@@ -206,6 +207,7 @@ export class SessionStore {
             : controller.signal
         try {
             return await withSessionLock(async () => {
+                if (this.snapshot.busy) throw aborted()
                 this.assertCurrent(scope, signal)
                 const user = await this.me(signal)
                 this.assertCurrent(scope, signal)
@@ -238,12 +240,15 @@ export class SessionStore {
         if (this.snapshot.busy) throw new Error('Please wait for the current account request.')
         const previous = this.snapshot.scope
         this.publish({ busy: true, error: null })
+        for (const controller of this.reads) controller.abort()
+        this.reads.clear()
         try {
             return await withSessionLock(async () => {
                 if (requireOwner) {
                     if (!previous) throw new Error('Please log in again.')
                     this.assertCurrent(previous)
                     const owner = await this.me()
+                    this.assertCurrent(previous)
                     if (owner?.publicId !== previous.publicId) {
                         this.adopt(owner)
                         throw new Error('Your session changed. Please try again.')
@@ -292,7 +297,7 @@ export class SessionStore {
             } catch (error) {
                 if (!(error instanceof ApiError && error.status === 401)) throw error
             }
-        }, false)
+        }, true)
     changePassword = (input: api.PasswordInput) =>
         this.transition(() => api.changePassword(input), true)
 }
