@@ -30,6 +30,7 @@ export type RequestOptions = {
     signal?: AbortSignal
     /** Public-only endpoints must not inherit an existing owner's Cookie session. */
     credentials?: 'include' | 'omit'
+    cache?: RequestCache
     /** Base URL override; defaults to the same-origin proxy. */
     baseUrl?: string
 }
@@ -96,6 +97,7 @@ function messageFromBody(status: number, body: unknown): { code?: number; messag
  * this type: the signature must not promise behaviour it does not implement.
  */
 export type BlobRequestOptions = {
+    cache?: RequestCache
     /** Query parameters; `undefined`/`null` entries are omitted. */
     query?: Record<string, string | number | boolean | undefined | null>
     /** Explicit headers merged after the default `Accept: image/*`. */
@@ -132,6 +134,7 @@ export async function request(path: string, options: RequestOptions = {}): Promi
             method: options.method ?? 'GET',
             headers,
             credentials: options.credentials ?? 'include',
+            ...(options.cache ? { cache: options.cache } : {}),
             ...(body === undefined ? {} : { body }),
             ...(options.signal ? { signal: options.signal } : {}),
         })
@@ -172,6 +175,7 @@ export async function requestBlob(path: string, options: BlobRequestOptions = {}
             method: 'GET',
             headers,
             credentials: 'include',
+            ...(options.cache ? { cache: options.cache } : {}),
             ...(options.signal ? { signal: options.signal } : {}),
         })
     } catch (error) {
