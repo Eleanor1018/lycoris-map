@@ -2,11 +2,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 import { LanguageProvider } from '@/shared/i18n'
 import { AppErrorBoundary } from './ErrorBoundary'
+import { SessionProvider } from '@/features/auth/SessionProvider'
+import { AccountFlowProvider } from '@/features/auth/AccountFlow'
+import { BookmarksProvider } from '@/features/bookmarks/BookmarksProvider'
 
-/**
- * S1 application root. It sets up the query client and language provider only;
- * routing and the map shell arrive in S2/S3.
- */
+/** One query cache and Cookie-session owner for the application. */
 export function AppProviders({ children }: { children: ReactNode }) {
     const [queryClient] = useState(
         () =>
@@ -24,7 +24,13 @@ export function AppProviders({ children }: { children: ReactNode }) {
     return (
         <AppErrorBoundary>
             <QueryClientProvider client={queryClient}>
-                <LanguageProvider>{children}</LanguageProvider>
+                <LanguageProvider>
+                    <SessionProvider>
+                        <AccountFlowProvider>
+                            <BookmarksProvider>{children}</BookmarksProvider>
+                        </AccountFlowProvider>
+                    </SessionProvider>
+                </LanguageProvider>
             </QueryClientProvider>
         </AppErrorBoundary>
     )

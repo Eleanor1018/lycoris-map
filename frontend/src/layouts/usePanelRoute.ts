@@ -102,6 +102,11 @@ export function usePanelRoute(
     }, [location.key])
     useEffect(() => {
         const escape = (event: KeyboardEvent) => {
+            if (
+                event.defaultPrevented ||
+                (event.target instanceof Element && event.target.closest('[data-account-dialog]'))
+            )
+                return
             if (event.key === 'Escape' && !event.isComposing && panel !== 'initial') {
                 event.preventDefault()
                 close()

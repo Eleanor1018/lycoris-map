@@ -6,6 +6,7 @@ import type { Marker } from '@/shared/api/markers'
 import type { PlaceBrowse } from '@/features/places/usePlaceBrowse'
 import { PlaceDetails } from '@/features/places/PlaceDetails'
 import { PlaceResults } from '@/features/places/PlaceResults'
+import { BookmarksPanel } from '@/features/bookmarks/BookmarksPanel'
 
 type Props = {
     panel: Panel
@@ -59,7 +60,10 @@ export function DesktopPanel(props: Props) {
                     )}
                 </>
             )}
-            {panel === 'bookmarks' && (
+            {panel === 'bookmarks' && !sample && props.browse && props.selectPlace && (
+                <BookmarksPanel browse={props.browse} onSelect={props.selectPlace} />
+            )}
+            {panel === 'bookmarks' && sample && (
                 <>
                     <SearchField
                         bookmarks

@@ -14,6 +14,9 @@ import { emptyContributionDraft, type ContributionDraft } from './ContributionFo
 import type { PlaceBrowse } from '@/features/places/usePlaceBrowse'
 import type { SharedTarget } from '@/features/map/MapPlaces'
 import type { Marker } from '@/shared/api/markers'
+import { AccountEntry } from '@/features/auth/AccountEntry'
+import { BookmarksPanel } from '@/features/bookmarks/BookmarksPanel'
+import { useAccountFlow } from '@/features/auth/AccountFlow'
 const navigation: { panel: Panel; label: string; icon: FigmaIconName }[] = [
     { panel: 'search', label: 'Search', icon: 'navSearch' },
     { panel: 'bookmarks', label: 'Bookmarks', icon: 'navBookmarks' },
@@ -31,6 +34,7 @@ export function MapShell({
     sharedTarget?: SharedTarget | undefined
 }) {
     const mobile = useMobileLayout()
+    const accountFlow = useAccountFlow()
     const { panel, open, close, location } = usePanelRoute(
         Boolean(sample),
         mobile ? 'back' : 'dismiss',
@@ -45,13 +49,14 @@ export function MapShell({
     const mobileFixture = Boolean(sample) && location.pathname === '/__design/mobile'
     const params = new URLSearchParams(location.search)
     const snapValue = params.get(mobileFixture ? 'screen' : 'snap')
-    const snap: Snap = contributionOpen
-        ? 'full'
-        : snapValue === 'half' || snapValue === 'full'
-          ? snapValue
-          : browse && location.pathname === '/search' && params.get('q')?.trim() && !snapValue
+    const snap: Snap =
+        contributionOpen || (mobile && panel === 'bookmarks')
             ? 'full'
-            : 'collapsed'
+            : snapValue === 'half' || snapValue === 'full'
+              ? snapValue
+              : browse && location.pathname === '/search' && params.get('q')?.trim() && !snapValue
+                ? 'full'
+                : 'collapsed'
     const [dragHeight, setDragHeight] = useState<number | null>(null)
     const sheetHeight =
         dragHeight ??
@@ -248,7 +253,9 @@ export function MapShell({
                             </DesignButton>
                         ))}
                     </nav>
-                    {sample && (
+                    {!sample ? (
+                        <AccountEntry />
+                    ) : (
                         <div className="desktop-account">
                             <span className="account-avatar" />
                             <div>
@@ -299,6 +306,19 @@ export function MapShell({
                     browse={browse}
                     selectPlace={selectPlace}
                     chooseCategory={browse ? chooseCategory : undefined}
+                    secondary={
+                        panel === 'bookmarks' && browse && !sample ? (
+                            <BookmarksPanel browse={browse} onSelect={selectPlace} mobile />
+                        ) : undefined
+                    }
+                    openBookmarks={
+                        !sample
+                            ? () =>
+                                  accountFlow?.requireLogin(() =>
+                                      open('bookmarks', 'mobile-account'),
+                                  )
+                            : undefined
+                    }
                 />
             )}
             <div className="map-tools top-tools" inert={mobile && sheetTop < 142}>

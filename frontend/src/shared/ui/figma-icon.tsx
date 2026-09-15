@@ -33,8 +33,10 @@ import mobileChevronDark from '@/assets/figma/mobile-chevron-dark.svg'
 import mobileChevronBlue from '@/assets/figma/mobile-chevron-blue.svg'
 import upload from '@/assets/figma/upload.svg'
 import send from '@/assets/figma/send.svg'
+import authLogin from '@/assets/figma/auth-login.svg'
 
 const icons = {
+    authLogin,
     navSearch,
     navBookmarks,
     navContribute,

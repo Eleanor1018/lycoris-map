@@ -1,4 +1,4 @@
-import { useRef, type PointerEvent } from 'react'
+import { useRef, type PointerEvent, type ReactNode } from 'react'
 import { FigmaIcon } from '@/shared/ui/figma-icon'
 import { PlaceMeta, PlaceSummary, ShareButton } from './DesktopPanel'
 import { CategoryBadge, DesignButton, IconButton, NearbyCards, SearchField } from './primitives'
@@ -8,6 +8,8 @@ import type { PlaceBrowse } from '@/features/places/usePlaceBrowse'
 import type { Marker } from '@/shared/api/markers'
 import { PlaceDetails } from '@/features/places/PlaceDetails'
 import { PlaceResults } from '@/features/places/PlaceResults'
+import { AccountEntry } from '@/features/auth/AccountEntry'
+import { BookmarksPanel } from '@/features/bookmarks/BookmarksPanel'
 
 export function MobileSheet({
     snap,
@@ -24,6 +26,8 @@ export function MobileSheet({
     browse,
     selectPlace,
     chooseCategory,
+    secondary,
+    openBookmarks,
 }: {
     snap: Snap
     setSnap: (value: Snap) => void
@@ -39,11 +43,13 @@ export function MobileSheet({
     browse?: PlaceBrowse | undefined
     selectPlace?: ((place: Marker, focusId: string) => void) | undefined
     chooseCategory?: ((category: 'toilet' | 'nursing' | 'medical') => void) | undefined
+    secondary?: ReactNode
+    openBookmarks?: (() => void) | undefined
 }) {
     const sheet = useRef<HTMLElement>(null)
     const gesture = useRef<{ id: number; y: number; height: number; moved: boolean } | null>(null)
     const suppressClick = useRef(false)
-    const expandedPanel = detail || Boolean(contribution)
+    const expandedPanel = detail || Boolean(contribution) || Boolean(secondary)
     const cycle = () =>
         expandedPanel
             ? close()
@@ -97,18 +103,28 @@ export function MobileSheet({
             ref={sheet}
             className={`mobile-sheet ${detail ? 'mobile-detail' : ''} ${contribution ? 'mobile-contribution' : ''}`}
             data-snap={snap}
-            aria-label={contribution ? 'Contribute' : detail ? 'Details' : 'Search positions'}
+            aria-label={
+                contribution
+                    ? 'Contribute'
+                    : secondary
+                      ? 'Bookmarks'
+                      : detail
+                        ? 'Details'
+                        : 'Search positions'
+            }
             style={dragHeight === null ? undefined : { height: dragHeight }}
         >
             <DesignButton
                 id="sheet-handle"
                 className="sheet-handle"
                 aria-label={
-                    contribution
-                        ? 'Close contribution panel'
-                        : detail
-                          ? 'Close details'
-                          : `Change panel height (${snap})`
+                    secondary
+                        ? 'Close bookmarks'
+                        : contribution
+                          ? 'Close contribution panel'
+                          : detail
+                            ? 'Close details'
+                            : `Change panel height (${snap})`
                 }
                 aria-expanded={expandedPanel || snap !== 'collapsed'}
                 onPointerDown={begin}
@@ -150,9 +166,19 @@ export function MobileSheet({
             </DesignButton>
             <div
                 className="sheet-scroll"
-                key={contribution ? 'contribution' : detail ? 'detail' : 'search'}
+                key={
+                    contribution
+                        ? 'contribution'
+                        : secondary
+                          ? 'bookmarks'
+                          : detail
+                            ? 'detail'
+                            : 'search'
+                }
             >
-                {contribution ? (
+                {secondary ? (
+                    secondary
+                ) : contribution ? (
                     <ContributionForm {...contribution} mobile />
                 ) : detail && browse ? (
                     <PlaceDetails browse={browse} mobile />
@@ -197,13 +223,17 @@ export function MobileSheet({
                     >
                         <div className="mobile-logo">Lycoris Maps</div>
                         <SearchField mobile value={search} onChange={setSearch} />
-                        <DesignButton
-                            className="mobile-avatar"
-                            available={false}
-                            aria-label="Account"
-                        >
-                            AA
-                        </DesignButton>
+                        {!sample ? (
+                            <AccountEntry mobile />
+                        ) : (
+                            <DesignButton
+                                className="mobile-avatar"
+                                available={false}
+                                aria-label="Account"
+                            >
+                                AA
+                            </DesignButton>
+                        )}
                         {browse && browse.mode !== 'map' && snap !== 'collapsed' && selectPlace ? (
                             <PlaceResults browse={browse} onSelect={selectPlace} mobile />
                         ) : (
@@ -222,11 +252,20 @@ export function MobileSheet({
                             <>
                                 <DesignButton
                                     className="mobile-section-heading mobile-bookmarks-heading"
-                                    available={false}
+                                    available={!!openBookmarks}
+                                    onClick={openBookmarks}
                                 >
                                     <span>Bookmarks</span>
                                     <FigmaIcon name="mobileChevronDark" />
                                 </DesignButton>
+                                {!sample && browse && selectPlace && (
+                                    <BookmarksPanel
+                                        browse={browse}
+                                        onSelect={selectPlace}
+                                        mobile
+                                        preview
+                                    />
+                                )}
                                 {sample && (
                                     <div className="mobile-bookmarks">
                                         {[0, 1].map((index) => (

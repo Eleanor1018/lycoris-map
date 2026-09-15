@@ -313,5 +313,33 @@
         "nodeId": "18:2383",
         "sha256": "cce16776f231a3c22b2396b12498ddbd159f469c131af0751b63d35526e11cc0",
         "bytes": 1032
+    },
+    {
+        "file": "auth-google.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "126:402",
+        "sha256": "89efac4c8f5c93a62aa2e67550c20e2938ee54d2368cd5357cc106cb645dcf18",
+        "bytes": 1417
+    },
+    {
+        "file": "auth-apple.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "126:396",
+        "sha256": "21b7110c04ae7576a2eab68b3e7db4176160067bf76c1c42a044a26cb3265a25",
+        "bytes": 1759
+    },
+    {
+        "file": "auth-login.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "126:501",
+        "sha256": "5c5cc217bf16ec28017b2ab388efe71efe8bcb56ee0a0fe9c1d9ed9217c49848",
+        "bytes": 369
+    },
+    {
+        "file": "auth-close.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "126:799",
+        "sha256": "1e7a390f7db5617bad4442a8c12692462c995dd41d92d2a423c1d81b38d37089",
+        "bytes": 368
     }
 ]

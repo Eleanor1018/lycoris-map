@@ -4,6 +4,7 @@ import { FigmaIcon } from '@/shared/ui/figma-icon'
 import { distanceLabel, navigationUrl, openingHours, placeShareUrl, publicImageUrl } from './model'
 import type { PlaceBrowse } from './usePlaceBrowse'
 import { ReadMessage } from './PlaceResults'
+import { BookmarkButton } from '@/features/bookmarks/BookmarkButton'
 
 export function PlaceDetails({
     browse,
@@ -56,13 +57,17 @@ export function PlaceDetails({
                             {place.title}
                         </h2>
                     )}
-                    <IconButton
-                        className={mobile ? 'mobile-place-edit' : 'details-bookmark'}
-                        icon={mobile ? 'mobileEdit' : 'navBookmarks'}
-                        size={mobile ? 20 : 24}
-                        label={mobile ? 'Edit place' : 'Bookmark place'}
-                        available={false}
-                    />
+                    {!mobile ? (
+                        <BookmarkButton place={place} language={browse.language} />
+                    ) : (
+                        <IconButton
+                            className={mobile ? 'mobile-place-edit' : 'details-bookmark'}
+                            icon={mobile ? 'mobileEdit' : 'navBookmarks'}
+                            size={mobile ? 20 : 24}
+                            label={mobile ? 'Edit place' : 'Bookmark place'}
+                            available={false}
+                        />
+                    )}
                     <span className="place-meta">
                         {distance && (
                             <span title="Straight-line distance from your location">
@@ -105,13 +110,7 @@ export function PlaceDetails({
                             <FigmaIcon name="forward" />
                         </a>
                         {mobile && (
-                            <IconButton
-                                className="mobile-bookmark"
-                                icon="mobileBookmark"
-                                size={28}
-                                label="Bookmark place"
-                                available={false}
-                            />
+                            <BookmarkButton place={place} language={browse.language} mobile />
                         )}
                     </div>
                     {shareState?.id === place.id && (

@@ -9,7 +9,9 @@ import {
     readSearch,
     readViewport,
 } from '@/shared/api/markerReads'
-import { publicKeys, type Language, type MarkerCategory } from '@/shared/query/keys'
+import { publicKeys, privateKeys, type Language, type MarkerCategory } from '@/shared/query/keys'
+import { useSession } from '@/features/auth/SessionProvider'
+import { readAccountPlace } from '@/shared/api/privatePlaces'
 import type { LatLng } from '@/features/map/coords'
 import type { MapFocus, MapView } from '@/features/map/viewport'
 import { useLocationFix } from '@/features/map/useLocationFix'
@@ -50,6 +52,8 @@ export function usePlaceBrowse(
     reads: PlaceReads = defaultReads,
 ) {
     const client = useQueryClient()
+    const session = useSession()
+    const scope = reads === defaultReads ? session.scope : null
     const [view, setView] = useState<MapView | null>(null)
     const viewport = useDebounced(view, 250)
     const [search, setSearchState] = useState(initialSearch)
@@ -134,9 +138,15 @@ export function usePlaceBrowse(
     const id = parseMarkerId(rawMarkerId)
     const detailQuery = useQuery({
         ...readOptions,
-        queryKey: publicKeys.anonymousDetail(language, id ?? ''),
-        enabled: id !== null,
-        queryFn: ({ signal }) => reads.readPublicPlace(id!, language, signal),
+        queryKey: scope
+            ? privateKeys.detail(scope, language, id ?? '')
+            : publicKeys.anonymousDetail(language, id ?? ''),
+        enabled:
+            id !== null && (!session.store || (!session.busy && session.status !== 'checking')),
+        queryFn: ({ signal }) =>
+            scope && session.store
+                ? session.store.runPrivate(scope, (s) => readAccountPlace(id!, language, s), signal)
+                : reads.readPublicPlace(id!, language, signal),
     })
     const unavailable = detailQuery.error instanceof ApiError && detailQuery.error.status === 404
     useEffect(() => {
