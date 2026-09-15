@@ -44,6 +44,27 @@ export function AccountAvatar() {
 export function AccountEntry({ mobile = false }: { mobile?: boolean }) {
     const flow = useAccountFlow(),
         session = useSession()
+    if (!mobile && !session.user)
+        return (
+            <div className="desktop-guest-account">
+                <p className="desktop-login-hint" id="desktop-login-hint">
+                    <span>
+                        Login to bookmark points
+                        <br />
+                        or contribute.
+                    </span>
+                </p>
+                <DesignButton
+                    id="desktop-account"
+                    className="desktop-login-button"
+                    aria-describedby="desktop-login-hint"
+                    onClick={() => flow?.open()}
+                >
+                    <span>Login</span>
+                    <FigmaIcon name="authLogin" size={24} />
+                </DesignButton>
+            </div>
+        )
     return (
         <DesignButton
             id={mobile ? 'mobile-account' : 'desktop-account'}

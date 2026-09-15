@@ -266,6 +266,46 @@ body:has(.account-mobile) .mobile-sheet {
     border-radius: 50%;
     object-fit: cover;
 }
+.desktop-guest-account {
+    position: absolute;
+    left: 13px;
+    bottom: 0;
+    width: 215px;
+    height: 120px;
+}
+.desktop-login-hint {
+    position: absolute;
+    top: 0;
+    left: 7px;
+    display: flex;
+    align-items: center;
+    width: 208px;
+    height: 66px;
+    margin: 0;
+    font: 590 17px/normal var(--ui-font-body);
+    letter-spacing: -0.8px;
+    color: var(--ui-brand-deep);
+}
+.desktop-guest-account .desktop-login-button {
+    position: absolute;
+    left: 0;
+    bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 208px;
+    height: 44px;
+    border: 1px solid var(--ui-brand);
+    border-radius: 71px;
+    background: var(--ui-brand-blush);
+    color: var(--ui-brand);
+    font: 500 20px/20px var(--ui-font-logo);
+    letter-spacing: 0.1px;
+}
+.desktop-nav:has(.desktop-guest-account) nav {
+    bottom: 120px;
+}
 .live-account .account-avatar {
     display: flex;
     align-items: center;
