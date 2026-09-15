@@ -144,7 +144,13 @@ export async function request(path: string, options: RequestOptions = {}): Promi
     }
 
     const requestId = response.headers.get('x-request-id') ?? undefined
-    const parsed = await parseBody(response)
+    let parsed: unknown
+    try {
+        parsed = await parseBody(response)
+    } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') throw error
+        throw ApiError.network('Response interrupted. Please try again.', requestId)
+    }
 
     if (!response.ok) {
         const { code, message } = messageFromBody(response.status, parsed)
