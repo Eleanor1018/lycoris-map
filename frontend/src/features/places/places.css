@@ -84,16 +84,22 @@
 }
 .mobile-place-results {
     top: 131px;
-    left: 8px;
-    right: 19px;
+    left: var(--mobile-content-inset);
+    right: var(--mobile-content-inset);
 }
 .mobile-place-results .results-heading {
     font-size: 16px;
-    margin: 0 0 9px 9px;
+    margin: 0 0 9px;
+}
+.mobile-place-results .nearby-reference {
+    margin-left: 0;
+}
+.mobile-place-results .place-read-message {
+    padding: 11px;
 }
 .mobile-place-results .place-result-scroll {
     flex: 0 1 auto;
-    padding: 11.5px 16px;
+    padding: 11px;
     border-radius: 24px;
     background: white;
 }
@@ -158,7 +164,7 @@
     outline: none;
 }
 .mobile-detail .live-mobile-detail {
-    padding: 29px 8px 21px;
+    padding: 29px var(--mobile-content-inset) 21px;
 }
 .mobile-detail .live-mobile-detail h1 {
     position: static;
@@ -174,7 +180,7 @@
 }
 .mobile-detail .live-mobile-detail .mobile-description {
     position: static;
-    width: calc(100% - 39px);
+    width: 100%;
     height: auto;
     min-height: 40px;
     overflow-wrap: anywhere;
@@ -183,11 +189,11 @@
     display: block;
     position: static;
     margin-top: 9px;
-    width: calc(100% - 6px);
+    width: 100%;
     height: 198px;
 }
 .live-mobile-detail .place-actions {
-    margin: 27px 12px 0 2px;
+    margin: 27px 0 0;
     gap: 10px;
 }
 .live-mobile-detail .place-actions .share-button,

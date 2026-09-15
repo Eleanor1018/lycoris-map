@@ -512,6 +512,7 @@
     height: 43px;
 }
 .mobile-sheet {
+    --mobile-content-inset: 11px;
     position: absolute;
     bottom: env(safe-area-inset-bottom, 0px);
     left: 0;
@@ -580,7 +581,7 @@
 }
 .mobile-logo {
     position: absolute;
-    left: 17px;
+    left: var(--mobile-content-inset);
     top: 29px;
     height: 20px;
     color: black;
@@ -589,9 +590,9 @@
     white-space: nowrap;
 }
 .mobile-search {
-    left: 8px;
+    left: var(--mobile-content-inset);
     top: 72px;
-    width: calc(100% - 62px);
+    width: calc(100% - 2 * var(--mobile-content-inset) - 44px - 6px);
 }
 .mobile-search input {
     font-size: 16px;
@@ -599,11 +600,11 @@
 }
 .mobile-avatar {
     position: absolute;
-    top: 76px;
-    right: 8px;
-    width: 36px;
-    height: 36px;
-    border-radius: 18px;
+    top: 72px;
+    right: var(--mobile-content-inset);
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
     background: #c7c7cb;
     color: #f7f7f6;
     font: 400 14px/17px var(--ui-font-body);
@@ -611,25 +612,24 @@
 .mobile-nearby-heading {
     position: absolute;
     top: 131px;
-    left: 17px;
+    left: var(--mobile-content-inset);
     margin: 0;
     font: 500 16px/20px var(--ui-font-nav);
     color: var(--ui-brand);
     letter-spacing: 0.1px;
 }
 .mobile-sheet[data-snap='half'] .mobile-nearby-heading {
-    left: 16px;
     top: 126px;
 }
 .mobile-sheet .nearby-cards {
-    left: 8px;
-    right: 11px;
+    left: var(--mobile-content-inset);
+    right: var(--mobile-content-inset);
     top: 160px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px 16px;
 }
 .mobile-sheet .category-card {
-    padding: 16px;
+    padding: 11px;
     gap: 12px;
 }
 .mobile-sheet .card-title {
@@ -637,10 +637,11 @@
 }
 .mobile-section-heading {
     position: relative;
-    margin-left: 17px;
-    width: calc(100% - 46px);
+    margin: 0 var(--mobile-content-inset);
+    width: calc(100% - 2 * var(--mobile-content-inset));
     height: 32px;
     display: flex;
+    align-items: center;
     justify-content: space-between;
     font: 500 16px/20px var(--ui-font-nav);
     letter-spacing: 0.1px;
@@ -655,18 +656,16 @@
 }
 .mobile-settings-heading {
     margin-top: 13px;
-    width: calc(100% - 42px);
 }
 .mobile-bookmarks {
     position: relative;
-    margin: 1px 19px 0 8px;
-    height: 200px;
-    padding: 11.5px 16px;
+    margin: 1px var(--mobile-content-inset) 0;
+    padding: 11px;
     border-radius: 24px;
     background: white;
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 12px;
 }
 .mobile-place-row {
     width: 100%;
@@ -684,20 +683,28 @@
     flex-direction: column;
     gap: 3px;
 }
-.mobile-sheet .setting-card {
+.mobile-settings {
+    display: grid;
+    gap: 11px;
+    margin: 0 var(--mobile-content-inset);
+}
+.mobile-map-settings {
+    border-radius: 24px;
+    background: white;
+}
+.mobile-settings .setting-card {
     position: relative;
-    margin-left: 11px;
-    width: calc(100% - 27px);
-    padding-left: 17px;
-    padding-right: 9px;
+    height: 44px;
+    padding: 0 11px;
 }
-.mobile-language {
-    margin-top: -1px;
+.mobile-map-settings .setting-card {
+    background: transparent;
 }
-.mobile-about {
-    margin-top: 12px;
+.mobile-settings .setting-card > span:first-child {
+    min-width: 0;
+    text-align: left;
 }
-.mobile-about .chevron-slot {
+.mobile-settings .chevron-slot:last-child:nth-child(2) {
     margin-left: auto;
 }
 .mobile-sheet .chevron-slot {
@@ -716,8 +723,8 @@
 .mobile-detail h1 {
     position: absolute;
     top: 29px;
-    left: 8px;
-    right: 30px;
+    left: var(--mobile-content-inset);
+    right: calc(var(--mobile-content-inset) + 24px);
     height: 40px;
     margin: 0;
     font: 500 20px/20px var(--ui-font-logo);
@@ -727,7 +734,7 @@
 }
 .mobile-place-edit {
     position: absolute;
-    right: 20px;
+    right: var(--mobile-content-inset);
     top: 29px;
     width: 20px;
     height: 20px;
@@ -735,13 +742,13 @@
 .mobile-detail .place-meta {
     position: absolute;
     top: 74px;
-    left: 8px;
+    left: var(--mobile-content-inset);
 }
 .mobile-description {
     position: absolute;
     top: 94px;
-    left: 7px;
-    width: calc(100% - 55px);
+    left: var(--mobile-content-inset);
+    width: calc(100% - 2 * var(--mobile-content-inset));
     height: 40px;
     margin: 0;
     font: 400 15px/20px var(--ui-font-body);
@@ -753,8 +760,8 @@
 .mobile-photo {
     position: absolute;
     top: 143px;
-    left: 8px;
-    width: calc(100% - 22px);
+    left: var(--mobile-content-inset);
+    width: calc(100% - 2 * var(--mobile-content-inset));
     height: auto;
     aspect-ratio: 353/198;
     object-fit: cover;
@@ -762,11 +769,11 @@
 }
 .mobile-detail .share-button {
     top: 368px;
-    left: 10px;
+    left: var(--mobile-content-inset);
 }
 .mobile-bookmark {
     position: absolute;
-    right: 20px;
+    right: var(--mobile-content-inset);
     top: 374px;
     width: 28px;
     height: 28px;
@@ -802,7 +809,6 @@
 }
 @media (max-width: 374px) {
     .mobile-sheet .category-card {
-        padding: 12px;
         gap: 8px;
     }
     .mobile-sheet .card-title {
@@ -816,16 +822,6 @@
     .mobile-photo {
         height: 198px;
     }
-    .mobile-detail h1 {
-        max-width: 337px;
-    }
-    .mobile-description {
-        max-width: 360px;
-    }
-}
-.mobile-settings-heading span {
-    position: relative;
-    top: -3px;
 }
 .settings-cards .setting-card {
     position: relative;

@@ -197,15 +197,13 @@ export function MobileSheet({
                     >
                         <div className="mobile-logo">Lycoris Maps</div>
                         <SearchField mobile value={search} onChange={setSearch} />
-                        {sample && (
-                            <DesignButton
-                                className="mobile-avatar"
-                                available={false}
-                                aria-label="Account"
-                            >
-                                AA
-                            </DesignButton>
-                        )}
+                        <DesignButton
+                            className="mobile-avatar"
+                            available={false}
+                            aria-label="Account"
+                        >
+                            AA
+                        </DesignButton>
                         {browse && browse.mode !== 'map' && snap !== 'collapsed' && selectPlace ? (
                             <PlaceResults browse={browse} onSelect={selectPlace} mobile />
                         ) : (
@@ -231,7 +229,7 @@ export function MobileSheet({
                                 </DesignButton>
                                 {sample && (
                                     <div className="mobile-bookmarks">
-                                        {[0, 1, 2].map((index) => (
+                                        {[0, 1].map((index) => (
                                             <DesignButton
                                                 id={`mobile-place-${index}`}
                                                 className="mobile-place-row"
@@ -244,37 +242,35 @@ export function MobileSheet({
                                         ))}
                                     </div>
                                 )}
-                                <DesignButton
-                                    className="mobile-section-heading mobile-settings-heading"
-                                    available={false}
-                                >
+                                <h2 className="mobile-section-heading mobile-settings-heading">
                                     <span>Settings</span>
-                                    <FigmaIcon name="mobileChevronDark" />
-                                </DesignButton>
-                                <DesignButton
-                                    className="setting-card mobile-language"
-                                    available={false}
-                                >
-                                    <span>Choose Language</span>
-                                    <span className="setting-value">English</span>
-                                    <span className="chevron-slot">
-                                        <FigmaIcon name="mobileChevronBlue" />
-                                    </span>
-                                </DesignButton>
-                                <DesignButton
-                                    className="setting-card mobile-about"
-                                    available={false}
-                                >
-                                    <span>About Lycoris Maps</span>
-                                    <span className="chevron-slot">
-                                        <FigmaIcon name="mobileChevronBlue" />
-                                    </span>
-                                </DesignButton>
+                                </h2>
+                                <div className="mobile-settings">
+                                    <MobileSetting label="Choose Language" value="English" />
+                                    <div className="mobile-map-settings">
+                                        <MobileSetting label="Map Source" value="OSM" />
+                                        <MobileSetting label="Searching Range" value="1km" />
+                                        <MobileSetting label="Searching Type" value="Toilet" />
+                                    </div>
+                                    <MobileSetting label="About Lycoris Maps" />
+                                </div>
                             </>
                         )}
                     </div>
                 )}
             </div>
         </section>
+    )
+}
+
+function MobileSetting({ label, value }: { label: string; value?: string }) {
+    return (
+        <DesignButton className="setting-card" available={false}>
+            <span>{label}</span>
+            {value && <span className="setting-value">{value}</span>}
+            <span className="chevron-slot">
+                <FigmaIcon name="mobileChevronBlue" />
+            </span>
+        </DesignButton>
     )
 }
