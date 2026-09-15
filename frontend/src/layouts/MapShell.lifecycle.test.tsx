@@ -44,11 +44,19 @@ it('preserves the actual Leaflet object and camera across panel history in Stric
     expect(screen.getByTestId('location')).toHaveTextContent(
         'lang=zh&markerId=123&panel=search#shared',
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
+    fireEvent.click(screen.getByRole('button', { name: 'History back' }))
     await waitFor(() =>
         expect(screen.queryByRole('heading', { name: 'Search' })).not.toBeInTheDocument(),
     )
     fireEvent.click(screen.getByRole('button', { name: 'History forward' }))
+    await waitFor(() =>
+        expect(screen.getByRole('textbox', { name: 'Lycoris Maps' })).toHaveValue('retained draft'),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
+    await waitFor(() =>
+        expect(screen.queryByRole('heading', { name: 'Search' })).not.toBeInTheDocument(),
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^Search$/ }))
     await waitFor(() =>
         expect(screen.getByRole('textbox', { name: 'Lycoris Maps' })).toHaveValue('retained draft'),
     )

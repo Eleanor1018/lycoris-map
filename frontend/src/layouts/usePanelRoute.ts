@@ -13,7 +13,7 @@ function readReturnState(value: unknown): ReturnState | null {
           }
         : null
 }
-export function usePanelRoute(design: boolean) {
+export function usePanelRoute(design: boolean, closeBehavior: 'dismiss' | 'back') {
     const location = useLocation()
     const navigate = useNavigate()
     const owner = useRef(crypto.randomUUID())
@@ -46,19 +46,28 @@ export function usePanelRoute(design: boolean) {
     )
     const close = useCallback(() => {
         const state = readReturnState(location.state)
-        if (state?.owner === owner.current && !state.replaceClose) {
+        if (closeBehavior === 'back' && state?.owner === owner.current && !state.replaceClose) {
             restoreFocus.current = state.focusId
             void navigate(-1)
         } else {
             const params = new URLSearchParams(location.search)
             params.delete(field)
-            restoreFocus.current = 'nav-search'
+            const desktopPanel =
+                panel === 'contribute-form'
+                    ? 'contribute'
+                    : panel === 'details'
+                      ? state?.focusId === 'desktop-bookmark-place'
+                          ? 'bookmarks'
+                          : 'search'
+                      : panel
+            restoreFocus.current =
+                closeBehavior === 'dismiss' ? `nav-${desktopPanel}` : 'nav-search'
             void navigate(
                 { pathname: location.pathname, search: params.toString(), hash: location.hash },
                 { replace: true, state: null },
             )
         }
-    }, [field, location, navigate])
+    }, [closeBehavior, field, location, navigate, panel])
     useEffect(() => {
         if (restoreFocus.current !== null) {
             const target = document.getElementById(restoreFocus.current)

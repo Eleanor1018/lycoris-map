@@ -19,8 +19,11 @@ const navigation: { panel: Panel; label: string; icon: FigmaIconName }[] = [
     { panel: 'settings', label: 'Settings', icon: 'navSettings' },
 ]
 export function MapShell({ sample }: { sample?: DesignSample }) {
-    const { panel, open, close, location } = usePanelRoute(Boolean(sample))
     const mobile = useMobileLayout()
+    const { panel, open, close, location } = usePanelRoute(
+        Boolean(sample),
+        mobile ? 'back' : 'dismiss',
+    )
     const contributionOpen = panel === 'contribute-form' || (mobile && panel === 'contribute')
     useEffect(() => {
         if (mobile && panel === 'contribute') open('contribute-form', 'nav-contribute', true)

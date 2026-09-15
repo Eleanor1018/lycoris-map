@@ -155,3 +155,27 @@ it('returns out of a desktop contribution in one Back after resizing to phone an
     fireEvent.click(screen.getByRole('button', { name: 'Browser forward' }))
     expect(await screen.findByRole('textbox', { name: 'Title' })).toHaveValue('History draft')
 })
+
+it.each(['picker', 'form'])(
+    'dismisses the desktop contribution %s without reopening Search',
+    async (step) => {
+        mockScreen(false)
+        const { container } = mount('/maps?lang=en&markerId=123#kept')
+        const map = container.querySelector('.product-map')
+        fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Contribute' }))
+        if (step === 'form') fireEvent.click(map!, { clientX: 650, clientY: 350 })
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: step === 'form' ? 'Close contribution form' : 'Close contribution mode',
+            }),
+        )
+        await waitFor(() =>
+            expect(screen.getByTestId('route').textContent).toBe('/maps?lang=en&markerId=123#kept'),
+        )
+        expect(screen.queryByRole('heading', { name: 'Search' })).not.toBeInTheDocument()
+        expect(screen.queryByRole('form', { name: 'Contribution draft' })).not.toBeInTheDocument()
+        expect(screen.queryByText('Click on the map to add points.')).not.toBeInTheDocument()
+        expect(container.querySelector('.product-map')).toBe(map)
+    },
+)
