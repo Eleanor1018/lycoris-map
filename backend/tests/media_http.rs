@@ -1870,3 +1870,396 @@ async fn cleanup_missing_images_over_http_clears_only_missing_references() {
         "清理不得删除文件"
     );
 }
+
+// S5 resume tests use real PostgreSQL rows and a fresh router between chunks.
+fn resume_digest(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+fn resume_start(id: i64, token: &str, request: &str, bytes: &[u8]) -> Call {
+    Call::json(
+        &format!("/api/markers/{id}/image-uploads"),
+        serde_json::json!({
+            "clientRequestId": request, "totalBytes": bytes.len(), "sha256": resume_digest(bytes)
+        }),
+    )
+    .cookie(token)
+    .header("Origin", ALLOWED_ORIGIN)
+}
+fn resume_chunk(url: &str, token: &str, offset: usize, bytes: &[u8]) -> Call {
+    Call::raw(
+        Method::POST,
+        &format!("{url}/chunks/{offset}"),
+        "application/octet-stream",
+        Body::from(bytes.to_vec()),
+    )
+    .cookie(token)
+    .header("Origin", ALLOWED_ORIGIN)
+}
+fn resume_complete(url: &str, token: &str) -> Call {
+    Call::new(Method::POST, &format!("{url}/complete"))
+        .cookie(token)
+        .header("Origin", ALLOWED_ORIGIN)
+}
+
+#[tokio::test]
+async fn photo_resume_survives_router_restart_and_completes_exactly_once() {
+    let env = TestEnv::new().await;
+    let (token, owner) = register(&env, "resume-owner").await;
+    let id = insert_marker(&env, "Resume place", true, "PENDING", &owner, None).await;
+    // Deterministic noise makes a valid multi-chunk PNG without external fixtures.
+    let mut random = 17u32;
+    let pixels: Vec<u8> = (0..400 * 400 * 4)
+        .map(|_| {
+            random ^= random << 13;
+            random ^= random >> 17;
+            random ^= random << 5;
+            random as u8
+        })
+        .collect();
+    let mut bytes = Vec::new();
+    image::codecs::png::PngEncoder::new(&mut bytes)
+        .write_image(&pixels, 400, 400, ExtendedColorType::Rgba8)
+        .unwrap();
+    assert!(bytes.len() > 262144);
+    let request = Uuid::new_v4().to_string();
+    let first = send(&env.router, resume_start(id, &token, &request, &bytes)).await;
+    assert_eq!(first.status, StatusCode::OK, "{}", first.text());
+    assert_eq!(first.header(header::CACHE_CONTROL), Some("no-store"));
+    let receipt = first.json();
+    let url = format!(
+        "/api/markers/{id}/image-uploads/{}",
+        receipt["uploadId"].as_str().unwrap()
+    );
+    let same = send(&env.router, resume_start(id, &token, &request, &bytes)).await;
+    assert_eq!(same.json(), receipt);
+    let first_chunk = send(&env.router, resume_chunk(&url, &token, 0, &bytes[..262144])).await;
+    assert_eq!(first_chunk.json()["receivedBytes"], 262144);
+    // Simulate a committed chunk whose response was lost, followed by process restart.
+    let restarted = env.router_with_redis(connect_redis().await);
+    let status = send(&restarted, Call::new(Method::GET, &url).cookie(&token)).await;
+    assert_eq!(status.json()["receivedBytes"], 262144);
+    let replay = send(&restarted, resume_chunk(&url, &token, 0, &bytes[..262144])).await;
+    assert_eq!(replay.json(), first_chunk.json());
+    let conflict = send(&restarted, resume_chunk(&url, &token, 0, &vec![0; 262144])).await;
+    assert_eq!(conflict.status, StatusCode::CONFLICT);
+    let missing = send(&restarted, resume_complete(&url, &token)).await;
+    assert_eq!(missing.status, StatusCode::CONFLICT);
+    for offset in (262144..bytes.len()).step_by(262144) {
+        let result = send(
+            &restarted,
+            resume_chunk(
+                &url,
+                &token,
+                offset,
+                &bytes[offset..(offset + 262144).min(bytes.len())],
+            ),
+        )
+        .await;
+        assert_eq!(result.status, StatusCode::OK, "{}", result.text());
+    }
+    let (a, b) = tokio::join!(
+        send(&restarted, resume_complete(&url, &token)),
+        send(&restarted, resume_complete(&url, &token))
+    );
+    assert_eq!(a.status, StatusCode::OK, "{}", a.text());
+    assert_eq!(b.json(), a.json());
+    assert_eq!(a.json()["status"], "COMPLETED");
+    assert_eq!(
+        send(&restarted, resume_start(id, &token, &request, &bytes))
+            .await
+            .json(),
+        a.json()
+    );
+    let (count,): (i64,) =
+        sqlx::query_as("SELECT count(*) FROM marker_image_proposals WHERE marker_id=$1")
+            .bind(id)
+            .fetch_one(&env.pool)
+            .await
+            .unwrap();
+    assert_eq!(count, 1);
+    let (size,): (i32,) = sqlx::query_as(
+        "SELECT octet_length(staged_bytes) FROM marker_image_uploads WHERE marker_id=$1",
+    )
+    .bind(id)
+    .fetch_one(&env.pool)
+    .await
+    .unwrap();
+    assert_eq!(size, 0);
+    assert_eq!(marker_row_state(&env, id).await.1, None);
+}
+
+#[tokio::test]
+async fn photo_resume_enforces_owner_origin_bytes_and_expiry() {
+    let env = TestEnv::new().await;
+    let (token, owner) = register(&env, "resume-a").await;
+    let (other, _) = register(&env, "resume-b").await;
+    let id = insert_marker(&env, "Public place", true, "APPROVED", &owner, None).await;
+    let bytes = rgba_png(8, 8);
+    let request = Uuid::new_v4().to_string();
+    let response = send(&env.router, resume_start(id, &token, &request, &bytes)).await;
+    assert_eq!(response.status, StatusCode::OK, "{}", response.text());
+    let upload = response.json()["uploadId"].as_str().unwrap().to_string();
+    let url = format!("/api/markers/{id}/image-uploads/{upload}");
+    assert_eq!(
+        send(&env.router, Call::new(Method::GET, &url).cookie(&other))
+            .await
+            .status,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        send(&env.router, resume_chunk(&url, &other, 0, &bytes))
+            .await
+            .status,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        send(&env.router, resume_complete(&url, &other))
+            .await
+            .status,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        send(
+            &env.router,
+            resume_chunk(&url, &token, 0, &bytes).header("Origin", "https://untrusted.example")
+        )
+        .await
+        .status,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        send(&env.router, resume_start(id, &token, &request, &[1, 2, 3]))
+            .await
+            .status,
+        StatusCode::CONFLICT
+    );
+    assert_eq!(
+        send(&env.router, resume_chunk(&url, &token, 0, &vec![0; 262145]))
+            .await
+            .status,
+        StatusCode::PAYLOAD_TOO_LARGE
+    );
+    let broken = Body::from_stream(stream::iter(vec![
+        Ok(Bytes::from_static(b"partial")),
+        Err(std::io::Error::other("synthetic disconnect")),
+    ]));
+    let interrupted = send(
+        &env.router,
+        Call::raw(
+            Method::POST,
+            &format!("{url}/chunks/0"),
+            "application/octet-stream",
+            broken,
+        )
+        .cookie(&token)
+        .header("Origin", ALLOWED_ORIGIN),
+    )
+    .await;
+    assert_eq!(interrupted.status, StatusCode::REQUEST_TIMEOUT);
+    assert_eq!(
+        send(&env.router, Call::new(Method::GET, &url).cookie(&token))
+            .await
+            .json()["receivedBytes"],
+        0
+    );
+    assert_eq!(
+        send(
+            &env.router,
+            resume_chunk(&url, &token, 0, &vec![0; bytes.len()])
+        )
+        .await
+        .status,
+        StatusCode::OK
+    );
+    assert_eq!(
+        send(&env.router, resume_complete(&url, &token))
+            .await
+            .status,
+        StatusCode::BAD_REQUEST
+    );
+    sqlx::query(
+        "UPDATE marker_image_uploads SET expires_at=now()-interval '1 second' WHERE upload_id=$1",
+    )
+    .bind(Uuid::parse_str(&upload).unwrap())
+    .execute(&env.pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        send(&env.router, Call::new(Method::GET, &url).cookie(&token))
+            .await
+            .status,
+        StatusCode::GONE
+    );
+    assert_eq!(
+        send(&env.router, resume_start(id, &token, &request, &bytes))
+            .await
+            .status,
+        StatusCode::GONE
+    );
+    let (status, size): (String, i32) = sqlx::query_as(
+        "SELECT status,octet_length(staged_bytes) FROM marker_image_uploads WHERE upload_id=$1",
+    )
+    .bind(Uuid::parse_str(&upload).unwrap())
+    .fetch_one(&env.pool)
+    .await
+    .unwrap();
+    assert_eq!((status, size), ("EXPIRED".into(), 0));
+    let private = insert_marker(&env, "Private", false, "PENDING", &owner, None).await;
+    assert_eq!(
+        send(
+            &env.router,
+            resume_start(private, &other, &Uuid::new_v4().to_string(), &bytes)
+        )
+        .await
+        .status,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        send(
+            &env.router,
+            resume_start(private, &token, &Uuid::new_v4().to_string(), &bytes)
+        )
+        .await
+        .status,
+        StatusCode::OK
+    );
+}
+
+#[tokio::test]
+async fn photo_resume_cleans_known_failed_completion_and_preserves_retry_bytes() {
+    let env = TestEnv::new().await;
+    let (token, owner) = register(&env, "resume-failure").await;
+    let id = insert_marker(&env, "Resume failure", true, "PENDING", &owner, None).await;
+    let bytes = rgba_png(8, 8);
+    let start = send(
+        &env.router,
+        resume_start(id, &token, &Uuid::new_v4().to_string(), &bytes),
+    )
+    .await;
+    assert_eq!(start.status, StatusCode::OK);
+    let url = format!(
+        "/api/markers/{id}/image-uploads/{}",
+        start.json()["uploadId"].as_str().unwrap()
+    );
+    assert_eq!(
+        send(&env.router, resume_chunk(&url, &token, 0, &bytes))
+            .await
+            .status,
+        StatusCode::OK
+    );
+    sqlx::raw_sql("CREATE FUNCTION fail_s5_image() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic failure'; END $$; CREATE TRIGGER fail_s5 BEFORE INSERT ON marker_image_proposals FOR EACH ROW EXECUTE FUNCTION fail_s5_image();").execute(&env.pool).await.unwrap();
+    for _ in 0..2 {
+        assert_eq!(
+            send(&env.router, resume_complete(&url, &token))
+                .await
+                .status,
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+        assert_eq!(
+            std::fs::read_dir(env.upload_root().join("markers"))
+                .unwrap()
+                .count(),
+            0
+        );
+    }
+    assert_eq!(
+        send(&env.router, Call::new(Method::GET, &url).cookie(&token))
+            .await
+            .json()["receivedBytes"],
+        bytes.len()
+    );
+    sqlx::query("DROP TRIGGER fail_s5 ON marker_image_proposals")
+        .execute(&env.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        send(&env.router, resume_complete(&url, &token))
+            .await
+            .json()["status"],
+        "COMPLETED"
+    );
+    assert_eq!(
+        std::fs::read_dir(env.upload_root().join("markers"))
+            .unwrap()
+            .count(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn photo_resume_completion_finishes_once_after_http_waiter_is_cancelled() {
+    let env = TestEnv::new().await;
+    let (token, owner) = register(&env, "resume-cancel").await;
+    let id = insert_marker(&env, "Cancelled waiter", true, "PENDING", &owner, None).await;
+    let bytes = rgba_png(8, 8);
+    let start = send(
+        &env.router,
+        resume_start(id, &token, &Uuid::new_v4().to_string(), &bytes),
+    )
+    .await;
+    let url = format!(
+        "/api/markers/{id}/image-uploads/{}",
+        start.json()["uploadId"].as_str().unwrap()
+    );
+    assert_eq!(
+        send(&env.router, resume_chunk(&url, &token, 0, &bytes))
+            .await
+            .status,
+        StatusCode::OK
+    );
+    let mut held = env.pool.begin().await.unwrap();
+    sqlx::query("SELECT id FROM map_markers WHERE id=$1 FOR UPDATE")
+        .bind(id)
+        .execute(&mut *held)
+        .await
+        .unwrap();
+    let router = env.router.clone();
+    let request = resume_complete(&url, &token);
+    let waiter = tokio::spawn(async move { send(&router, request).await });
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            if std::fs::read_dir(env.upload_root().join("markers"))
+                .is_ok_and(|items| items.count() == 1)
+            {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    // Same cancellation boundary as TimeoutLayer dropping the handler future.
+    waiter.abort();
+    let _ = waiter.await;
+    held.rollback().await.unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5),async {
+        loop {
+            let (count,): (i64,)=sqlx::query_as("SELECT count(*) FROM marker_image_uploads WHERE marker_id=$1 AND status='COMPLETED'").bind(id).fetch_one(&env.pool).await.unwrap();
+            if count==1 {break}
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    }).await.unwrap();
+    assert_eq!(
+        send(&env.router, resume_complete(&url, &token))
+            .await
+            .json()["status"],
+        "COMPLETED"
+    );
+    assert_eq!(
+        std::fs::read_dir(env.upload_root().join("markers"))
+            .unwrap()
+            .count(),
+        1
+    );
+    let (count,): (i64,) =
+        sqlx::query_as("SELECT count(*) FROM marker_image_proposals WHERE marker_id=$1")
+            .bind(id)
+            .fetch_one(&env.pool)
+            .await
+            .unwrap();
+    assert_eq!(count, 1);
+}

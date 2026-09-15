@@ -127,6 +127,7 @@ pub fn build_router(state: AppState) -> Router {
         .merge(crate::modules::markers::http::router())
         // 阶段 3：点位写入/收藏/审核（18 个非图片路由）。
         .merge(crate::modules::markers::write_http::router())
+        .merge(crate::media::resumable::router())
         // 阶段 2：AuthController（9 个中的 6 个非头像路由）
         .route("/api/login", axum::routing::post(routes::auth::login))
         .route("/api/register", axum::routing::post(routes::auth::register))
