@@ -2,13 +2,16 @@ import 'leaflet/dist/leaflet.css'
 import { useEffect, type RefCallback } from 'react'
 import { MapContainer, TileLayer, useMap } from 'react-leaflet'
 import L, { type Map as LeafletMap } from 'leaflet'
+import { MapPlaces, type MapPlacesProps } from './MapPlaces'
 const CENTER: [number, number] = [31.2304, 121.4737]
 export function MapSurface({
     onMap,
     onPick,
+    places,
 }: {
     onMap: RefCallback<LeafletMap>
     onPick?: ((point: { lat: number; lng: number }) => void) | undefined
+    places?: MapPlacesProps | undefined
 }) {
     return (
         <MapContainer
@@ -17,6 +20,7 @@ export function MapSurface({
             zoom={14}
             zoomControl={false}
             trackResize={false}
+            maxZoom={19}
             className="product-map"
             attributionControl
         >
@@ -28,6 +32,7 @@ export function MapSurface({
             />
             <MapLifecycle />
             <MapPick onPick={onPick} />
+            {places && <MapPlaces {...places} />}
         </MapContainer>
     )
 }

@@ -299,5 +299,19 @@
         "nodeId": "74:4741",
         "sha256": "0d76ac697009b06516a014af09aa832fd1edade29e3a4f86d61e536715da41c1",
         "bytes": 313
+    },
+    {
+        "file": "map-place.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "54:1816",
+        "sha256": "0b3bf4e62dc70be74b241c6f0ed9ff79afe51f770f3299f391565c41a9fbef35",
+        "bytes": 3150
+    },
+    {
+        "file": "map-position.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:2383",
+        "sha256": "cce16776f231a3c22b2396b12498ddbd159f469c131af0751b63d35526e11cc0",
+        "bytes": 1032
     }
 ]
