@@ -1,4 +1,4 @@
-import type { ComponentProps } from 'react'
+import { useRef, type ComponentProps } from 'react'
 import { Button } from '@/shared/ui/button'
 import { FigmaIcon, type FigmaIconName } from '@/shared/ui/figma-icon'
 export function DesignButton({
@@ -42,15 +42,23 @@ export function SearchField({
     bookmarks?: boolean
     mobile?: boolean
 }) {
+    const input = useRef<HTMLInputElement>(null)
     const placeholder = mobile
         ? 'Search Positions'
         : bookmarks
           ? 'Search Bookmarks'
           : 'Lycoris Maps'
     return (
-        <div className={`design-search ${mobile ? 'mobile-search' : ''}`}>
+        <div
+            className={`design-search ${mobile ? 'mobile-search' : ''}`}
+            onClick={(event) => {
+                if (!(event.target instanceof Element) || event.target.closest('button')) return
+                input.current?.focus()
+            }}
+        >
             <FigmaIcon name="search" size={20} />
             <input
+                ref={input}
                 aria-label={placeholder}
                 placeholder={placeholder}
                 value={value}

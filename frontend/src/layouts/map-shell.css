@@ -177,10 +177,14 @@
     border: 0;
     background: transparent;
     padding: 0;
-    outline-offset: 3px;
+    outline: none;
     color: black;
     font: 510 17px/20px var(--ui-font-body);
     letter-spacing: -0.5px;
+}
+.design-search:focus-within {
+    outline: 3px solid var(--ui-brand-blush);
+    outline-offset: 2px;
 }
 .design-search input::placeholder {
     color: #88898b;
@@ -570,7 +574,9 @@
     min-height: 320px;
 }
 .mobile-sheet[data-snap='full'] .mobile-search-content {
-    min-height: 758px;
+    min-height: 0;
+    padding-top: 310px;
+    padding-bottom: 27px;
 }
 .mobile-logo {
     position: absolute;
@@ -630,9 +636,9 @@
     line-height: 20px;
 }
 .mobile-section-heading {
-    position: absolute;
-    left: 17px;
-    right: 29px;
+    position: relative;
+    margin-left: 17px;
+    width: calc(100% - 46px);
     height: 32px;
     display: flex;
     justify-content: space-between;
@@ -645,17 +651,15 @@
     height: 32px;
 }
 .mobile-bookmarks-heading {
-    top: 310px;
+    margin-top: 0;
 }
 .mobile-settings-heading {
-    top: 556px;
-    right: 25px;
+    margin-top: 13px;
+    width: calc(100% - 42px);
 }
 .mobile-bookmarks {
-    position: absolute;
-    left: 8px;
-    right: 19px;
-    top: 343px;
+    position: relative;
+    margin: 1px 19px 0 8px;
     height: 200px;
     padding: 11.5px 16px;
     border-radius: 24px;
@@ -681,17 +685,17 @@
     gap: 3px;
 }
 .mobile-sheet .setting-card {
-    position: absolute;
-    left: 11px;
+    position: relative;
+    margin-left: 11px;
     width: calc(100% - 27px);
     padding-left: 17px;
     padding-right: 9px;
 }
 .mobile-language {
-    top: 587px;
+    margin-top: -1px;
 }
 .mobile-about {
-    top: 665px;
+    margin-top: 12px;
 }
 .mobile-about .chevron-slot {
     margin-left: auto;
