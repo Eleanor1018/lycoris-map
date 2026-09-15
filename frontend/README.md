@@ -1,6 +1,6 @@
 # Lycoris Web v2（`frontend/`）
 
-Web v2 新工程，当前处于 **S1 工程基础** 阶段：工程外壳、后端连通状态屏、地图生命周期验证和本机浏览器诊断入口。Figma 页面在后续阶段实现，**本 S1 构建不可部署**。
+Web v2 新工程，当前已实现 **S2 设计外壳**：对应 Figma 的 7 个桌面状态、4 个手机状态、常驻 OSM 地图与面板导航。S2 由温晓亲自编码，使用 Figma MCP 原始资产和 Computer Use 逐屏核对。真实地点、搜索、账号及贡献等业务接入属于后续阶段；当前仅供本机开发与验收。
 
 ## 环境与命令
 
@@ -26,9 +26,11 @@ pnpm test:unit
 
 ```text
 src/
-  app/                 启动、Providers、错误边界、S1 dev pathname 入口
-  features/map/        S1 状态屏、地图模块（MapCanvas、coords、合成点位）、/__dev/map-spike
-  features/dev/        S1 浏览器诊断页 /__dev/qa
+  app/                 启动、Providers、错误边界、React Router、DEV 按需入口
+  layouts/             桌面导航/面板、手机三态/详情、面板历史与焦点恢复
+  features/map/        产品 MapSurface、S1 地图验证与后端状态屏
+  features/dev/        仅开发环境的 Figma 样本与 S1 浏览器诊断页
+  assets/figma/        原始导出图标、DEV 样本、来源节点及 SHA256
   shared/api/          transport、ApiError、各接口 DTO/schema、session
   shared/query/        查询键约定（public / private）
   shared/i18n/         LanguageProvider 与 zh/en 词条
@@ -38,15 +40,27 @@ src/
   styles/              tokens.css、fonts.css、global.css
 ```
 
-## S1 开发验证入口（不是产品页面）
+## 页面与设计验收
 
-| 路径               | 用途                                                                                                           |
-| ------------------ | -------------------------------------------------------------------------------------------------------------- |
-| `/`                | S1 状态屏：后端 `/health/live`、`/health/ready` 连通性与重试                                                   |
-| `/__dev/map-spike` | 地图生命周期验证：200 个**固定合成**上海点位、常驻 Leaflet 实例、语言/面板/字段更新/增删按钮、更新的下一帧耗时 |
-| `/__dev/qa`        | 本机浏览器诊断：375×812 固定 CSS 视口 iframe 预览 + 开发会话表单                                               |
+正常入口 `/`（兼容 `/maps`）使用真实 OSM 瓦片，不放入 Figma 的样本账号、距离、地点、照片或模拟点。面板使用 `?panel=search|bookmarks|languages|settings|contribute|details`；手机吸附高度使用 `?snap=collapsed|half|full`。关闭面板和浏览器返回/前进保留已有 query、hash 和搜索草稿，切换屏宽不重新创建地图。
 
-这些入口由 `src/app/devRoutes.tsx` 按 `window.location.pathname` 切换，**S2 引入真实 Router 时替换**。它们**包含在当前 S1 构建产物中**（不是仅 dev server 存在，也未在生产构建里被排除），但约定只在本机使用、不对外发布。
+| 仅开发环境的路径                    | 用途                                                                                          |
+| ----------------------------------- | --------------------------------------------------------------------------------------------- |
+| `/__design/desktop?screen=initial`  | 桌面原稿比对，可选 initial / search / bookmarks / languages / settings / contribute / details |
+| `/__design/mobile?screen=collapsed` | 手机原稿比对，可选 collapsed / half / full / details                                          |
+| `/__dev/status`                     | 后端 `/health/live`、`/health/ready` 连通状态                                                 |
+| `/__dev/map-spike`                  | S1 的 200 个固定合成点位及地图生命周期诊断                                                    |
+| `/__dev/qa`                         | S1 本机 Cookie 会话、头像与固定手机视口验证                                                   |
+
+这些开发页面由 `import.meta.env.DEV` 隔离并按需加载；生产构建不包含其组件、样本地图/照片或诊断词条。画稿样本与正常入口共用 `MapShell`、`DesktopPanel`、`MobileSheet`，不是整页截图。
+
+Figma 基准：[Lycoris v2](https://www.figma.com/design/nmsiDbbgm0LG0CSwXUSLPW/Lycoris-v2-design?node-id=9-397)。桌面基准为 1440×1024，手机为 375×812，手机系统栏与设备边框不复制为网页。已额外检查 390/430/768/1024 宽度与短视口滚动。手机手柄支持拖动、点击及方向键/Home/End；详情关闭、输入法 Escape 和焦点返回有相应处理。
+
+布局、色值、图标按原稿实现；**尚不能宣称所有文字像素一致**：Figma 的 SF Pro 与本机 SF 系统字体存在字宽差异。Fredoka、Roboto、Noto Sans 的所用 Latin 字重自托管，SF 使用本机系统字体，不把下载的 SF 字体打包分发。中英文完整业务切换留在 S6。
+
+原稿尚未定义的流程不新增弹窗、toast 或可见说明。未接业务的按钮保留原稿外观并标记 `aria-disabled`；语言选择当前仅保存页面内选择，不冒充已持久化设置。S2 可验收页面结构和已有面板交互，不能据此验收 S3–S6 的业务功能。
+
+## S1 开发诊断保留范围
 
 ### `/__dev/map-spike`
 

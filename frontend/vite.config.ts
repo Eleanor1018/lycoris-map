@@ -21,6 +21,20 @@ const DEV_PORT = 5173
 
 export default defineConfig({
     plugins: [react(), tailwindcss()],
+    build: {
+        rolldownOptions: {
+            output: {
+                codeSplitting: {
+                    groups: [
+                        {
+                            name: 'map-engine',
+                            test: /\/node_modules\/(?:leaflet|react-leaflet|@react-leaflet)\//,
+                        },
+                    ],
+                },
+            },
+        },
+    },
     resolve: {
         alias: {
             '@': fileURLToPath(new URL('./src', import.meta.url)),
