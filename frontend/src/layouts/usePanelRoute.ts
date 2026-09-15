@@ -13,19 +13,38 @@ function readReturnState(value: unknown): ReturnState | null {
           }
         : null
 }
-export function usePanelRoute(design: boolean, closeBehavior: 'dismiss' | 'back') {
+export function usePanelRoute(
+    design: boolean,
+    closeBehavior: 'dismiss' | 'back',
+    markerLinks = false,
+) {
     const location = useLocation()
     const navigate = useNavigate()
     const owner = useRef(crypto.randomUUID())
     const restoreFocus = useRef<string | null>(null)
     const field = design ? 'screen' : 'panel'
-    const panel = parsePanel(new URLSearchParams(location.search).get(field))
+    const params = new URLSearchParams(location.search)
+    const rawPanel = params.get(field)
+    const panel =
+        markerLinks && !design && rawPanel === null
+            ? params.has('markerId')
+                ? 'details'
+                : location.pathname === '/search'
+                  ? 'search'
+                  : 'initial'
+            : parsePanel(rawPanel)
     const open = useCallback(
-        (next: Panel, focusId = '', replace = false) => {
-            if (next === panel) return
+        (next: Panel, focusId = '', replace = false, markerId?: string) => {
             const params = new URLSearchParams(location.search)
+            if (next === panel && (markerId === undefined || markerId === params.get('markerId')))
+                return
             if (next === 'initial') params.delete(field)
             else params.set(field, next)
+            if (markerId !== undefined) {
+                params.set('markerId', markerId)
+                for (const field of ['lat', 'lng', 'title']) params.delete(field)
+            } else if (markerLinks && panel === 'details' && next !== 'details')
+                params.delete('markerId')
             const previous = readReturnState(location.state)
             const finishingPicker = panel === 'contribute' && next === 'contribute-form'
             const ownedPicker = previous?.owner === owner.current
@@ -42,7 +61,7 @@ export function usePanelRoute(design: boolean, closeBehavior: 'dismiss' | 'back'
                 },
             )
         },
-        [field, location, navigate, panel],
+        [field, location, navigate, panel, markerLinks],
     )
     const close = useCallback(() => {
         const state = readReturnState(location.state)
@@ -52,6 +71,11 @@ export function usePanelRoute(design: boolean, closeBehavior: 'dismiss' | 'back'
         } else {
             const params = new URLSearchParams(location.search)
             params.delete(field)
+            if (markerLinks && location.pathname === '/search') params.set(field, 'initial')
+            if (markerLinks && panel === 'details')
+                for (const field of ['markerId', 'lat', 'lng', 'title']) params.delete(field)
+            if (markerLinks && closeBehavior === 'back' && panel === 'search')
+                params.set('snap', 'collapsed')
             const desktopPanel =
                 panel === 'contribute-form'
                     ? 'contribute'
@@ -67,7 +91,7 @@ export function usePanelRoute(design: boolean, closeBehavior: 'dismiss' | 'back'
                 { replace: true, state: null },
             )
         }
-    }, [closeBehavior, field, location, navigate, panel])
+    }, [closeBehavior, field, location, navigate, panel, markerLinks])
     useEffect(() => {
         if (restoreFocus.current !== null) {
             const target = document.getElementById(restoreFocus.current)

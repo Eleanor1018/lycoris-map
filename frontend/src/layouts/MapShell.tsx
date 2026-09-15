@@ -11,6 +11,9 @@ import { usePanelRoute } from './usePanelRoute'
 import type { DesignSample, Panel, Snap } from './types'
 import './map-shell.css'
 import { emptyContributionDraft, type ContributionDraft } from './ContributionForm'
+import type { PlaceBrowse } from '@/features/places/usePlaceBrowse'
+import type { SharedTarget } from '@/features/map/MapPlaces'
+import type { Marker } from '@/shared/api/markers'
 const navigation: { panel: Panel; label: string; icon: FigmaIconName }[] = [
     { panel: 'search', label: 'Search', icon: 'navSearch' },
     { panel: 'bookmarks', label: 'Bookmarks', icon: 'navBookmarks' },
@@ -18,11 +21,20 @@ const navigation: { panel: Panel; label: string; icon: FigmaIconName }[] = [
     { panel: 'languages', label: 'Languages', icon: 'navLanguages' },
     { panel: 'settings', label: 'Settings', icon: 'navSettings' },
 ]
-export function MapShell({ sample }: { sample?: DesignSample }) {
+export function MapShell({
+    sample,
+    browse,
+    sharedTarget,
+}: {
+    sample?: DesignSample
+    browse?: PlaceBrowse
+    sharedTarget?: SharedTarget | undefined
+}) {
     const mobile = useMobileLayout()
     const { panel, open, close, location } = usePanelRoute(
         Boolean(sample),
         mobile ? 'back' : 'dismiss',
+        !!browse,
     )
     const contributionOpen = panel === 'contribute-form' || (mobile && panel === 'contribute')
     useEffect(() => {
@@ -37,7 +49,9 @@ export function MapShell({ sample }: { sample?: DesignSample }) {
         ? 'full'
         : snapValue === 'half' || snapValue === 'full'
           ? snapValue
-          : 'collapsed'
+          : browse && location.pathname === '/search' && params.get('q')?.trim() && !snapValue
+            ? 'full'
+            : 'collapsed'
     const [dragHeight, setDragHeight] = useState<number | null>(null)
     const sheetHeight =
         dragHeight ??
@@ -59,7 +73,42 @@ export function MapShell({ sample }: { sample?: DesignSample }) {
     const onMap = useCallback((value: LeafletMap | null) => {
         map.current = value
     }, [])
+    const showMobileSearch = (nextSnap: Snap) => {
+        const next = new URLSearchParams(location.search)
+        next.set('panel', 'search')
+        next.set('snap', nextSnap)
+        for (const field of ['markerId', 'lat', 'lng', 'title']) next.delete(field)
+        void navigate(
+            { pathname: location.pathname, search: next.toString(), hash: location.hash },
+            { replace: true, state: null },
+        )
+    }
     const [search, setSearch] = useState('')
+    const updateSearch = (value: string) => {
+        if (browse) {
+            browse.setSearch(value)
+            if (mobile && (snap !== 'full' || panel !== 'search')) showMobileSearch('full')
+        } else setSearch(value)
+    }
+    const chooseCategory = (category: 'toilet' | 'nursing' | 'medical') => {
+        browse?.chooseCategory(
+            (
+                {
+                    toilet: 'accessible_toilet',
+                    nursing: 'baby_room',
+                    medical: 'friendly_clinic',
+                } as const
+            )[category],
+        )
+        if (mobile) showMobileSearch('full')
+        else open('search', 'nav-search')
+    }
+    const selectPlace = useCallback(
+        (place: Marker, focusId: string) => {
+            open('details', focusId, false, String(place.id))
+        },
+        [open],
+    )
     const [bookmarksSearch, setBookmarksSearch] = useState('')
     const [language, setLanguage] = useState<'en' | 'zh'>('en')
     const [contributionDraft, setContributionDraft] =
@@ -136,7 +185,38 @@ export function MapShell({ sample }: { sample?: DesignSample }) {
                     )}
                 </div>
             ) : (
-                <MapSurface onMap={onMap} onPick={picking ? selectPoint : undefined} />
+                <MapSurface
+                    onMap={onMap}
+                    onPick={picking ? selectPoint : undefined}
+                    places={
+                        browse
+                            ? {
+                                  markers: browse.markers,
+                                  selected: browse.detail,
+                                  sharedTarget,
+                                  position: browse.location.position,
+                                  focus: browse.focus,
+                                  onView: browse.onView,
+                                  onSelect: selectPlace,
+                                  onCluster: (ids) => {
+                                      browse.showCluster(ids)
+                                      if (mobile) showMobileSearch('full')
+                                      else open('search', 'nav-search')
+                                  },
+                                  padding: {
+                                      left: mobile
+                                          ? 16
+                                          : panel === 'initial' || panel === 'contribute'
+                                            ? 256
+                                            : 576,
+                                      right: mobile ? 64 : 80,
+                                      top: mobile ? 54 : 64,
+                                      bottom: mobile ? sheetHeight + 16 : 40,
+                                  },
+                              }
+                            : undefined
+                    }
+                />
             )}
             {!mobile && (
                 <aside className="desktop-nav" aria-label="Main navigation">
@@ -155,6 +235,7 @@ export function MapShell({ sample }: { sample?: DesignSample }) {
                                 }
                                 onClick={() => {
                                     if (item.panel === 'contribute') setContributionPoint(null)
+                                    if (item.panel === 'search') browse?.clearResults()
                                     open(item.panel, `nav-${item.panel}`)
                                 }}
                             >
@@ -188,8 +269,8 @@ export function MapShell({ sample }: { sample?: DesignSample }) {
                 <DesktopPanel
                     panel={panel}
                     sample={sample}
-                    search={search}
-                    setSearch={setSearch}
+                    search={browse?.search ?? search}
+                    setSearch={updateSearch}
                     bookmarksSearch={bookmarksSearch}
                     setBookmarksSearch={setBookmarksSearch}
                     language={language}
@@ -197,6 +278,9 @@ export function MapShell({ sample }: { sample?: DesignSample }) {
                     open={open}
                     close={close}
                     contribution={contribution}
+                    browse={browse}
+                    selectPlace={selectPlace}
+                    chooseCategory={browse ? chooseCategory : undefined}
                 />
             )}
             {mobile && (
@@ -205,13 +289,16 @@ export function MapShell({ sample }: { sample?: DesignSample }) {
                     setSnap={setSnap}
                     detail={panel === 'details'}
                     sample={sample}
-                    search={search}
-                    setSearch={setSearch}
+                    search={browse?.search ?? search}
+                    setSearch={updateSearch}
                     openDetails={(focusId) => open('details', focusId)}
                     close={close}
                     dragHeight={dragHeight}
                     setDragHeight={setDragHeight}
                     contribution={contributionOpen ? contribution : undefined}
+                    browse={browse}
+                    selectPlace={selectPlace}
+                    chooseCategory={browse ? chooseCategory : undefined}
                 />
             )}
             <div className="map-tools top-tools" inert={mobile && sheetTop < 142}>
@@ -225,12 +312,23 @@ export function MapShell({ sample }: { sample?: DesignSample }) {
                     icon={mobile ? 'mobileDirection' : 'direction'}
                     size={20}
                     label="Locate me"
-                    available={false}
+                    available={!!browse && !browse.location.pending}
+                    aria-busy={browse?.location.pending || undefined}
+                    onClick={() => browse?.location.locate()}
                 />
             </div>
             {mobile ? (
                 <div className="map-tools mobile-tools" inert={sheetTop < 240}>
-                    <IconButton icon="radar" size={20} label="Find nearby" available={false} />
+                    <IconButton
+                        icon="radar"
+                        size={20}
+                        label="Find nearby"
+                        available={!!browse}
+                        onClick={() => {
+                            browse?.clearResults()
+                            showMobileSearch('half')
+                        }}
+                    />
                     <IconButton
                         id="mobile-contribute"
                         icon="mobileContribute"
@@ -257,6 +355,17 @@ export function MapShell({ sample }: { sample?: DesignSample }) {
                         onClick={() => map.current?.zoomOut()}
                         available={!sample}
                     />
+                </div>
+            )}
+            {browse && (browse.location.error || browse.location.pending) && (
+                <p className="map-location-status" role="status">
+                    {browse.location.pending ? 'Finding your location…' : browse.location.error}
+                </p>
+            )}
+            {browse?.mode === 'map' && browse.state.error && (
+                <div className="map-read-status" role="status">
+                    {browse.state.error}{' '}
+                    <DesignButton onClick={browse.state.retry}>Try again</DesignButton>
                 </div>
             )}
         </main>

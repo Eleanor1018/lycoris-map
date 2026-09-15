@@ -4,6 +4,10 @@ import { PlaceMeta, PlaceSummary, ShareButton } from './DesktopPanel'
 import { CategoryBadge, DesignButton, IconButton, NearbyCards, SearchField } from './primitives'
 import type { DesignSample, Snap } from './types'
 import { ContributionForm, type ContributionFormProps } from './ContributionForm'
+import type { PlaceBrowse } from '@/features/places/usePlaceBrowse'
+import type { Marker } from '@/shared/api/markers'
+import { PlaceDetails } from '@/features/places/PlaceDetails'
+import { PlaceResults } from '@/features/places/PlaceResults'
 
 export function MobileSheet({
     snap,
@@ -17,6 +21,9 @@ export function MobileSheet({
     dragHeight,
     setDragHeight,
     contribution,
+    browse,
+    selectPlace,
+    chooseCategory,
 }: {
     snap: Snap
     setSnap: (value: Snap) => void
@@ -29,6 +36,9 @@ export function MobileSheet({
     dragHeight: number | null
     setDragHeight: (height: number | null) => void
     contribution?: Omit<ContributionFormProps, 'mobile'> | undefined
+    browse?: PlaceBrowse | undefined
+    selectPlace?: ((place: Marker, focusId: string) => void) | undefined
+    chooseCategory?: ((category: 'toilet' | 'nursing' | 'medical') => void) | undefined
 }) {
     const sheet = useRef<HTMLElement>(null)
     const gesture = useRef<{ id: number; y: number; height: number; moved: boolean } | null>(null)
@@ -140,10 +150,12 @@ export function MobileSheet({
             </DesignButton>
             <div
                 className="sheet-scroll"
-                key={contribution ? 'contribution' : detail ? 'detail' : snap}
+                key={contribution ? 'contribution' : detail ? 'detail' : 'search'}
             >
                 {contribution ? (
                     <ContributionForm {...contribution} mobile />
+                ) : detail && browse ? (
+                    <PlaceDetails browse={browse} mobile />
                 ) : detail ? (
                     <div className="mobile-detail-content">
                         {sample && (
@@ -180,7 +192,9 @@ export function MobileSheet({
                         />
                     </div>
                 ) : (
-                    <div className="mobile-search-content">
+                    <div
+                        className={`mobile-search-content ${browse && browse.mode !== 'map' ? 'has-place-results' : ''}`}
+                    >
                         <div className="mobile-logo">Lycoris Maps</div>
                         <SearchField mobile value={search} onChange={setSearch} />
                         {sample && (
@@ -192,13 +206,21 @@ export function MobileSheet({
                                 AA
                             </DesignButton>
                         )}
-                        {snap !== 'collapsed' && (
-                            <>
-                                <h2 className="mobile-nearby-heading">Find Nearby</h2>
-                                <NearbyCards mobile half={snap === 'half'} />
-                            </>
+                        {browse && browse.mode !== 'map' && snap !== 'collapsed' && selectPlace ? (
+                            <PlaceResults browse={browse} onSelect={selectPlace} mobile />
+                        ) : (
+                            snap !== 'collapsed' && (
+                                <>
+                                    <h2 className="mobile-nearby-heading">Find Nearby</h2>
+                                    <NearbyCards
+                                        mobile
+                                        half={snap === 'half'}
+                                        onSelect={chooseCategory}
+                                    />
+                                </>
+                            )
                         )}
-                        {snap === 'full' && (
+                        {snap === 'full' && (!browse || browse.mode === 'map') && (
                             <>
                                 <DesignButton
                                     className="mobile-section-heading mobile-bookmarks-heading"

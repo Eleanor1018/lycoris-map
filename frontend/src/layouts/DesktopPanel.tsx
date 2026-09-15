@@ -2,6 +2,10 @@ import { FigmaIcon } from '@/shared/ui/figma-icon'
 import { CategoryBadge, DesignButton, IconButton, NearbyCards, SearchField } from './primitives'
 import type { DesignSample, Panel } from './types'
 import { ContributionForm, type ContributionFormProps } from './ContributionForm'
+import type { Marker } from '@/shared/api/markers'
+import type { PlaceBrowse } from '@/features/places/usePlaceBrowse'
+import { PlaceDetails } from '@/features/places/PlaceDetails'
+import { PlaceResults } from '@/features/places/PlaceResults'
 
 type Props = {
     panel: Panel
@@ -15,6 +19,9 @@ type Props = {
     open: (panel: Panel, focusId?: string) => void
     close: () => void
     contribution?: Omit<ContributionFormProps, 'mobile'>
+    browse?: PlaceBrowse | undefined
+    selectPlace?: ((place: Marker, focusId: string) => void) | undefined
+    chooseCategory?: ((category: 'toilet' | 'nursing' | 'medical') => void) | undefined
 }
 
 export function DesktopPanel(props: Props) {
@@ -42,8 +49,14 @@ export function DesktopPanel(props: Props) {
             {panel === 'search' && (
                 <>
                     <SearchField value={props.search} onChange={props.setSearch} />
-                    <h2 className="nearby-heading">Find Nearby</h2>
-                    <NearbyCards />
+                    {props.browse && props.browse.mode !== 'map' && props.selectPlace ? (
+                        <PlaceResults browse={props.browse} onSelect={props.selectPlace} />
+                    ) : (
+                        <>
+                            <h2 className="nearby-heading">Find Nearby</h2>
+                            <NearbyCards onSelect={props.chooseCategory} />
+                        </>
+                    )}
                 </>
             )}
             {panel === 'bookmarks' && (
@@ -144,25 +157,39 @@ export function DesktopPanel(props: Props) {
                         label="Edit place"
                         available={false}
                     />
-                    {sample && (
-                        <div className="desktop-place-detail">
-                            <h2>{sample.place.title.replace(' Shanghai,', '\nShanghai,')}</h2>
-                            <IconButton
-                                className="details-bookmark"
-                                icon="bookmarkFilled"
-                                label="Bookmark place"
-                                available={false}
-                            />
-                            <PlaceMeta place={sample.place} />
-                            <img className="place-photo" src={sample.place.desktopPhoto} alt="" />
-                            <p className="place-description">{sample.place.desktopDescription}</p>
-                        </div>
+                    {props.browse ? (
+                        <PlaceDetails browse={props.browse} />
+                    ) : (
+                        sample && (
+                            <div className="desktop-place-detail">
+                                <h2>{sample.place.title.replace(' Shanghai,', '\nShanghai,')}</h2>
+                                <IconButton
+                                    className="details-bookmark"
+                                    icon="bookmarkFilled"
+                                    label="Bookmark place"
+                                    available={false}
+                                />
+                                <PlaceMeta place={sample.place} />
+                                <img
+                                    className="place-photo"
+                                    src={sample.place.desktopPhoto}
+                                    alt=""
+                                />
+                                <p className="place-description">
+                                    {sample.place.desktopDescription}
+                                </p>
+                            </div>
+                        )
                     )}
-                    <ShareButton />
-                    <DesignButton className="navigate-button" available={false}>
-                        <span>Navigate</span>
-                        <FigmaIcon name="forward" />
-                    </DesignButton>
+                    {!props.browse && (
+                        <>
+                            <ShareButton />
+                            <DesignButton className="navigate-button" available={false}>
+                                <span>Navigate</span>
+                                <FigmaIcon name="forward" />
+                            </DesignButton>
+                        </>
+                    )}
                 </>
             )}
         </section>

@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter } from 'react-router'
-import { MapShell } from '@/layouts/MapShell'
+import { MapPage } from './MapPage'
 import { AppProviders } from './providers'
 const DevelopmentPage = import.meta.env.DEV ? lazy(() => import('./devRoutes')) : null
 export function App() {
@@ -13,7 +13,7 @@ export function App() {
                         <DevelopmentPage />
                     </Suspense>
                 ) : (
-                    <MapShell />
+                    <MapPage />
                 )}
             </BrowserRouter>
         </AppProviders>
