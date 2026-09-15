@@ -36,7 +36,7 @@ async function setup() {
 }
 it('freezes create UUID, content and point after a lost response, including reopening the draft', async () => {
     const { store, api, scope } = await setup()
-    api.createMarker.mockRejectedValueOnce(ApiError.network('lost'))
+    api.createMarker.mockRejectedValueOnce(new ApiError(408, 'response timed out'))
     await store.submit(scope)
     expect(store.getSnapshot().phase).toBe('save-uncertain')
     store.beginCreate('zh')
@@ -62,7 +62,7 @@ it('photo-only recovery keeps the marker receipt and photo UUID, without repeati
     await store.photo(new File(['photo'], 'synthetic.png', { type: 'image/png' }))
     upload.mockRejectedValueOnce(ApiError.network('lost'))
     await store.submit(scope)
-    expect(store.getSnapshot().phase).toBe('photo-error')
+    expect(store.getSnapshot().phase).toBe('photo-paused')
     await store.submit(scope)
     expect(api.createMarker).toHaveBeenCalledTimes(1)
     expect(upload.mock.calls[0]!.slice(0, 3)).toEqual(upload.mock.calls[1]!.slice(0, 3))
@@ -201,4 +201,14 @@ it('can reopen busy work and dispose cancels it without accepting a late result'
     finish()
     await submission
     expect(store.getSnapshot()).toMatchObject({ phase: 'draft', saved: null })
+})
+it('allows discarding a rejected image while preserving the saved place', async () => {
+    const { store, scope, upload, api } = await setup()
+    await store.photo(new File(['photo'], 'photo.png', { type: 'image/png' }))
+    upload.mockRejectedValueOnce(new ApiError(400, 'Invalid image'))
+    await store.submit(scope)
+    expect(store.getSnapshot().phase).toBe('photo-error')
+    await store.photo(null)
+    expect(store.getSnapshot().phase).toBe('complete')
+    expect(api.createMarker).toHaveBeenCalledTimes(1)
 })

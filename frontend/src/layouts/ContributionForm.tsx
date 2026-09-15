@@ -2,28 +2,12 @@ import { useEffect, useId, useRef } from 'react'
 import { CategoryBadge, DesignButton, IconButton } from './primitives'
 import { FigmaIcon } from '@/shared/ui/figma-icon'
 import './contribution-form.css'
-
-export type ContributionDraft = {
-    title: string
-    category: 'toilet' | 'nursing' | 'medical' | null
-    description: string
-    openingHour: string
-    openingMinute: string
-    closingHour: string
-    closingMinute: string
-    photo: File | null
-}
-
-export const emptyContributionDraft: ContributionDraft = {
-    title: '',
-    category: null,
-    description: '',
-    openingHour: '',
-    openingMinute: '',
-    closingHour: '',
-    closingMinute: '',
-    photo: null,
-}
+import type { ContributionDraft } from '@/features/contributions/draft'
+import {
+    contributionBusy,
+    type ContributionSnapshot,
+} from '@/features/contributions/ContributionStore'
+export { emptyContributionDraft, type ContributionDraft } from '@/features/contributions/draft'
 
 export type ContributionFormProps = {
     draft: ContributionDraft
@@ -31,22 +15,50 @@ export type ContributionFormProps = {
     close: () => void
     point: { lat: number; lng: number } | null
     mobile?: boolean
+    state?: ContributionSnapshot | null | undefined
+    onSubmit?: ((resendUnconfirmed?: boolean) => void) | undefined
+    onPhoto?: ((file: File | null) => void) | undefined
+    onView?: (() => void) | undefined
 }
 
-/** The S2 composer keeps a local draft; authenticated submission is the S5 flow. */
 export function ContributionForm({
     draft,
     onChange,
     close,
     point,
     mobile = false,
+    state,
+    onSubmit,
+    onPhoto,
+    onView,
 }: ContributionFormProps) {
     const id = useId()
     const heading = useRef<HTMLHeadingElement>(null)
     const photoInput = useRef<HTMLInputElement>(null)
+    const feedback = useRef<HTMLDivElement>(null)
+    const submit = useRef<HTMLButtonElement>(null)
     useEffect(() => {
         heading.current?.focus({ preventScroll: true })
     }, [])
+    useEffect(() => {
+        if (state?.phase === 'complete') {
+            submit.current?.focus({ preventScroll: true })
+            submit.current?.scrollIntoView?.({ block: 'nearest' })
+        } else if (state?.error) feedback.current?.scrollIntoView?.({ block: 'nearest' })
+    }, [state?.error, state?.phase])
+    const locked = !!state && state.phase !== 'draft'
+    const busy = !!state && contributionBusy(state.phase)
+    const unconfirmed = state?.phase === 'save-uncertain' && !!state.base
+    const action =
+        state?.phase === 'complete'
+            ? 'View place'
+            : busy
+              ? 'Saving…'
+              : state?.saved
+                ? 'Retry photo'
+                : state?.phase === 'save-uncertain'
+                  ? 'Retry'
+                  : 'Submit'
     const update = <K extends keyof ContributionDraft>(key: K, value: ContributionDraft[K]) =>
         onChange({ ...draft, [key]: value })
     const categories = [
@@ -56,14 +68,20 @@ export function ContributionForm({
     ] as const
     return (
         <form
-            className={`contribution-form ${mobile ? 'contribution-form-mobile' : ''}`}
-            aria-label="Contribution draft"
+            className={`contribution-form ${mobile ? 'contribution-form-mobile' : ''} ${state ? 'contribution-form-live' : ''}`}
+            aria-label={state?.base ? 'Edit proposal' : 'Contribution draft'}
+            aria-busy={busy || undefined}
             data-lat={import.meta.env.DEV ? point?.lat : undefined}
             data-lng={import.meta.env.DEV ? point?.lng : undefined}
-            onSubmit={(event) => event.preventDefault()}
+            onSubmit={(event) => {
+                event.preventDefault()
+                if (busy || unconfirmed) return
+                if (state?.phase === 'complete') onView?.()
+                else onSubmit?.()
+            }}
         >
             <h1 ref={heading} tabIndex={-1}>
-                Contribute
+                {state?.base ? 'Edit place' : 'Contribute'}
             </h1>
             <IconButton
                 className="contribution-close"
@@ -79,6 +97,7 @@ export function ContributionForm({
                 className="contribution-input contribution-title"
                 placeholder={mobile ? 'Input title here' : undefined}
                 value={draft.title}
+                disabled={locked}
                 onChange={(event) => update('title', event.target.value)}
                 autoComplete="off"
             />
@@ -96,6 +115,7 @@ export function ContributionForm({
                         role="radio"
                         aria-label={label}
                         aria-checked={draft.category === category}
+                        disabled={locked}
                         tabIndex={
                             draft.category === category || (draft.category === null && index === 0)
                                 ? 0
@@ -125,6 +145,9 @@ export function ContributionForm({
                         <CategoryBadge category={category} />
                     </DesignButton>
                 ))}
+                {draft.category === 'custom' && (
+                    <span className="contribution-custom-category">Custom</span>
+                )}
             </div>
             <label className="contribution-label description-label" htmlFor={`${id}-description`}>
                 Description
@@ -133,6 +156,7 @@ export function ContributionForm({
                 id={`${id}-description`}
                 className="contribution-input contribution-description"
                 value={draft.description}
+                disabled={locked}
                 onChange={(event) => update('description', event.target.value)}
             />
             {(['opening', 'closing'] as const).map((kind) => {
@@ -165,6 +189,7 @@ export function ContributionForm({
                                             part === 'Hour' ? '([01]?[0-9]|2[0-3])' : '[0-5]?[0-9]'
                                         }
                                         value={draft[`${kind}${part}`]}
+                                        disabled={locked}
                                         onChange={(event) =>
                                             update(
                                                 `${kind}${part}`,
@@ -194,7 +219,10 @@ export function ContributionForm({
                 hidden
                 onChange={(event) => {
                     const photo = event.target.files?.[0]
-                    if (photo) update('photo', photo)
+                    if (photo) {
+                        if (onPhoto) onPhoto(photo)
+                        else update('photo', photo)
+                    }
                     event.target.value = ''
                 }}
             />
@@ -203,13 +231,53 @@ export function ContributionForm({
                 aria-label={
                     draft.photo ? `Upload photo: ${draft.photo.name} selected` : 'Upload photo'
                 }
+                disabled={!!state && !['draft', 'photo-error'].includes(state.phase)}
                 onClick={() => photoInput.current?.click()}
             >
                 <span>Upload</span>
                 <FigmaIcon name="upload" />
             </DesignButton>
-            <DesignButton className="contribution-action contribution-submit" available={false}>
-                <span>Submit</span>
+            {state && (
+                <div className="contribution-feedback" ref={feedback}>
+                    {state.base && <p>Location is fixed. Changes are submitted for review.</p>}
+                    {draft.photo && (
+                        <p className="contribution-photo-name">
+                            {draft.photo.name}{' '}
+                            {['draft', 'photo-error'].includes(state.phase) && (
+                                <DesignButton onClick={() => onPhoto?.(null)}>Remove</DesignButton>
+                            )}
+                        </p>
+                    )}
+                    <p role={state.error ? 'alert' : 'status'}>
+                        {state.error ??
+                            (state.phase === 'complete'
+                                ? state.base
+                                    ? 'Your changes have been submitted for review.'
+                                    : 'Place saved. Public places appear on the map after review.'
+                                : state.phase === 'photo-saving'
+                                  ? 'Place saved. Uploading photo…'
+                                  : state.phase === 'checking-photo'
+                                    ? 'Checking photo…'
+                                    : '')}
+                    </p>
+                    {unconfirmed && (
+                        <DesignButton
+                            className="contribution-resend"
+                            onClick={() => onSubmit?.(true)}
+                        >
+                            Send again
+                        </DesignButton>
+                    )}
+                </div>
+            )}
+            <DesignButton
+                className="contribution-action contribution-submit"
+                ref={submit}
+                type="submit"
+                disabled={!!state && (busy || !!unconfirmed)}
+                available={!!onSubmit && !busy && !unconfirmed}
+            >
+                <span>{action}</span>
                 <FigmaIcon name="send" />
             </DesignButton>
         </form>

@@ -5,6 +5,7 @@ import { AppErrorBoundary } from './ErrorBoundary'
 import { SessionProvider } from '@/features/auth/SessionProvider'
 import { AccountFlowProvider } from '@/features/auth/AccountFlow'
 import { BookmarksProvider } from '@/features/bookmarks/BookmarksProvider'
+import { ContributionsProvider } from '@/features/contributions/ContributionsProvider'
 
 /** One query cache and Cookie-session owner for the application. */
 export function AppProviders({ children }: { children: ReactNode }) {
@@ -27,7 +28,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
                 <LanguageProvider>
                     <SessionProvider>
                         <AccountFlowProvider>
-                            <BookmarksProvider>{children}</BookmarksProvider>
+                            <BookmarksProvider>
+                                <ContributionsProvider>{children}</ContributionsProvider>
+                            </BookmarksProvider>
                         </AccountFlowProvider>
                     </SessionProvider>
                 </LanguageProvider>

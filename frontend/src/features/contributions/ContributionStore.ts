@@ -22,6 +22,7 @@ export type ContributionPhase =
     | 'save-uncertain'
     | 'photo-saving'
     | 'photo-error'
+    | 'photo-paused'
     | 'complete'
 export type ContributionSnapshot = {
     round: number
@@ -58,7 +59,10 @@ function fresh(
     }
 }
 const uncertain = (error: unknown) =>
-    !(error instanceof ApiError) || error.status === 0 || error.status >= 500
+    !(error instanceof ApiError) ||
+    error.status === 0 ||
+    error.status === 408 ||
+    error.status >= 500
 const errorMessage = (error: unknown) =>
     error instanceof Error ? error.message : 'Submission failed. Please try again.'
 
@@ -141,7 +145,13 @@ export class ContributionStore {
             if (file) await this.validatePhoto(file)
             if (round === this.snapshot.round && token === this.photoRound) {
                 this.uploadRequestId = file ? crypto.randomUUID() : null
-                this.publish({ draft: { ...this.snapshot.draft, photo: file }, phase: previous })
+                this.publish({
+                    draft: { ...this.snapshot.draft, photo: file },
+                    phase:
+                        previous === 'photo-error' && !file && this.snapshot.saved
+                            ? 'complete'
+                            : previous,
+                })
             }
         } catch (error) {
             if (round === this.snapshot.round && token === this.photoRound)
@@ -237,7 +247,12 @@ export class ContributionStore {
             } catch (error) {
                 if (!this.current(round, scope)) return
                 this.publish({
-                    phase: 'photo-error',
+                    // Only an explicit file rejection permits replacing it. An unknown
+                    // receipt must keep the same photo UUID until reconciled.
+                    phase:
+                        error instanceof ApiError && [400, 410, 413, 415].includes(error.status)
+                            ? 'photo-error'
+                            : 'photo-paused',
                     error: `The place step is saved. Photo upload paused: ${errorMessage(error)}`,
                 })
                 return

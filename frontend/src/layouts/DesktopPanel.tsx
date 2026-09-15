@@ -23,6 +23,7 @@ type Props = {
     browse?: PlaceBrowse | undefined
     selectPlace?: ((place: Marker, focusId: string) => void) | undefined
     chooseCategory?: ((category: 'toilet' | 'nursing' | 'medical') => void) | undefined
+    editPlace?: (() => void) | undefined
 }
 
 export function DesktopPanel(props: Props) {
@@ -156,10 +157,12 @@ export function DesktopPanel(props: Props) {
                 <>
                     <IconButton
                         className="details-edit"
+                        id="desktop-place-edit"
                         icon="edit"
                         size={20}
                         label="Edit place"
-                        available={false}
+                        available={!!props.editPlace && !!props.browse?.detail}
+                        onClick={props.editPlace}
                     />
                     {props.browse ? (
                         <PlaceDetails browse={props.browse} />

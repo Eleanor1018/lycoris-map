@@ -270,3 +270,75 @@
 .contribution-categories .badge-medical {
     background: #1fbc00;
 }
+.contribution-form-live {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: max(748px, 100%);
+    padding: 686px 16px 16px;
+}
+.contribution-form-live .contribution-submit {
+    position: static;
+    align-self: flex-end;
+    flex: none;
+    margin-top: auto;
+    margin-right: -10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+}
+.contribution-form-live .contribution-submit span,
+.contribution-form-live .contribution-submit img {
+    position: static;
+}
+.contribution-form-live .contribution-submit img {
+    width: 24px;
+    height: 24px;
+}
+.contribution-feedback {
+    font: 400 14px/20px var(--ui-font-body);
+    color: var(--ui-brand-deep);
+    overflow-wrap: anywhere;
+}
+.contribution-feedback p {
+    margin: 0 0 11px;
+}
+.contribution-feedback p:empty {
+    display: none;
+}
+.contribution-feedback .design-button {
+    font: inherit;
+    text-decoration: underline;
+}
+.contribution-custom-category {
+    align-self: center;
+    font: 500 16px/20px var(--ui-font-nav);
+    color: var(--ui-brand);
+}
+.contribution-form-mobile.contribution-form-live {
+    min-height: 758px;
+    padding: 702px 11px 12px;
+}
+.contribution-form-mobile.contribution-form-live .contribution-submit {
+    margin-right: 0;
+}
+.contribution-form-live :is(input, textarea):disabled {
+    opacity: 1;
+}
+.mobile-sheet.mobile-contribution {
+    max-height: calc(
+        var(--contribution-viewport-height, 100dvh) - 54px - env(safe-area-inset-bottom, 0px)
+    );
+    bottom: calc(var(--contribution-keyboard-offset, 0px) + 8px + env(safe-area-inset-bottom, 0px));
+}
+.mobile-contribution .sheet-scroll {
+    scroll-padding: 16px;
+}
+@media (max-height: 480px) {
+    .mobile-sheet.mobile-contribution {
+        max-height: calc(
+            var(--contribution-viewport-height, 100dvh) - 16px - env(safe-area-inset-bottom, 0px)
+        );
+    }
+}

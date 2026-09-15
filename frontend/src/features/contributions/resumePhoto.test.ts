@@ -118,3 +118,13 @@ it('waits silently through a long browser offline period and resumes on the onli
         vi.useRealTimers()
     }
 })
+it('continues bounded background retries after a long server outage', async () => {
+    const options = fixture()
+    options.api.beginPhotoUpload.mockReset()
+    for (let i = 0; i < 10; i++)
+        options.api.beginPhotoUpload.mockRejectedValueOnce(new ApiError(503, 'offline'))
+    options.api.beginPhotoUpload.mockResolvedValue(receipt())
+    await resumePhoto(1, file, 'request', direct, new AbortController().signal, options)
+    expect(options.api.beginPhotoUpload).toHaveBeenCalledTimes(11)
+    expect(options.pause.mock.calls.every(([delay]) => delay <= 30000)).toBe(true)
+})

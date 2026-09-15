@@ -9,9 +9,11 @@ import { BookmarkButton } from '@/features/bookmarks/BookmarkButton'
 export function PlaceDetails({
     browse,
     mobile = false,
+    onEdit,
 }: {
     browse: PlaceBrowse
     mobile?: boolean
+    onEdit?: (() => void) | undefined
 }) {
     const { detail: place, detailState } = browse
     const [failedImage, setFailedImage] = useState<string | null>(null)
@@ -62,10 +64,12 @@ export function PlaceDetails({
                     ) : (
                         <IconButton
                             className={mobile ? 'mobile-place-edit' : 'details-bookmark'}
+                            id="mobile-place-edit"
                             icon={mobile ? 'mobileEdit' : 'navBookmarks'}
                             size={mobile ? 20 : 24}
                             label={mobile ? 'Edit place' : 'Bookmark place'}
-                            available={false}
+                            available={!!onEdit}
+                            onClick={onEdit}
                         />
                     )}
                     <span className="place-meta">

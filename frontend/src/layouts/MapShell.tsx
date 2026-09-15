@@ -17,6 +17,9 @@ import type { Marker } from '@/shared/api/markers'
 import { AccountEntry } from '@/features/auth/AccountEntry'
 import { BookmarksPanel } from '@/features/bookmarks/BookmarksPanel'
 import { useAccountFlow } from '@/features/auth/AccountFlow'
+import { useContributions } from '@/features/contributions/ContributionsProvider'
+import { contributionBusy } from '@/features/contributions/ContributionStore'
+import { checkPoint, draftText } from '@/features/contributions/draft'
 const navigation: { panel: Panel; label: string; icon: FigmaIconName }[] = [
     { panel: 'search', label: 'Search', icon: 'navSearch' },
     { panel: 'bookmarks', label: 'Bookmarks', icon: 'navBookmarks' },
@@ -35,12 +38,17 @@ export function MapShell({
 }) {
     const mobile = useMobileLayout()
     const accountFlow = useAccountFlow()
+    const contributions = useContributions()
+    const contributor = !sample && browse ? contributions.store : null
+    const contributionState = contributor ? contributions.state : null
     const { panel, open, close, location } = usePanelRoute(
         Boolean(sample),
         mobile ? 'back' : 'dismiss',
         !!browse,
     )
     const contributionOpen = panel === 'contribute-form' || (mobile && panel === 'contribute')
+    const activeRoute = useRef(location.key)
+    activeRoute.current = location.key
     useEffect(() => {
         if (mobile && panel === 'contribute') open('contribute-form', 'nav-contribute', true)
     }, [mobile, panel, open])
@@ -75,9 +83,40 @@ export function MapShell({
         )
     }
     const map = useRef<LeafletMap | null>(null)
-    const onMap = useCallback((value: LeafletMap | null) => {
-        map.current = value
-    }, [])
+    const onMap = useCallback(
+        (value: LeafletMap | null) => {
+            map.current = value
+            if (
+                value &&
+                contributor &&
+                mobile &&
+                contributionOpen &&
+                !contributor.getSnapshot().point
+            )
+                contributor.setPoint(value.getCenter().wrap())
+        },
+        [contributor, mobile, contributionOpen],
+    )
+    useEffect(() => {
+        if (
+            contributor &&
+            mobile &&
+            contributionOpen &&
+            map.current &&
+            contributionState?.phase === 'draft' &&
+            !contributionState.base &&
+            !contributionState.point
+        )
+            contributor.setPoint(map.current.getCenter().wrap())
+    }, [
+        contributor,
+        mobile,
+        contributionOpen,
+        contributionState?.round,
+        contributionState?.phase,
+        contributionState?.base,
+        contributionState?.point,
+    ])
     const showMobileSearch = (nextSnap: Snap) => {
         const next = new URLSearchParams(location.search)
         next.set('panel', 'search')
@@ -121,19 +160,77 @@ export function MapShell({
     const [contributionPoint, setContributionPoint] = useState<{ lat: number; lng: number } | null>(
         null,
     )
-    const picking = panel === 'contribute' && !mobile
+    const picking =
+        panel === 'contribute' &&
+        !mobile &&
+        !contributionState?.base &&
+        (!contributionState || contributionState.phase === 'draft')
     const selectPoint = useCallback(
         (point: { lat: number; lng: number } | null) => {
-            setContributionPoint(point)
+            if (contributor && point) contributor.setPoint(point)
+            else setContributionPoint(point)
             open('contribute-form', 'nav-contribute')
         },
-        [open],
+        [open, contributor],
     )
+    const startContribution = (phone: boolean) => {
+        if (contributor) {
+            if (!contributor.beginCreate(browse?.language ?? 'en')) return
+            if (phone && map.current) contributor.setPoint(map.current.getCenter().wrap())
+            const current = contributor.getSnapshot()
+            open(
+                phone || current.phase !== 'draft' ? 'contribute-form' : 'contribute',
+                phone ? 'mobile-contribute' : 'nav-contribute',
+            )
+        } else {
+            setContributionPoint(null)
+            open(
+                phone ? 'contribute-form' : 'contribute',
+                phone ? 'mobile-contribute' : 'nav-contribute',
+            )
+        }
+    }
+    const editPlace = () => {
+        if (!contributor || !browse?.detail || !contributor.beginEdit(browse.detail)) return
+        open('contribute-form', mobile ? 'mobile-place-edit' : 'desktop-place-edit')
+    }
+    const submitContribution = (resendUnconfirmed = false) => {
+        if (!contributor || !accountFlow) return
+        const current = contributor.getSnapshot(),
+            key = location.key
+        try {
+            if (current.phase === 'draft') {
+                draftText(current.draft, current.language)
+                if (!current.base) checkPoint(current.point)
+            }
+        } catch (error) {
+            contributor.report(error instanceof Error ? error.message : 'Check the form.')
+            return
+        }
+        accountFlow.requireLogin((scope) => {
+            if (key === activeRoute.current && current.round === contributor.getSnapshot().round)
+                void contributor.submit(scope, resendUnconfirmed)
+        })
+    }
     const contribution = {
-        draft: contributionDraft,
-        onChange: setContributionDraft,
-        point: contributionPoint,
+        draft: contributionState?.draft ?? contributionDraft,
+        onChange: contributor?.change ?? setContributionDraft,
+        point: contributionState?.point ?? contributionPoint,
         close,
+        state: contributionState,
+        onSubmit: contributor ? submitContribution : undefined,
+        onPhoto: contributor
+            ? (file: File | null) => {
+                  void contributor.photo(file)
+              }
+            : undefined,
+        onView: () => {
+            const saved = contributor?.getSnapshot().saved
+            if (saved) {
+                selectPlace(saved, 'nav-contribute')
+                browse?.focusPoint(saved)
+            }
+        },
     }
     return (
         <main
@@ -198,7 +295,14 @@ export function MapShell({
                             ? {
                                   markers: browse.markers,
                                   selected: browse.detail,
-                                  sharedTarget,
+                                  sharedTarget:
+                                      contributionOpen && contributionState?.point
+                                          ? {
+                                                ...contributionState.point,
+                                                title: 'Contribution location',
+                                                showLabel: false,
+                                            }
+                                          : sharedTarget,
                                   position: browse.location.position,
                                   focus: browse.focus,
                                   onView: browse.onView,
@@ -239,7 +343,10 @@ export function MapShell({
                                         : undefined
                                 }
                                 onClick={() => {
-                                    if (item.panel === 'contribute') setContributionPoint(null)
+                                    if (item.panel === 'contribute') {
+                                        startContribution(false)
+                                        return
+                                    }
                                     if (item.panel === 'search') browse?.clearResults()
                                     open(item.panel, `nav-${item.panel}`)
                                 }}
@@ -288,6 +395,11 @@ export function MapShell({
                     browse={browse}
                     selectPlace={selectPlace}
                     chooseCategory={browse ? chooseCategory : undefined}
+                    editPlace={
+                        contributor && !contributionBusy(contributionState!.phase)
+                            ? editPlace
+                            : undefined
+                    }
                 />
             )}
             {mobile && (
@@ -306,6 +418,11 @@ export function MapShell({
                     browse={browse}
                     selectPlace={selectPlace}
                     chooseCategory={browse ? chooseCategory : undefined}
+                    editPlace={
+                        contributor && !contributionBusy(contributionState!.phase)
+                            ? editPlace
+                            : undefined
+                    }
                     secondary={
                         panel === 'bookmarks' && browse && !sample ? (
                             <BookmarksPanel browse={browse} onSelect={selectPlace} mobile />
@@ -355,8 +472,7 @@ export function MapShell({
                         size={20}
                         label="Contribute"
                         onClick={() => {
-                            setContributionPoint(null)
-                            open('contribute-form', 'mobile-contribute')
+                            startContribution(true)
                         }}
                     />
                 </div>

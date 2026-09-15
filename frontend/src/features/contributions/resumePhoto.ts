@@ -116,7 +116,8 @@ export async function resumePhoto(
                     ? error.status === 0 || error.status === 408 || error.status >= 500
                     : error instanceof DOMException &&
                       ['TimeoutError', 'AbortError'].includes(error.name)
-            if (!retry || ++failures > 8) throw error
+            if (!retry) throw error
+            failures = Math.min(failures + 1, 6)
             reconcile = true
             await wait(Math.min(30000, 1000 * 2 ** (failures - 1)), signal)
         }

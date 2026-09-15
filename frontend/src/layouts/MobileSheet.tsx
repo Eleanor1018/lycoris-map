@@ -1,4 +1,4 @@
-import { useRef, type PointerEvent, type ReactNode } from 'react'
+import { useEffect, useRef, type PointerEvent, type ReactNode } from 'react'
 import { FigmaIcon } from '@/shared/ui/figma-icon'
 import { PlaceMeta, PlaceSummary, ShareButton } from './DesktopPanel'
 import { CategoryBadge, DesignButton, IconButton, NearbyCards, SearchField } from './primitives'
@@ -28,6 +28,7 @@ export function MobileSheet({
     chooseCategory,
     secondary,
     openBookmarks,
+    editPlace,
 }: {
     snap: Snap
     setSnap: (value: Snap) => void
@@ -45,8 +46,45 @@ export function MobileSheet({
     chooseCategory?: ((category: 'toilet' | 'nursing' | 'medical') => void) | undefined
     secondary?: ReactNode
     openBookmarks?: (() => void) | undefined
+    editPlace?: (() => void) | undefined
 }) {
     const sheet = useRef<HTMLElement>(null)
+    const composing = !!contribution
+    useEffect(() => {
+        const element = sheet.current,
+            viewport = window.visualViewport
+        if (!composing || !element || !viewport) return
+        let frame = 0
+        const resize = () => {
+            const normalScale = Math.abs(viewport.scale - 1) < 0.05
+            const height = normalScale ? viewport.height : window.innerHeight
+            const offset = normalScale
+                ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+                : 0
+            element.style.setProperty('--contribution-viewport-height', `${height}px`)
+            element.style.setProperty('--contribution-keyboard-offset', `${offset}px`)
+            cancelAnimationFrame(frame)
+            frame = requestAnimationFrame(() => {
+                const active = document.activeElement
+                if (
+                    active instanceof HTMLElement &&
+                    element.contains(active) &&
+                    active.matches('input, textarea')
+                )
+                    active.scrollIntoView?.({ block: 'nearest' })
+            })
+        }
+        resize()
+        viewport.addEventListener('resize', resize)
+        viewport.addEventListener('scroll', resize)
+        return () => {
+            cancelAnimationFrame(frame)
+            viewport.removeEventListener('resize', resize)
+            viewport.removeEventListener('scroll', resize)
+            element.style.removeProperty('--contribution-viewport-height')
+            element.style.removeProperty('--contribution-keyboard-offset')
+        }
+    }, [composing])
     const gesture = useRef<{ id: number; y: number; height: number; moved: boolean } | null>(null)
     const suppressClick = useRef(false)
     const expandedPanel = detail || Boolean(contribution) || Boolean(secondary)
@@ -181,7 +219,7 @@ export function MobileSheet({
                 ) : contribution ? (
                     <ContributionForm {...contribution} mobile />
                 ) : detail && browse ? (
-                    <PlaceDetails browse={browse} mobile />
+                    <PlaceDetails browse={browse} mobile onEdit={editPlace} />
                 ) : detail ? (
                     <div className="mobile-detail-content">
                         {sample && (

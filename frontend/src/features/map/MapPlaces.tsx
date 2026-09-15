@@ -23,7 +23,7 @@ const locationIcon = L.divIcon({
 })
 const EMPTY: readonly Marker[] = []
 const DEFAULT_PADDING: MapPadding = { left: 0, right: 0, top: 0, bottom: 0 }
-export type SharedTarget = LatLng & { title: string }
+export type SharedTarget = LatLng & { title: string; showLabel?: boolean }
 export type MapPlacesProps = {
     sharedTarget?: SharedTarget | undefined
     markers?: readonly Marker[] | undefined
@@ -208,7 +208,8 @@ export function MapPlaces({
                 const item = registry.current.get('shared-location')!
                 const label = document.createElement('span')
                 label.textContent = sharedTarget.title
-                if (item.getTooltip()) item.setTooltipContent(label)
+                if (sharedTarget.showLabel === false) item.unbindTooltip()
+                else if (item.getTooltip()) item.setTooltipContent(label)
                 else
                     item.bindTooltip(label, {
                         permanent: true,
