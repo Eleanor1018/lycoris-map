@@ -1,6 +1,6 @@
 # Lycoris Web v2（`frontend/`）
 
-Web v2 新工程，当前已完成 **S3 浏览闭环**：在 S2 原稿外壳上接通 OSM 点位聚合、主动定位、附近分类、搜索、详情、分享、外部导航及旧链接。温晓亲自编码，结合 Figma MCP 与 Computer Use 核对。当前仅供本机开发与验收，账号收藏、贡献提交和完整设置分别留在 S4–S6。
+Web v2 新工程，当前已完成 **S4 账号与收藏**：登录/注册/退出、资料、头像、改密、收藏、本人点位已接通 Rust 接口。温晓亲自编码，结合 Figma MCP 与 Computer Use 核对。当前仅供本机开发与验收，贡献提交和完整设置留在 S5–S6。
 
 ## 环境与命令
 
@@ -28,6 +28,10 @@ pnpm test:unit
 src/
   app/                 启动、Providers、错误边界、React Router、DEV 按需入口
   layouts/             桌面导航/面板、手机三态/详情、面板历史与焦点恢复
+  features/auth/       账号窗口、Cookie 会话、跨标签页同步
+  features/bookmarks/  收藏查询与按点位独立的乐观更新
+  features/profile/    资料、头像、改密、本人点位
+  features/places/     搜索/附近/详情和公开数据读取
   features/map/        产品 MapSurface、S1 地图验证与后端状态屏
   features/dev/        仅开发环境的 Figma 样本与 S1 浏览器诊断页
   assets/figma/        原始导出图标、DEV 样本、来源节点及 SHA256
@@ -50,7 +54,7 @@ src/
 | `/__design/mobile?screen=collapsed` | 手机原稿比对，可选 collapsed / half / full / contribute-form / details                                          |
 | `/__dev/status`                     | 后端 `/health/live`、`/health/ready` 连通状态                                                                   |
 | `/__dev/map-spike`                  | S1 的 200 个固定合成点位及地图生命周期诊断                                                                      |
-| `/__dev/qa`                         | S1 本机 Cookie 会话、头像与固定手机视口验证                                                                     |
+| `/__dev/qa`                         | 固定手机视口；账号验证转到产品页面                                                                              |
 
 这些开发页面由 `import.meta.env.DEV` 隔离并按需加载；生产构建不包含其组件、样本地图/照片或诊断词条。画稿样本与正常入口共用 `MapShell`、`DesktopPanel`、`MobileSheet`，不是整页截图。
 
@@ -70,12 +74,12 @@ S3 搜索/附近结果和加载、空结果、失败状态经 Nora 同意，复�
 
 ## S3 数据与交互
 
-- 公共 viewport、nearby、search、detail 均明确 `credentials: omit`，详情不会继承 OptionalUser 的所有者 Cookie；23 字段 DTO 在边界校验，坐标越界及不安全整数显示受控失败。
+- 公共 viewport、nearby、search 及匿名 detail 明确 `credentials: omit`；登录后的 detail 切到独立私有 scope，避免 OptionalUser 数据进入公开缓存；23 字段 DTO 在边界校验，坐标越界及不安全整数显示受控失败。
 - viewport 250ms 防抖，经度 wrap、越日期线拆请求并按 ID 合并。默认全部类别不传过滤，以兼容后端读取时归一的历史类别。Supercluster 仅减少屏上图钉，不截断服务端结果。
 - 搜索 300ms 防抖、取消过时请求，查询键包含语言和实际过滤值；不因 version 相同忽略新标题、坐标或可用性数据。超过 100 条的结果使用虚拟列表，支持方向键、Home/End，以及手机详情返回的滚动/焦点恢复。
 - 主动点击 Locate me 才请求浏览器定位。附近类别使用已取得的位置或地图中心，标明 1km 的参考点；重新定位同步更新查询中心。距离仅在有实际定位时显示直线距离，不把地图中心当作用户所在位置。
 - 详情按实际内容排版：无图片不填假图，图片失败收起；无开放时间明确显示未提供，不从 isActive 猜测全天开放。404 会撤掉旧选中点和缓存行，之后新的公开读取可恢复重新公开的点位。
-- Share 优先系统分享，支持时回退复制 ID＋语言链接；Navigate 使用 Google Maps 步行导航，只传公开目的地，不传用户起点。
+- Share 优先系统分享，支持时回退复制 ID＋语言链接；Navigate 使用 Google Maps 步行导航，仅在用户点击时传所选目的地，不传用户起点。
 - 保留 `/maps?markerId=…&lang=…`、`/maps?lat=…&lng=…&title=…`、`/search?q=…`。ID 优先，关闭详情不会激活原先被忽略的坐标；手机搜索直达展开结果，切至平板保留正在浏览的结果栏。
 - 历史数据库坐标基准仍未通过外部控制点核验。本机真实 Rust 联通使用隔离的合成样本，不能据此宣称历史坐标准确或已上线。
 
@@ -86,6 +90,18 @@ S3 搜索/附近结果和加载、空结果、失败状态经 Nora 同意，复�
 原稿内容对照可打开 `/__dev/places-performance?panel=details&markerId=1&design=desktop`（或 `mobile` / `long`）。只在该开发入口使用原稿照片与合成内容，正常应用入口不读取这些样本。
 
 这不是 Rust 大数据量基准或 GPU 绘制完成时间；内存包含仪器开销，重复数据可能被 Query 结构共享。实测 10,000 条约 5.36MB 原始 JSON，11 级下聚合为 163 个屏上标记，1440px 视口结果列表只渲染 19 行且最后一条可由 End 到达。聚合不解决移动网络响应体，后续应评估轻量 viewport DTO / 服务端分层读取，不做静默截断。
+
+## S4 账号与收藏
+
+- 设计基准：桌面登录 `126:382`、注册 `126:513`，手机登录 `126:805`、注册 `126:1008`。桌面窗口居中，375×758，短屏内部滚动；手机从顶部 46px 展开到底部安全区，延续 Nora 指定的两端 11px。输入框 44px、半径 22px，原始 Apple/Google/登录/关闭图标附来源与 SHA256。
+- 桌面关闭和 Escape 只关闭账号窗口；不会关闭其后的地图面板。地图不按登录状态重新挂载。手机账号窗口展开时隐藏原底部菜单，避免透出重复搜索框；关闭后恢复菜单与焦点。
+- 注册使用现有 `{username,email,password}` 契约，成功后从 `/api/me` 确认 Cookie。**验证码按 Nora 确认保留禁用占位，不发码或验码。** Apple/Google 保留设计按钮，点击提示暂未接入，不跳转或伪造成功。后端尚无这三类接口。
+- 资料、头像、改密、本人点位尚无独立画稿，复用现有窗口、输入框、设置行和点位卡片。昵称/代词/签名按后端 Unicode 长度边界校验；头像检查格式与 5MiB 大小，服务端继续校验像素/实际内容。改密后重新确认会话，要求重新登录时不会误报仍已登录。
+- SessionStore 是产品 Cookie 会话唯一写入器。Web Locks 可用时按同源标签页串行调度 Cookie 请求；无 Web Locks 时退化为当前页面队列。BroadcastChannel 与 storage 仅广播变更信号，身份由 `/api/me` 核实；focus/pageshow 也会复查。旧浏览器不具备 Web Locks 时不承诺同等的跨标签页请求互斥。
+- 私有读取/修改以 `publicId + authEpoch` 归属，发送前核对当前 Cookie 所属账号。退出、切账号、过期会话取消请求、清空原 scope 缓存和头像 object URL，撤掉私有详情/地图标记；403/503 不被当作退出成功。身份相关 HTTP 读取明确 `no-store`。
+- 收藏按点位独立更新/回滚，失败立即恢复按钮并保留重试入口；同点位重复点击去重，其他点位的成功不被覆盖。内容 DTO 带语言，切语言不让旧乐观标题覆盖目标语言结果。匿名用户登录成功后仅恢复本次仍有效的收藏操作，取消登录会清除待办。
+- 本人点位包含私有/待审数据，仅进入账号查询和详情 scope，公共 viewport/search/nearby 不混入这些 DTO。账号窗口按打开轮次防止旧提交结果覆盖后来打开的界面。
+- 开发地址 `http://127.0.0.1:5173` 已在本机合成后端写入 Origin 白名单中。若使用 `pnpm preview` 的默认 4173 端口，需由相应本机后端显式允许该 Origin 才能测试写操作；不能通过改写 Origin 绕过检查。S4 未变更服务器配置或部署。
 
 ## S1 开发诊断保留范围
 
@@ -99,12 +115,7 @@ S3 搜索/附近结果和加载、空结果、失败状态经 Nora 同意，复�
 ### `/__dev/qa`
 
 - 只提供 **375×812** 一个固定 iframe 尺寸，避免对桌面窗口产生大幅横向溢出。iframe 用真实 CSS 视口尺寸，仅做响应式检查，**不是 iPhone 设备模拟，也不缩放截图冒充手机视口**。
-- 开发会话表单是 S1 本机诊断工具，不是产品账号 UI（正式登录在 S4）：
-    - 操作者自行输入合成 username/password → 真实 `POST /api/login`，随后 `GET /api/me`（取 AuthEnvelope 的 `data`）、`GET /api/me/avatar`（Blob）、`POST /api/me/avatar`（仅 `file` 字段，合成图片）、`POST /api/logout` 并确认 `/api/me` 返回 401。
-    - **不注册账号、不改密码、不硬编码任何凭据或真实用户数据。**
-    - 密码不落 localStorage、不打印、不写 URL，提交后立即从组件状态清空。
-    - 会话响应受 authEpoch 保护：旧 `/me`、旧头像、旧上传结果不会恢复旧用户；登录 A→B、当前 401、退出都会撤销旧头像 object URL、取消并删除旧 scope 私有查询，公开缓存保留。
-    - 登录/退出/上传等操作串行执行，进行中禁用输入与 file 选择。
+- S4 已移除旧诊断页独立的 Cookie 写入器。账号操作统一从产品地图的账号窗口进入，使用同一 SessionStore；此页只显示会话状态和返回地图的链接。原诊断竞态回归已迁移到产品会话与账号流程测试。
 
 ## 图标与 UI 资产
 
