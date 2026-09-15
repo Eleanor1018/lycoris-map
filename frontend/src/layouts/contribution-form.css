@@ -53,6 +53,10 @@
     color: black;
     font: 400 17px/20px var(--ui-font-body);
 }
+.desktop-panel .contribution-input:focus {
+    border-color: var(--ui-brand-blush);
+    outline: none;
+}
 .contribution-title,
 .contribution-description {
     position: absolute;

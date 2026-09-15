@@ -58,6 +58,8 @@ Figma 基准：[Lycoris v2](https://www.figma.com/design/nmsiDbbgm0LG0CSwXUSLPW/
 
 桌面和平板采用侧边栏布局（宽度 ≥768px），手机采用底部面板（≤767px）。搜索框由圆角外框整体显示焦点；手机空 Bookmarks 与 Settings 之间保留 13px，有收藏时保持原稿卡片排布。
 
+桌面/平板的关闭按钮与 Escape 直接收起第二栏，保留主导航和地图；即使从 Settings 打开 Languages、从 Bookmarks 打开详情，也不返回上一面板。浏览器返回仍按历史记录导航，手机保留原有返回来源的关闭行为。贡献表单的桌面输入聚焦时直接改变原有圆角边框颜色，不在外围另留间隙。
+
 贡献入口对应 [桌面表单 72:2369](https://www.figma.com/design/nmsiDbbgm0LG0CSwXUSLPW/Lycoris-v2-design?node-id=72-2369) 与 [手机表单 74:4744](https://www.figma.com/design/nmsiDbbgm0LG0CSwXUSLPW/Lycoris-v2-design?node-id=74-4744)：桌面/平板先显示气泡，点击地图后打开表单；拖动地图不会触发表单，键盘可在地图上按 Enter 选择中心。手机点击笔按钮直接打开。关闭表单退出本次贡献流程，切换屏宽保留草稿与已选坐标。
 
 当前表单支持本次页面会话内的标题、类别、描述、时间及本地照片选择；重新打开仍保留草稿，刷新后清空。手机直接进入时尚未选择坐标，不假定为用户当前位置。Submit 保持 `aria-disabled`，不发送创建或上传请求；认证、手机坐标确认、校验和真实提交属于 S5。
