@@ -34,6 +34,22 @@
     min-height: 758px;
     padding: 33px 11px 22px;
 }
+.account-desktop.account-login {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    max-height: calc(100dvh - 32px);
+    border: 3px solid var(--ui-brand);
+    box-shadow: 4px 4px 4px #e6cbff42;
+}
+.account-desktop.account-login .account-dialog-scroll {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+}
+.account-desktop.account-login .account-dialog-inner {
+    min-height: 0;
+}
 .account-dialog h2 {
     margin: 0;
     outline: none;
@@ -148,6 +164,9 @@
     font: 500 32px/32px var(--ui-font-logo);
     letter-spacing: 0.1px;
     color: black;
+}
+.account-desktop.account-login .auth-social {
+    margin-top: 22px;
 }
 .account-desktop.account-register .auth-social {
     margin-top: -1px;
