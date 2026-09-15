@@ -1,20 +1,21 @@
-import { BackendStatusPanel } from '@/features/map/BackendStatusPanel'
-import { DevRoutePage, resolveDevRoute } from './devRoutes'
+import { lazy, Suspense } from 'react'
+import { BrowserRouter } from 'react-router'
+import { MapShell } from '@/layouts/MapShell'
 import { AppProviders } from './providers'
-
-/**
- * S1 entry: the welcome/status screen plus two development-only pages.
- *
- * `/__dev/map-spike` (map lifecycle) and `/__dev/qa` (browser diagnostics) are
- * S1 tools replaced by the S2 router and S4 account flows. The default route
- * stays the status screen, and this build is an S1 artefact that is not
- * deployable.
- */
+const DevelopmentPage = import.meta.env.DEV ? lazy(() => import('./devRoutes')) : null
 export function App() {
-    const devRoute = resolveDevRoute(window.location.pathname)
+    const isDevelopmentPath = /^\/__(dev|design)\//.test(window.location.pathname)
     return (
         <AppProviders>
-            {devRoute ? <DevRoutePage route={devRoute} /> : <BackendStatusPanel />}
+            <BrowserRouter>
+                {DevelopmentPage && isDevelopmentPath ? (
+                    <Suspense fallback={null}>
+                        <DevelopmentPage />
+                    </Suspense>
+                ) : (
+                    <MapShell />
+                )}
+            </BrowserRouter>
         </AppProviders>
     )
 }

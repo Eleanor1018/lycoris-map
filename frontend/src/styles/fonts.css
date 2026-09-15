@@ -1,5 +1,5 @@
 /* Figma: Fredoka 500, Roboto 400/500, Noto Sans 400. SF Pro and CJK use the local system fonts; no proprietary font is redistributed. */
-@import '@fontsource/fredoka/500.css';
-@import '@fontsource/roboto/400.css';
-@import '@fontsource/roboto/500.css';
-@import '@fontsource/noto-sans/400.css';
+@import '@fontsource/fredoka/latin-500.css';
+@import '@fontsource/roboto/latin-400.css';
+@import '@fontsource/roboto/latin-500.css';
+@import '@fontsource/noto-sans/latin-400.css';

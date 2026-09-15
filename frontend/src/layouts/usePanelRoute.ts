@@ -1,0 +1,66 @@
+import { useCallback, useEffect, useRef } from 'react'
+import { useLocation, useNavigate } from 'react-router'
+import { parsePanel, type Panel } from './types'
+type ReturnState = { owner: string; focusId: string }
+function readReturnState(value: unknown): ReturnState | null {
+    if (!value || typeof value !== 'object' || !('owner' in value) || !('focusId' in value))
+        return null
+    return typeof value.owner === 'string' && typeof value.focusId === 'string'
+        ? { owner: value.owner, focusId: value.focusId }
+        : null
+}
+export function usePanelRoute(design: boolean) {
+    const location = useLocation()
+    const navigate = useNavigate()
+    const owner = useRef(crypto.randomUUID())
+    const restoreFocus = useRef<string | null>(null)
+    const field = design ? 'screen' : 'panel'
+    const panel = parsePanel(new URLSearchParams(location.search).get(field))
+    const open = useCallback(
+        (next: Panel, focusId = '') => {
+            if (next === panel) return
+            const params = new URLSearchParams(location.search)
+            if (next === 'initial') params.delete(field)
+            else params.set(field, next)
+            navigate(
+                { pathname: location.pathname, search: params.toString(), hash: location.hash },
+                { state: { owner: owner.current, focusId } },
+            )
+        },
+        [field, location, navigate, panel],
+    )
+    const close = useCallback(() => {
+        const state = readReturnState(location.state)
+        if (state?.owner === owner.current) {
+            restoreFocus.current = state.focusId
+            void navigate(-1)
+        } else {
+            const params = new URLSearchParams(location.search)
+            params.delete(field)
+            restoreFocus.current = 'nav-search'
+            void navigate(
+                { pathname: location.pathname, search: params.toString(), hash: location.hash },
+                { replace: true, state: null },
+            )
+        }
+    }, [field, location, navigate])
+    useEffect(() => {
+        if (restoreFocus.current !== null) {
+            const target = document.getElementById(restoreFocus.current)
+            if (target && target.getClientRects().length > 0) target.focus()
+            else document.getElementById('map-shell')?.focus()
+            restoreFocus.current = null
+        }
+    }, [location.key])
+    useEffect(() => {
+        const escape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape' && !event.isComposing && panel !== 'initial') {
+                event.preventDefault()
+                close()
+            }
+        }
+        window.addEventListener('keydown', escape)
+        return () => window.removeEventListener('keydown', escape)
+    }, [panel, close])
+    return { panel, open, close, location }
+}
