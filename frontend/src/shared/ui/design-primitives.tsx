@@ -102,7 +102,9 @@ export function NearbyCards({
         <div className="nearby-cards">
             {entries.map(({ category, title }) => (
                 <DesignButton
+                    id={`${mobile ? 'mobile' : 'desktop'}-nearby-${category}`}
                     className="category-card"
+                    aria-label={title.replace(/\s+/g, ' ')}
                     available={!!onSelect}
                     key={category}
                     onClick={() => onSelect?.(category)}

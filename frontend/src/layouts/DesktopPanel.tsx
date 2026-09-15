@@ -5,6 +5,7 @@ import { ContributionForm, type ContributionFormProps } from './ContributionForm
 import type { Marker } from '@/shared/api/markers'
 import type { PlaceBrowse } from '@/features/places/usePlaceBrowse'
 import { PlaceDetails } from '@/features/places/PlaceDetails'
+import { NearbyResults } from '@/features/places/NearbyResults'
 import { PlaceResults } from '@/features/places/PlaceResults'
 import { BookmarksPanel } from '@/features/bookmarks/BookmarksPanel'
 
@@ -51,7 +52,9 @@ export function DesktopPanel(props: Props) {
             {panel === 'search' && (
                 <>
                     <SearchField value={props.search} onChange={props.setSearch} />
-                    {props.browse && props.browse.mode !== 'map' && props.selectPlace ? (
+                    {props.browse &&
+                    (props.browse.mode === 'search' || props.browse.mode === 'cluster') &&
+                    props.selectPlace ? (
                         <PlaceResults browse={props.browse} onSelect={props.selectPlace} />
                     ) : (
                         <>
@@ -60,6 +63,9 @@ export function DesktopPanel(props: Props) {
                         </>
                     )}
                 </>
+            )}
+            {panel === 'nearby' && props.browse && props.selectPlace && (
+                <NearbyResults browse={props.browse} onSelect={props.selectPlace} />
             )}
             {panel === 'bookmarks' && !sample && props.browse && props.selectPlace && (
                 <BookmarksPanel browse={props.browse} onSelect={props.selectPlace} />

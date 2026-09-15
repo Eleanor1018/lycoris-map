@@ -27,6 +27,7 @@ export function MobileSheet({
     selectPlace,
     chooseCategory,
     secondary,
+    secondaryLabel = 'Bookmarks',
     openBookmarks,
     editPlace,
 }: {
@@ -44,10 +45,12 @@ export function MobileSheet({
     browse?: PlaceBrowse | undefined
     selectPlace?: ((place: Marker, focusId: string) => void) | undefined
     chooseCategory?: ((category: 'toilet' | 'nursing' | 'medical') => void) | undefined
+    secondaryLabel?: string
     secondary?: ReactNode
     openBookmarks?: (() => void) | undefined
     editPlace?: (() => void) | undefined
 }) {
+    const hasPlaceResults = browse?.mode === 'search' || browse?.mode === 'cluster'
     const sheet = useRef<HTMLElement>(null)
     const composing = !!contribution
     useEffect(() => {
@@ -145,7 +148,7 @@ export function MobileSheet({
                 contribution
                     ? 'Contribute'
                     : secondary
-                      ? 'Bookmarks'
+                      ? secondaryLabel
                       : detail
                         ? 'Details'
                         : 'Search positions'
@@ -157,7 +160,7 @@ export function MobileSheet({
                 className="sheet-handle"
                 aria-label={
                     secondary
-                        ? 'Close bookmarks'
+                        ? `Close ${secondaryLabel.toLowerCase()}`
                         : contribution
                           ? 'Close contribution panel'
                           : detail
@@ -208,7 +211,7 @@ export function MobileSheet({
                     contribution
                         ? 'contribution'
                         : secondary
-                          ? 'bookmarks'
+                          ? secondaryLabel
                           : detail
                             ? 'detail'
                             : 'search'
@@ -257,7 +260,7 @@ export function MobileSheet({
                     </div>
                 ) : (
                     <div
-                        className={`mobile-search-content ${browse && browse.mode !== 'map' ? 'has-place-results' : ''}`}
+                        className={`mobile-search-content ${hasPlaceResults ? 'has-place-results' : ''}`}
                     >
                         <div className="mobile-logo">Lycoris Maps</div>
                         <SearchField mobile value={search} onChange={setSearch} />
@@ -272,7 +275,7 @@ export function MobileSheet({
                                 AA
                             </DesignButton>
                         )}
-                        {browse && browse.mode !== 'map' && snap !== 'collapsed' && selectPlace ? (
+                        {browse && hasPlaceResults && snap !== 'collapsed' && selectPlace ? (
                             <PlaceResults browse={browse} onSelect={selectPlace} mobile />
                         ) : (
                             snap !== 'collapsed' && (
@@ -286,7 +289,7 @@ export function MobileSheet({
                                 </>
                             )
                         )}
-                        {snap === 'full' && (!browse || browse.mode === 'map') && (
+                        {snap === 'full' && !hasPlaceResults && (
                             <>
                                 <DesignButton
                                     className="mobile-section-heading mobile-bookmarks-heading"

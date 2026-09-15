@@ -80,7 +80,12 @@ export function usePlaceBrowse(
         [focusPoint],
     )
     const location = useLocationFix(onLocated)
-    const listPositions = useRef(new Map<string, { offset: number; active: number }>())
+    const listPositions = useRef(
+        new Map<
+            string,
+            { offset: number; active: number; sizes?: Map<number, number>; width?: number }
+        >(),
+    )
     const onView = useCallback(
         (next: MapView) =>
             setView((previous) =>
@@ -227,7 +232,7 @@ export function usePlaceBrowse(
         location,
         listPositions,
         clusterIds,
-        showCluster: (ids: number[]) => {
+        showCluster: (ids: number[] | null) => {
             setClusterIds(ids)
         },
         clearResults: () => {

@@ -1,6 +1,7 @@
 export const panels = [
     'initial',
     'search',
+    'nearby',
     'bookmarks',
     'languages',
     'settings',

@@ -151,3 +151,26 @@ it('reports invalid links without fetching and updates nearby reference after a 
     )
     expect(result.current.nearby?.located).toBe(true)
 })
+
+it('keeps a nearby search anchored while panning and cancels a superseded category request', async () => {
+    let finishOld!: (value: ReturnType<typeof syntheticPlace>[]) => void
+    vi.mocked(reads.readNearby).mockImplementation(({ category }) =>
+        category === 'baby_room'
+            ? new Promise((resolve) => {
+                  finishOld = resolve
+              })
+            : Promise.resolve([syntheticPlace({ category, title: 'Newest nearby' })]),
+    )
+    const { result } = renderHook(() => usePlaceBrowse('en', null), { wrapper: wrapper() })
+    act(() => result.current.onView(mapView(31, 32, 121, 122, { lat: 31.5, lng: 121.5 }, 10)))
+    act(() => result.current.chooseCategory('baby_room'))
+    await waitFor(() => expect(reads.readNearby).toHaveBeenCalledTimes(1))
+    const signal = vi.mocked(reads.readNearby).mock.calls[0]![2]
+    act(() => result.current.onView(mapView(32, 33, 122, 123, { lat: 32.5, lng: 122.5 }, 10)))
+    expect(result.current.nearby?.point).toEqual({ lat: 31.5, lng: 121.5 })
+    act(() => result.current.chooseCategory('friendly_clinic'))
+    await waitFor(() => expect(result.current.results[0]?.title).toBe('Newest nearby'))
+    expect(signal.aborted).toBe(true)
+    await act(async () => finishOld([syntheticPlace({ title: 'Old nearby' })]))
+    expect(result.current.results[0]?.title).toBe('Newest nearby')
+})

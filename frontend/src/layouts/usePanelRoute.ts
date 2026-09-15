@@ -34,7 +34,13 @@ export function usePanelRoute(
                   : 'initial'
             : parsePanel(rawPanel)
     const open = useCallback(
-        (next: Panel, focusId = '', replace = false, markerId?: string) => {
+        (
+            next: Panel,
+            focusId = '',
+            replace = false,
+            markerId?: string,
+            query?: Record<string, string>,
+        ) => {
             const params = new URLSearchParams(location.search)
             if (next === panel && (markerId === undefined || markerId === params.get('markerId')))
                 return
@@ -45,6 +51,9 @@ export function usePanelRoute(
                 for (const field of ['lat', 'lng', 'title']) params.delete(field)
             } else if (markerLinks && panel === 'details' && next !== 'details')
                 params.delete('markerId')
+            if (next === 'nearby' && markerLinks)
+                for (const field of ['markerId', 'lat', 'lng', 'title']) params.delete(field)
+            for (const [key, value] of Object.entries(query ?? {})) params.set(key, value)
             const previous = readReturnState(location.state)
             const finishingPicker = panel === 'contribute' && next === 'contribute-form'
             const ownedPicker = previous?.owner === owner.current
@@ -74,16 +83,22 @@ export function usePanelRoute(
             if (markerLinks && location.pathname === '/search') params.set(field, 'initial')
             if (markerLinks && panel === 'details')
                 for (const field of ['markerId', 'lat', 'lng', 'title']) params.delete(field)
-            if (markerLinks && closeBehavior === 'back' && panel === 'search')
+            if (
+                markerLinks &&
+                closeBehavior === 'back' &&
+                (panel === 'search' || panel === 'nearby')
+            )
                 params.set('snap', 'collapsed')
             const desktopPanel =
                 panel === 'contribute-form'
                     ? 'contribute'
-                    : panel === 'details'
-                      ? state?.focusId === 'desktop-bookmark-place'
-                          ? 'bookmarks'
-                          : 'search'
-                      : panel
+                    : panel === 'nearby'
+                      ? 'search'
+                      : panel === 'details'
+                        ? state?.focusId === 'desktop-bookmark-place'
+                            ? 'bookmarks'
+                            : 'search'
+                        : panel
             restoreFocus.current =
                 closeBehavior === 'dismiss' ? `nav-${desktopPanel}` : 'nav-search'
             void navigate(

@@ -15,6 +15,8 @@ import type { PlaceBrowse } from '@/features/places/usePlaceBrowse'
 import type { SharedTarget } from '@/features/map/MapPlaces'
 import type { Marker } from '@/shared/api/markers'
 import { AccountEntry } from '@/features/auth/AccountEntry'
+import { NearbyResults } from '@/features/places/NearbyResults'
+import type { MarkerCategory } from '@/shared/query/keys'
 import { BookmarksPanel } from '@/features/bookmarks/BookmarksPanel'
 import { useAccountFlow } from '@/features/auth/AccountFlow'
 import { useContributions } from '@/features/contributions/ContributionsProvider'
@@ -58,7 +60,7 @@ export function MapShell({
     const params = new URLSearchParams(location.search)
     const snapValue = params.get(mobileFixture ? 'screen' : 'snap')
     const snap: Snap =
-        contributionOpen || (mobile && panel === 'bookmarks')
+        contributionOpen || (mobile && (panel === 'bookmarks' || panel === 'nearby'))
             ? 'full'
             : snapValue === 'half' || snapValue === 'full'
               ? snapValue
@@ -134,8 +136,24 @@ export function MapShell({
             if (mobile && (snap !== 'full' || panel !== 'search')) showMobileSearch('full')
         } else setSearch(value)
     }
+    const nearbyCategory = params.get('nearbyCategory')
+    const requestedCategory =
+        nearbyCategory === 'baby_room' || nearbyCategory === 'friendly_clinic'
+            ? nearbyCategory
+            : 'accessible_toilet'
+    useEffect(() => {
+        // Also initialize a direct Nearby URL once the map has a real center.
+        if (panel !== 'nearby' || !browse) return
+        if (browse.nearby?.category !== requestedCategory || browse.mode === 'search')
+            browse.chooseCategory(requestedCategory)
+        else if (browse.mode === 'cluster') browse.showCluster(null)
+    }, [panel, browse, requestedCategory])
+    const showNearby = (category: MarkerCategory, focusId: string) => {
+        browse?.chooseCategory(category)
+        open('nearby', focusId, false, undefined, { nearbyCategory: category })
+    }
     const chooseCategory = (category: 'toilet' | 'nursing' | 'medical') => {
-        browse?.chooseCategory(
+        showNearby(
             (
                 {
                     toilet: 'accessible_toilet',
@@ -143,9 +161,8 @@ export function MapShell({
                     medical: 'friendly_clinic',
                 } as const
             )[category],
+            `${mobile ? 'mobile' : 'desktop'}-nearby-${category}`,
         )
-        if (mobile) showMobileSearch('full')
-        else open('search', 'nav-search')
     }
     const selectPlace = useCallback(
         (place: Marker, focusId: string) => {
@@ -335,9 +352,10 @@ export function MapShell({
                             <DesignButton
                                 key={item.panel}
                                 id={`nav-${item.panel}`}
-                                className={`nav-row ${panel === item.panel || (panel === 'contribute-form' && item.panel === 'contribute') ? 'selected' : ''}`}
+                                className={`nav-row ${panel === item.panel || (panel === 'nearby' && item.panel === 'search') || (panel === 'contribute-form' && item.panel === 'contribute') ? 'selected' : ''}`}
                                 aria-current={
                                     panel === item.panel ||
+                                    (panel === 'nearby' && item.panel === 'search') ||
                                     (panel === 'contribute-form' && item.panel === 'contribute')
                                         ? 'page'
                                         : undefined
@@ -423,8 +441,11 @@ export function MapShell({
                             ? editPlace
                             : undefined
                     }
+                    secondaryLabel={panel === 'nearby' ? 'Nearby' : 'Bookmarks'}
                     secondary={
-                        panel === 'bookmarks' && browse && !sample ? (
+                        panel === 'nearby' && browse ? (
+                            <NearbyResults browse={browse} onSelect={selectPlace} mobile />
+                        ) : panel === 'bookmarks' && browse && !sample ? (
                             <BookmarksPanel browse={browse} onSelect={selectPlace} mobile />
                         ) : undefined
                     }
@@ -457,13 +478,13 @@ export function MapShell({
             {mobile ? (
                 <div className="map-tools mobile-tools" inert={sheetTop < 240}>
                     <IconButton
+                        id="mobile-nearby"
                         icon="radar"
                         size={20}
                         label="Find nearby"
                         available={!!browse}
                         onClick={() => {
-                            browse?.clearResults()
-                            showMobileSearch('half')
+                            showNearby('accessible_toilet', 'mobile-nearby')
                         }}
                     />
                     <IconButton
