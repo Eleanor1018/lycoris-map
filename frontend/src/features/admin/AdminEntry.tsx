@@ -3,7 +3,7 @@ import { useAccountFlow } from '@/features/auth/AccountFlow'
 import { FigmaIcon } from '@/shared/ui/figma-icon'
 import { useAdminAccess } from './useAdminAccess'
 import { useAdminUi } from './ui'
-export function AdminEntry() {
+export function AdminEntry({ mobile = false }: { mobile?: boolean }) {
     const { access } = useAdminAccess(),
         ui = useAdminUi(),
         flow = useAccountFlow()
@@ -15,7 +15,9 @@ export function AdminEntry() {
             onClick={() => flow?.close()}
         >
             <span>{ui.message('Administration')}</span>
-            <FigmaIcon name="chevron" />
+            <span className="chevron-slot">
+                <FigmaIcon name={mobile ? 'mobileChevronBlue' : 'chevron'} />
+            </span>
         </Link>
     )
 }

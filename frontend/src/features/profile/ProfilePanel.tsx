@@ -20,6 +20,7 @@ import type { Marker } from '@/shared/api/markers'
 import type { PlaceBrowse } from '@/features/places/usePlaceBrowse'
 import { ReadMessage } from '@/features/places/PlaceResults'
 import { SavedPlaceRow } from '@/features/bookmarks/BookmarksPanel'
+import { useMobileLayout } from '@/layouts/useMobileLayout'
 
 export function ProfilePanel({ password = false }: { password?: boolean }) {
     const ui = useUi()
@@ -54,6 +55,7 @@ export function ProfilePanel({ password = false }: { password?: boolean }) {
 }
 function ProfileForm() {
     const ui = useUi()
+    const mobile = useMobileLayout()
     const session = useSession(),
         flow = useAccountFlow()!,
         client = useQueryClient()
@@ -128,10 +130,16 @@ function ProfileForm() {
     }
     return (
         <div className="profile-content">
-            <label className="profile-avatar-control">
+            <div className="profile-header">
                 <span className="profile-avatar">
                     <AccountAvatar />
                 </span>
+                <div className="profile-identity">
+                    <h3>{user.nickname?.trim() || ui.text('Account')}</h3>
+                    <p>{user.email}</p>
+                </div>
+            </div>
+            <label className="profile-avatar-control">
                 <span>{ui.text('Change avatar')}</span>
                 <input
                     className="sr-only"
@@ -146,11 +154,6 @@ function ProfileForm() {
                     }}
                 />
             </label>
-            <p className="profile-identity">
-                {user.username}
-                <br />
-                {user.email}
-            </p>
             <form onSubmit={(event) => void save(event)}>
                 <div className="account-fields">
                     <AccountField
@@ -182,7 +185,6 @@ function ProfileForm() {
                 </p>
             )}
             <div className="profile-options">
-                <AdminEntry />
                 <DesignButton
                     className="setting-card"
                     disabled={busy || session.busy}
@@ -192,7 +194,9 @@ function ProfileForm() {
                     }}
                 >
                     <span>{ui.text('Change Password')}</span>
-                    <FigmaIcon name="chevron" />
+                    <span className="chevron-slot">
+                        <FigmaIcon name={mobile ? 'mobileChevronBlue' : 'chevron'} />
+                    </span>
                 </DesignButton>
                 <DesignButton
                     className="setting-card"
@@ -203,17 +207,20 @@ function ProfileForm() {
                     }}
                 >
                     <span>{ui.text('My Places')}</span>
-                    <FigmaIcon name="chevron" />
+                    <span className="chevron-slot">
+                        <FigmaIcon name={mobile ? 'mobileChevronBlue' : 'chevron'} />
+                    </span>
                 </DesignButton>
-                <DesignButton
-                    className="setting-card"
-                    disabled={busy || session.busy}
-                    onClick={() => void logout()}
-                >
-                    <span>{ui.text('Logout')}</span>
-                    <FigmaIcon name="authLogin" />
-                </DesignButton>
+                <AdminEntry mobile={mobile} />
             </div>
+            <DesignButton
+                className="profile-logout setting-card"
+                disabled={busy || session.busy}
+                onClick={() => void logout()}
+            >
+                <span>{ui.text('Logout')}</span>
+                <FigmaIcon name="authLogin" />
+            </DesignButton>
         </div>
     )
 }
