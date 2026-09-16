@@ -5,6 +5,7 @@ import type { Marker } from '@/shared/api/markers'
 export function clusterPlaces(markers: readonly Marker[]) {
     return new Supercluster<{ markerId: number }, Record<string, never>>({
         radius: 48,
+        minPoints: 10,
         maxZoom: 18,
     }).load(
         markers.map((marker) => ({
