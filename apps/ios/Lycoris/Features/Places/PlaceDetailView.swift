@@ -92,11 +92,12 @@ struct PlaceDetailView: View {
             .accessibilityIdentifier("place.bookmark").disabled(bookmarkBusy)
           }
           .padding(.leading, 16).padding(.trailing, 22).padding(.top, 8)
-          .padding(.bottom, max(bottomInset, 29))
+          .padding(.bottom, max(bottomInset, 12))
         }
       }
     }
     .scrollIndicators(.hidden)
+    .ignoresSafeArea(.container, edges: .bottom)
     .accessibilityIdentifier("place.details")
     .task(id: place.id) { titleFocused = true }
   }

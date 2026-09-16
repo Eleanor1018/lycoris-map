@@ -51,7 +51,22 @@ struct PanelLayout {
     return min(1, max(0, (top - nearbyTop) / distance))
   }
 
-  func horizontalInset(at top: CGFloat) -> CGFloat { 10 + 15 * collapsedProgress(at: top) }
+  func expandedProgress(at top: CGFloat) -> CGFloat {
+    let distance = nearbyTop - expandedTop
+    // Large text may merge Nearby with Expanded. Keep the floating-to-edge
+    // transition continuous even when that intermediate stop disappears.
+    guard distance > 0 else { return 1 - collapsedProgress(at: top) }
+    return min(1, max(0, (nearbyTop - top) / distance))
+  }
+
+  func horizontalInset(at top: CGFloat) -> CGFloat {
+    10 * (1 - expandedProgress(at: top)) + 15 * collapsedProgress(at: top)
+  }
+
+  func bottomCornerRadius(at top: CGFloat) -> CGFloat {
+    26 * (1 - expandedProgress(at: top))
+  }
+
   func bottomGap(at top: CGFloat) -> CGFloat { max(bottomInset, 29) * collapsedProgress(at: top) }
   func height(at top: CGFloat) -> CGFloat { viewport.height - top - bottomGap(at: top) }
 }

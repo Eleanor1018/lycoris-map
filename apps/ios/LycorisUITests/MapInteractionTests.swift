@@ -106,6 +106,8 @@ final class MapInteractionTests: XCTestCase {
     let expanded = XCTNSPredicateExpectation(
       predicate: NSPredicate(format: "value == %@", "Expanded"), object: handle)
     XCTAssertEqual(XCTWaiter.wait(for: [expanded], timeout: 3), .completed)
+    XCTAssertEqual(handle.frame.minX, app.frame.minX, accuracy: 1)
+    XCTAssertEqual(handle.frame.maxX, app.frame.maxX, accuracy: 1)
     attach(app, name: "03-expanded")
 
     let search = app.textFields["map.search"]

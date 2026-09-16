@@ -80,6 +80,9 @@ struct MapScreen: View {
       )
       let panelTop = layout.clampedTop(layout.top(for: detent) + dragTranslation)
       let panelHeight = layout.height(at: panelTop)
+      let panelShape = UnevenRoundedRectangle(
+        topLeadingRadius: 26, bottomLeadingRadius: layout.bottomCornerRadius(at: panelTop),
+        bottomTrailingRadius: layout.bottomCornerRadius(at: panelTop), topTrailingRadius: 26)
       let toolsVisible = panelTop > layout.topInset + 270 && !isSearchFocused && !selectingLocation
       // Keep attribution fixed above the panel's lowest resting position.
       let mapBottomInset = layout.viewport.height - layout.collapsedTop + 10
@@ -116,21 +119,21 @@ struct MapScreen: View {
           )
           .background {
             if reduceTransparency {
-              RoundedRectangle(cornerRadius: 26).fill(Color(.secondarySystemBackground))
+              panelShape.fill(Color(.secondarySystemBackground))
             } else {
-              RoundedRectangle(cornerRadius: 26).fill(.ultraThinMaterial)
+              panelShape.fill(.ultraThinMaterial)
             }
           }
           .background {
-            RoundedRectangle(cornerRadius: 26)
+            panelShape
               .fill(Color("PanelTint").opacity(0.4 * layout.collapsedProgress(at: panelTop)))
           }
           .overlay {
-            RoundedRectangle(cornerRadius: 26)
+            panelShape
               .strokeBorder(.white.opacity(0.28), lineWidth: 0.5)
               .allowsHitTesting(false)
           }
-          .clipShape(RoundedRectangle(cornerRadius: 26))
+          .clipShape(panelShape)
           .shadow(color: .black.opacity(0.12), radius: 16, y: 4)
           .position(x: layout.viewport.width / 2, y: panelTop + panelHeight / 2)
           .opacity(selectingLocation ? 0 : 1)
@@ -431,13 +434,16 @@ struct MapScreen: View {
             }
           }
           .padding(.horizontal, 14)
-          .padding(.bottom, max(layout.bottomInset, 14))
+          // The keyboard already includes the home-indicator area. Otherwise
+          // keep one device safe-area inset, without ScrollView adding it again.
+          .padding(.bottom, keyboardHeight > 0 ? 12 : max(layout.bottomInset, 12))
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)
         .scrollDisabled(detent == .collapsed)
         .accessibilityHidden(height <= layout.headerHeight + 1)
         .allowsHitTesting(height > layout.headerHeight + 1)
+        .ignoresSafeArea(.container, edges: .bottom)
         .padding(.bottom, keyboardHeight)
       }
     }
@@ -450,9 +456,6 @@ struct MapScreen: View {
     } label: {
       Capsule().fill(.secondary.opacity(0.4))
         .frame(width: 48, height: 4)
-        .offset(
-          x: -14 + 15 * layout.collapsedProgress(at: layout.top(for: detent) + dragTranslation)
-        )
         .frame(maxWidth: .infinity).frame(height: 44)
         .contentShape(Rectangle())
     }

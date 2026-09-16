@@ -18,7 +18,9 @@ struct PanelLayoutTests {
     #expect(layout.top(for: .expanded) == 70)
     #expect(layout.horizontalInset(at: 774) == 25)
     #expect(layout.horizontalInset(at: 598) == 10)
-    #expect(layout.horizontalInset(at: 70) == 10)
+    #expect(layout.horizontalInset(at: 70) == 0)
+    #expect(layout.bottomCornerRadius(at: 70) == 0)
+    #expect(layout.height(at: 70) + 70 == 874)
     #expect(layout.height(at: 774) == 66)
   }
 
@@ -28,6 +30,9 @@ struct PanelLayoutTests {
     #expect(layout.horizontalInset(at: middle) == 17.5)
     #expect(layout.bottomGap(at: middle) == 17)
     #expect(layout.height(at: middle) + middle + layout.bottomGap(at: middle) == 874)
+    let expanding = (layout.expandedTop + layout.nearbyTop) / 2
+    #expect(layout.horizontalInset(at: expanding) == 5)
+    #expect(layout.bottomCornerRadius(at: expanding) == 13)
   }
 
   @Test func gestureBoundsAndProjectedLandingCannotLeaveTheViewport() {
@@ -57,6 +62,10 @@ struct PanelLayoutTests {
     #expect(layout.nearbyTop == layout.expandedTop)
     #expect(layout.nearest(to: 28) == .expanded)
     #expect(layout.nearest(to: 80) == .expanded)
+    #expect(layout.horizontalInset(at: layout.expandedTop) == 0)
+    #expect(layout.horizontalInset(at: layout.collapsedTop) == 25)
+    let middle = (layout.expandedTop + layout.collapsedTop) / 2
+    #expect(layout.horizontalInset(at: middle) == 12.5)
   }
 
   @Test func detailRestingHeightKeepsTheSameCollapsedDestination() {
