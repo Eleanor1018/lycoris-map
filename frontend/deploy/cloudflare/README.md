@@ -1,18 +1,55 @@
 # lycoris-map.com deployment
 
-The new frontend is deployed to the independent Cloudflare Pages project
-`lycoris-map-web` using dashboard Direct Upload. Its custom domain is
-`https://lycoris-map.com`; its Pages hostname is `lycoris-map-web.pages.dev`.
-The existing projects and `lycoris.online` DNS were not changed.
+The production frontend is deployed by the existing Git-connected Cloudflare
+Pages project `lycoris-main`. Its custom domain is `https://lycoris-map.com`;
+its Pages hostname is `lycoris-main.pages.dev`. GitHub pushes to `main`,
+including merged pull requests, automatically build and deploy the new
+`frontend/`. Non-production branches produce previews. No new API token or
+GitHub Actions secret is required: the existing Cloudflare GitHub installation
+is reused. The dashboard still displays the repository's old name
+`Eleanor1018/lycoris`, but follows the renamed `Eleanor1018/lycoris-map` repository
+and its current commits.
 
-## Build and upload
+## Automatic build configuration
 
-From `frontend/`, run `pnpm build`, then copy only `_worker.js`, `_routes.json`
-and `_headers` from this directory into `dist/`. Upload the **contents** of
-`dist/` (or a ZIP with `index.html` at its root) through the project's Create
-deployment page. Do not upload this test file, source tree, `.env`, local test
-credentials, or server data. `node --test deploy/cloudflare/worker.test.js`
-checks the deployment proxy independently of the application tests.
+The dashboard settings are part of the deployment configuration. Use these
+values in both production and preview environments:
+
+- Build system: version 3.
+- Production branch: `main`; automatic deployments enabled.
+- Preview branches: all non-production branches.
+- Root directory: `frontend`; output directory: `dist`.
+- `NODE_VERSION=24.19.0`; `PNPM_VERSION=11.19.0`.
+- Build command:
+
+```sh
+pnpm test:unit && node --test deploy/cloudflare/worker.test.js && pnpm build && cp deploy/cloudflare/_worker.js deploy/cloudflare/_routes.json deploy/cloudflare/_headers dist/
+```
+
+Pages installs dependencies before running the command. `pnpm-lock.yaml` and
+the declared tool versions pin the frontend dependency graph. A failing test,
+proxy check or strict TypeScript build stops publication. Only `dist/` is
+uploaded, including the three explicitly copied proxy configuration files.
+Source files, `.env`, fixtures, private credentials and server data are excluded.
+The same command can be run locally after `pnpm install --frozen-lockfile`.
+
+Production's historical `VITE_API_BASE_URL` setting is now `/api`; the new
+client always uses same-origin routes and does not read that variable. Legacy
+map-key variables are not consumed by the new frontend. Do not add keys or
+private data to the client bundle. Preview read requests use the same backend;
+preview domains are not added to the production write-origin allowlist.
+
+The former Direct Upload project `lycoris-map-web` and its deployment history
+are retained for recovery, without the production custom-domain binding.
+Routine releases must use Git. If emergency manual recovery is needed, upload
+only the contents of a tested `dist/` with the three configuration files above,
+then explicitly rebind the domain; never use an older backend data snapshot
+as a frontend rollback.
+
+Cloudflare documents that a [Direct Upload project cannot be converted to Git
+integration](https://developers.cloudflare.com/pages/get-started/direct-upload/),
+so the already-connected `lycoris-main` project is used instead. See the
+[build image version settings](https://developers.cloudflare.com/pages/configuration/build-image/).
 
 Pages serves the SPA, including `/admin/*` deep links. Only `/api`, `/uploads`
 and `/health` routes invoke the Worker, forwarding to
@@ -20,6 +57,49 @@ and `/health` routes invoke the Worker, forwarding to
 browser Origin and authentication, streams bodies, does not follow upstream
 redirects, and marks proxied responses private and uncacheable. The fixed
 backend origin is server-side and is not embedded in the browser bundle.
+
+## Git deployment and domain cutover — 2026-09-17
+
+- `frontend-old/` was removed from Git tracking (127 files) and ignored; local
+  copies were retained. The active source remains `frontend/`. Repository
+  instructions now describe the production stack rather than the S1 shell.
+- Rebuilding Git main `0efa846` with the new configuration produced successful
+  deployment `7c035fff-7d56-4db3-b59f-af91a8897f38`. Its page and health proxy
+  returned HTTP 200.
+- The owner then merged PR #18. Git main `1393525` automatically triggered
+  successful production deployment `aa2b8d14-895f-4ef1-aa02-bb3b146d2624`.
+  No manual ZIP upload was used for either Git deployment.
+- `lycoris-map.com` was moved from `lycoris-map-web` to `lycoris-main`; the
+  apex CNAME targets `lycoris-main.pages.dev`. The dashboard confirmed Active
+  with SSL enabled. The new backend origin and certificate settings are
+  unchanged.
+- Cloudflare rule `9baf5744c7814515b64eb696e3122372`, named
+  `Lycoris website moved to lycoris-map.com`, is Active on `lycoris.online`.
+  It matches `http.host in {"lycoris.online" "www.lycoris.online"}` and returns
+  HTTP 302 to `concat("https://lycoris-map.com", http.request.uri.path)` with
+  query preservation enabled. The old Pages domain bindings remain so their
+  existing DNS and TLS continue supporting the edge redirect.
+- External requests from the old server verified HTTPS root, HTTP
+  `/maps?markerId=244&lang=zh`, and HTTPS www `/search?q=test&lang=en` return
+  the matching new-domain Location. Local DNS still returns unrelated IPs for
+  the blocked old domain; the edge redirect cannot fix upstream DNS blocking.
+- All 286 frontend tests, three proxy tests and the strict production build
+  passed locally using the configured build command. The Git-built HTML,
+  JavaScript, CSS and map previews (13 files) byte-match the local build.
+- The old server's application, Nginx, PostgreSQL and Redis were stopped and
+  auto-start disabled, with database, media and verified backups retained.
+  The new site's health still reports PostgreSQL and Redis healthy. See the
+  [server retirement record](../../../backend/deploy/production/README.md).
+
+For frontend rollback, prefer the previous successful Git deployment in
+`lycoris-main` (initial verified release `7c035fff`). The preserved manual
+project's last deployment is `e0c442e4-8654-4728-86f8-70c7786c1bec`. A rollback
+must preserve the current `/api`, `/uploads` and `/health` proxy configuration.
+Turning off the redirect rule restores old-host delivery but must not restart
+the obsolete Java writer or reverse the migrated database.
+
+The sections below are historical release records and may refer to the former
+manual-upload project or earlier domain configuration.
 
 ## Deployment record — 2026-09-16
 

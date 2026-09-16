@@ -89,3 +89,23 @@ The source contains one duplicate active username group and one duplicate
 active case-insensitive email group. They were preserved unchanged. Rust
 deliberately rejects ambiguous login identities; resolving these records
 requires the owner's account-ownership decision, not an automatic merge.
+
+## Old server retired — 2026-09-17
+
+The old host `207.57.131.13` is no longer a Lycoris runtime. The stopped
+`lycoris-backend` container now has restart policy `no`. Nginx, Redis and
+PostgreSQL were stopped and disabled; PostgreSQL 17's cluster `start.conf` is
+`manual`. A final listener check showed only SSH on port 64307. The machine
+remains accessible for the owner's later reuse; no VM, volume, database,
+uploads or backup was deleted.
+
+All eight final migration backup checksums were rechecked successfully before
+retirement. Redis was saved before shutdown. Previous Nginx configuration and
+PostgreSQL cluster startup configuration were copied into the root-only
+`/opt/lycoris-backups/retired-20260917/`. Migration backups remain in the three
+locations recorded above. Do not turn the obsolete data copy into a writer:
+the new server has accepted production writes since the September 16 cutover.
+
+After stopping the old stack, `https://lycoris-map.com/health/ready` still
+returned PostgreSQL and Redis healthy. The new backend on `43.155.130.105`
+was not restarted or modified during retirement.
