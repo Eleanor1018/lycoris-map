@@ -82,7 +82,9 @@ final class MapInteractionTests: XCTestCase {
 
   func testPanelDragKeyboardAndMapInteraction() throws {
     let app = XCUIApplication()
-    app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+    app.launchArguments = [
+      "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-lycoris-preview", "collapsed",
+    ]
     app.launch()
     let handle = app.buttons["map.panel.handle"]
     XCTAssertTrue(handle.waitForExistence(timeout: 10))

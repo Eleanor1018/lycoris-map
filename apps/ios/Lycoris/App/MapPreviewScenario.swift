@@ -5,12 +5,12 @@
   enum MapPreviewScenario: String, CaseIterable {
     case collapsed, nearby, expanded, anonymousExpanded, details
 
-    static var launchSelection: Self {
+    static var launchSelection: Self? {
       let arguments = ProcessInfo.processInfo.arguments
       guard let index = arguments.firstIndex(of: "-lycoris-preview"),
         arguments.indices.contains(index + 1)
-      else { return .collapsed }
-      return Self(rawValue: arguments[index + 1]) ?? .collapsed
+      else { return nil }
+      return Self(rawValue: arguments[index + 1])
     }
 
     static let places = (1...3).map { index in
@@ -31,7 +31,7 @@
           ? .collapsed
           : preview == .nearby || preview == .details ? .nearby : .expanded,
         bookmarks: preview == .expanded ? MapPreviewScenario.places : [],
-        initialPlace: preview == .details ? MapPreviewScenario.places[0] : nil)
+        initialPlace: preview == .details ? MapPreviewScenario.places[0] : nil, isPreview: true)
     }
   }
 

@@ -5,7 +5,7 @@ struct CategoryIcon: View {
   let tint: String
 
   var body: some View {
-    Image(image).resizable().frame(width: 24, height: 24)
+    Image(image).resizable().scaledToFit().frame(width: 24, height: 24)
       .frame(width: 30, height: 30)
       .background {
         if image == "Toilet" {

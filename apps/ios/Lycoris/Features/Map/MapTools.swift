@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MapTools: View {
   var spacing: CGFloat = 23
+  var locate: () -> Void = {}
   var showNearby: () -> Void
   var onUnavailableAction: () -> Void
 
@@ -11,10 +12,10 @@ struct MapTools: View {
         Button(action: onUnavailableAction) {
           Image("Map").resizable().frame(width: 20, height: 20).frame(width: 48, height: 48)
         }.accessibilityLabel("Map source")
-        Button(action: onUnavailableAction) {
+        Button(action: locate) {
           Image(systemName: "location").font(.title3).foregroundStyle(Color.accentColor)
             .frame(width: 48, height: 48)
-        }.accessibilityLabel("Current location")
+        }.accessibilityLabel("Current location").accessibilityIdentifier("map.locate")
       }
       .glassEffect(in: .rect(cornerRadius: 24))
 

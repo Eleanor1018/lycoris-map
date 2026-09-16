@@ -4,6 +4,10 @@ struct PlaceDetailView: View {
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   let place: PlacePresentation
   let bottomInset: CGFloat
+  var state: PlaceStore.LoadState = .idle
+  var onRetry: () -> Void = {}
+  var onShare: () -> Void = {}
+  var onNavigate: () -> Void = {}
   let onUnavailableAction: () -> Void
   @ScaledMetric(relativeTo: .body) private var buttonHeight: CGFloat = 48
 
@@ -23,46 +27,61 @@ struct PlaceDetailView: View {
         }
         .padding(.horizontal, 24).padding(.top, 10)
 
-        HStack(spacing: 16) {
-          Text(place.distance)
-          Text(place.openingHours)
-        }
-        .font(.subheadline).foregroundStyle(.secondary)
-        .padding(.horizontal, 24).padding(.top, 10)
-
-        Text(place.description).font(.subheadline).foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
-          .padding(.horizontal, 24).padding(.top, 5)
-
-        Image(place.photoAsset).resizable().aspectRatio(353.0 / 198, contentMode: .fit)
-          .clipShape(RoundedRectangle(cornerRadius: 16))
-          .padding(.horizontal, 15).padding(.top, 5)
-          .accessibilityLabel("Place photo")
-
-        let actionLayout =
-          dynamicTypeSize.isAccessibilitySize
-          ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 14))
-        actionLayout {
-          actionLabel("Share", image: "PlaceShare", size: 20)
-            .buttonStyle(.glass)
-          actionLabel("Navigate", image: "PlaceNavigate", size: 24)
-            .buttonStyle(.glassProminent)
-          Button(action: onUnavailableAction) {
-            Image("PlaceBookmark").resizable().frame(width: 28, height: 28)
-              .frame(minWidth: 28, minHeight: buttonHeight)
+        PlaceLoadStatus(state: state, retry: onRetry).padding(.horizontal, 18)
+        if !hasFailed {
+          HStack(spacing: 16) {
+            if !place.distance.isEmpty { Text(place.distance) }
+            Text(place.openingHours)
           }
-          .buttonStyle(.plain).accessibilityLabel("Bookmark place")
+          .font(.subheadline).foregroundStyle(.secondary)
+          .padding(.horizontal, 24).padding(.top, 10)
+
+          if let reference = place.distanceReference {
+            Text(reference).font(.caption).foregroundStyle(.secondary)
+              .padding(.horizontal, 24).padding(.top, 3)
+          }
+          if !place.description.isEmpty {
+            Text(place.description).font(.subheadline).foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+              .padding(.horizontal, 24).padding(.top, 5)
+
+          }
+          if place.hasPhoto {
+            PlacePhoto(place: place).padding(.horizontal, 15).padding(.top, 5)
+          }
+
+          let actionLayout =
+            dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 14))
+          actionLayout {
+            actionLabel("Share", image: "PlaceShare", size: 20, action: onShare)
+              .buttonStyle(.glass)
+            actionLabel("Navigate", image: "PlaceNavigate", size: 24, action: onNavigate)
+              .buttonStyle(.glassProminent)
+            Button(action: onUnavailableAction) {
+              Image("PlaceBookmark").resizable().frame(width: 28, height: 28)
+                .frame(minWidth: 28, minHeight: buttonHeight)
+            }
+            .buttonStyle(.plain).accessibilityLabel("Bookmark place")
+          }
+          .padding(.leading, 16).padding(.trailing, 22).padding(.top, 8)
+          .padding(.bottom, max(bottomInset, 29))
         }
-        .padding(.leading, 16).padding(.trailing, 22).padding(.top, 8)
-        .padding(.bottom, max(bottomInset, 29))
       }
     }
     .scrollIndicators(.hidden)
     .accessibilityIdentifier("place.details")
   }
 
-  private func actionLabel(_ title: LocalizedStringKey, image: String, size: CGFloat) -> some View {
-    Button(action: onUnavailableAction) {
+  private var hasFailed: Bool {
+    if case .failed = state { return true }
+    return false
+  }
+
+  private func actionLabel(
+    _ title: LocalizedStringKey, image: String, size: CGFloat, action: @escaping () -> Void
+  ) -> some View {
+    Button(action: action) {
       HStack(spacing: 6) {
         Text(title).font(.body.weight(.medium))
           .lineLimit(1).minimumScaleFactor(0.85)

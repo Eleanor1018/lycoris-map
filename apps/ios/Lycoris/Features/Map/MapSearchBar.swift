@@ -4,6 +4,7 @@ struct MapSearchBar: View {
   @Binding var query: String
   var focused: FocusState<Bool>.Binding
   let height: CGFloat
+  var onSubmit: () -> Void = {}
   var onUnavailableAction: () -> Void
   @ScaledMetric(relativeTo: .headline) private var avatarFont: CGFloat = 18
 
@@ -18,7 +19,10 @@ struct MapSearchBar: View {
           .submitLabel(.search)
           .autocorrectionDisabled()
           .textInputAutocapitalization(.never)
-          .onSubmit { focused.wrappedValue = false }
+          .onSubmit {
+            focused.wrappedValue = false
+            onSubmit()
+          }
           .accessibilityIdentifier("map.search")
         Button(action: onUnavailableAction) {
           Image(systemName: "microphone").font(.subheadline).foregroundStyle(.secondary)

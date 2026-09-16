@@ -5,6 +5,7 @@ struct MapPanelContent: View {
   let cardHeight: CGFloat
   let showsSettings: Bool
   let bookmarks: [PlacePresentation]
+  var onCategory: (PlaceCategory) -> Void = { _ in }
   let onSelect: (PlacePresentation) -> Void
   let onUnavailableAction: () -> Void
 
@@ -14,11 +15,11 @@ struct MapPanelContent: View {
         .padding(.horizontal, 6).padding(.bottom, 8)
       Grid(horizontalSpacing: 16, verticalSpacing: 12) {
         GridRow {
-          category("Accessible Toilets", image: "Toilet", tint: "ToiletTint")
-          category("Nursing Rooms", image: "Nursing", tint: "NursingTint")
+          category(.toilet)
+          category(.nursing)
         }
         GridRow {
-          category("Medical Institutions", image: "Medical", tint: "MedicalTint")
+          category(.medical)
           Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
         }
       }
@@ -63,11 +64,13 @@ struct MapPanelContent: View {
     .buttonStyle(.plain)
   }
 
-  private func category(_ title: LocalizedStringKey, image: String, tint: String) -> some View {
-    Button(action: onUnavailableAction) {
+  private func category(_ category: PlaceCategory) -> some View {
+    Button {
+      onCategory(category)
+    } label: {
       HStack(spacing: 12) {
-        CategoryIcon(image: image, tint: tint)
-        Text(title).font(.body.weight(.semibold))
+        CategoryIcon(image: category.image, tint: category.tint)
+        Text(category.title).font(.body.weight(.semibold))
           .fixedSize(horizontal: false, vertical: true)
           .frame(maxWidth: .infinity, alignment: .leading)
       }
@@ -77,6 +80,7 @@ struct MapPanelContent: View {
       .contentShape(RoundedRectangle(cornerRadius: 24))
     }
     .buttonStyle(.plain)
+    .accessibilityIdentifier("map.category.\(category.rawValue)")
   }
 
   private func settingsRow(_ title: LocalizedStringKey, value: String) -> some View {

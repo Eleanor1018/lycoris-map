@@ -3,7 +3,12 @@ import SwiftUI
 
 struct MapScreen: View {
   @State private var detent: MapPanelDetent
-  @State private var selectedPlace: PlacePresentation?
+  @State private var store: PlaceStore
+  @State private var location = LocationProvider()
+  @State private var sharedPlace: PlacePresentation?
+  @State private var showsLocationError = false
+  @State private var showsNavigationError = false
+  private var selectedPlace: PlacePresentation? { store.selectedPlace }
   @State private var showsUnavailableAction = false
   private let bookmarks: [PlacePresentation]
   @GestureState private var dragTranslation: CGFloat = 0
@@ -17,10 +22,10 @@ struct MapScreen: View {
 
   init(
     initialDetent: MapPanelDetent = .collapsed, bookmarks: [PlacePresentation] = [],
-    initialPlace: PlacePresentation? = nil
+    initialPlace: PlacePresentation? = nil, isPreview: Bool = false
   ) {
     _detent = State(initialValue: initialDetent)
-    _selectedPlace = State(initialValue: initialPlace)
+    _store = State(initialValue: PlaceStore(isPreview: isPreview, initialPlace: initialPlace))
     self.bookmarks = bookmarks
   }
 
@@ -37,7 +42,9 @@ struct MapScreen: View {
         nearbyContentHeight: titleHeight + 8 + cardHeight * 2 + 12,
         detailHeight: selectedPlace == nil
           ? nil
-          : 208 + (geometry.size.width - 50) * 198 / 353 + max(geometry.safeAreaInsets.bottom, 29)
+          : 208 + (selectedPlace?.hasPhoto == true ? (geometry.size.width - 50) * 198 / 353 : 0)
+            + (selectedPlace?.distanceReference != nil ? 30 : 0)
+            + max(geometry.safeAreaInsets.bottom, 29)
       )
       let panelTop = layout.clampedTop(layout.top(for: detent) + dragTranslation)
       let panelHeight = layout.height(at: panelTop)
@@ -47,16 +54,19 @@ struct MapScreen: View {
 
       ZStack(alignment: .topLeading) {
         NativeMapView(
-          topInset: layout.topInset, bottomInset: mapBottomInset, selectedPlace: selectedPlace
+          topInset: layout.topInset, bottomInset: mapBottomInset,
+          places: store.mapPlaces, focus: store.focus,
+          showsUserLocation: !store.isPreview && location.hasRequestedLocation
+            && location.isAuthorized, animated: !reduceMotion,
+          onViewport: { store.viewportChanged($0) }, onSelect: selectPlace
         )
         .accessibilityIdentifier("map.canvas")
 
         MapTools(
           spacing: selectedPlace == nil ? 23 : 10,
-          showNearby: {
-            selectedPlace = nil
-            movePanel(to: .nearby)
-          }, onUnavailableAction: { showsUnavailableAction = true }
+          locate: locate,
+          showNearby: { showNearby(.toilet) },
+          onUnavailableAction: { showsUnavailableAction = true }
         )
         .position(x: layout.viewport.width - 40, y: panelTop - (selectedPlace == nil ? 131.5 : 116))
         .opacity(toolsVisible ? 1 : 0)
@@ -89,6 +99,25 @@ struct MapScreen: View {
     .alert("Not available yet", isPresented: $showsUnavailableAction) {
       Button("OK", role: .cancel) {}
     }
+    .alert("Location unavailable", isPresented: $showsLocationError) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text(
+        "You can browse the map without location access. To use your location, enable it in Settings and try again."
+      )
+    }
+    .alert("Could not open Apple Maps", isPresented: $showsNavigationError) {
+      Button("OK", role: .cancel) {}
+    }
+    .sheet(item: $sharedPlace) { PlaceShareSheet(place: $0) }
+    .onChange(of: query) { _, text in
+      if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        store.search(text)
+      } else if case .search = store.browse {
+        store.closeResults()
+      }
+    }
+    .onDisappear { store.stop() }
     .onChange(of: isSearchFocused) { _, focused in
       if focused { movePanel(to: .expanded) }
     }
@@ -114,21 +143,42 @@ struct MapScreen: View {
       if let selectedPlace {
         PlaceDetailView(
           place: selectedPlace, bottomInset: layout.bottomInset,
+          state: store.detailState, onRetry: store.retryDetail,
+          onShare: {
+            if store.isPreview {
+              showsUnavailableAction = true
+            } else {
+              sharedPlace = selectedPlace
+            }
+          },
+          onNavigate: { navigate(selectedPlace) },
           onUnavailableAction: { showsUnavailableAction = true })
       } else {
         MapSearchBar(
           query: $query, focused: $isSearchFocused, height: max(38, searchHeight),
+          onSubmit: { store.search(query, debounce: false) },
           onUnavailableAction: { showsUnavailableAction = true }
         )
         .padding(.horizontal, 14)
         .padding(.bottom, detent == .collapsed ? 14 : detent == .nearby ? 7 : 11)
 
         ScrollView {
-          MapPanelContent(
-            cardHeight: cardHeight, showsSettings: detent == .expanded,
-            bookmarks: bookmarks, onSelect: selectPlace,
-            onUnavailableAction: { showsUnavailableAction = true }
-          )
+          VStack(spacing: 8) {
+            if store.browse != nil || store.pendingNearby != nil {
+              PlaceResultsView(store: store, onSelect: selectPlace) {
+                query = ""
+                store.closeResults()
+              }
+            } else {
+              if case .failed = store.viewportState {
+                PlaceLoadStatus(state: store.viewportState, retry: store.retryResults)
+              }
+              MapPanelContent(
+                cardHeight: cardHeight, showsSettings: detent == .expanded,
+                bookmarks: bookmarks, onCategory: showNearby, onSelect: selectPlace,
+                onUnavailableAction: { showsUnavailableAction = true })
+            }
+          }
           .padding(.horizontal, 14)
           .padding(.bottom, max(layout.bottomInset, 14))
         }
@@ -194,15 +244,56 @@ struct MapScreen: View {
   private func selectPlace(_ place: PlacePresentation) {
     isSearchFocused = false
     withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.86)) {
-      selectedPlace = place
+      store.select(place)
       detent = .nearby
+    }
+  }
+
+  private func showNearby(_ category: PlaceCategory) {
+    query = ""
+    let token = store.nearby(category)
+    movePanel(to: .nearby)
+    guard !store.isPreview else { return }
+    location.request { result in
+      if case .success(let point) = result { store.resolveNearbyLocation(point, token: token) }
+    }
+  }
+
+  private func locate() {
+    guard !store.isPreview else {
+      showsUnavailableAction = true
+      return
+    }
+    let token = store.beginLocationRequest()
+    location.request { result in
+      guard store.acceptsLocation(token) else { return }
+      switch result {
+      case .success(let point): store.locate(point, token: token)
+      case .failure: showsLocationError = true
+      }
+    }
+  }
+
+  private func navigate(_ place: PlacePresentation) {
+    guard !store.isPreview else {
+      showsUnavailableAction = true
+      return
+    }
+    guard let point = place.point else { return }
+    let item = MKMapItem(
+      location: CLLocation(latitude: point.latitude, longitude: point.longitude), address: nil)
+    item.name = place.title
+    if !item.openInMaps(launchOptions: [
+      MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking
+    ]) {
+      showsNavigationError = true
     }
   }
 
   private func movePanel(to newDetent: MapPanelDetent) {
     if newDetent != .expanded { isSearchFocused = false }
     withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.86)) {
-      if newDetent == .collapsed { selectedPlace = nil }
+      if newDetent == .collapsed { store.closeDetail() }
       detent = newDetent
     }
   }
