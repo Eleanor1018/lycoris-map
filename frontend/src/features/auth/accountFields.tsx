@@ -1,3 +1,4 @@
+import { useUi } from '@/shared/i18n/ui'
 import { useId, type ComponentProps } from 'react'
 import { DesignButton } from '@/shared/ui/design-primitives'
 import loginIcon from '@/assets/figma/auth-login.svg'
@@ -7,18 +8,26 @@ export function AccountField({
     className = '',
     ...props
 }: ComponentProps<'input'> & { label: string }) {
+    const ui = useUi()
     const id = useId()
     return (
         <label className={`account-field ${className}`} htmlFor={id}>
-            <span>{label}</span>
-            <input id={id} {...props} />
+            <span>{ui.message(label)}</span>
+            <input
+                id={id}
+                {...props}
+                placeholder={
+                    props.placeholder ? (ui.message(props.placeholder) ?? undefined) : undefined
+                }
+            />
         </label>
     )
 }
 export function AccountSubmit({ children, ...props }: ComponentProps<typeof DesignButton>) {
+    const ui = useUi()
     return (
         <DesignButton type="submit" className="account-submit" {...props}>
-            <span>{children}</span>
+            <span>{typeof children === 'string' ? ui.message(children) : children}</span>
             <img src={loginIcon} alt="" width={24} height={24} />
         </DesignButton>
     )

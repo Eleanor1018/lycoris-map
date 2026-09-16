@@ -826,51 +826,6 @@
 .settings-cards .setting-card {
     position: relative;
 }
-.settings-cards .setting-value,
-.settings-cards .chevron-slot {
-    position: absolute;
-    margin: 0;
-}
-.settings-cards .setting-value {
-    top: 22px;
-}
-.settings-cards .chevron-slot {
-    top: 17px;
-}
-.settings-cards .chevron-slot img {
-    position: absolute;
-    left: -0.098145px;
-    top: 10.055176px;
-    width: 6.947754px;
-    height: 11.90332px;
-}
-.settings-cards .setting-card:nth-child(1) .setting-value {
-    left: 201px;
-}
-.settings-cards .setting-card:nth-child(1) .chevron-slot {
-    left: 269px;
-}
-.settings-cards .setting-card:nth-child(2) .setting-value {
-    left: 224px;
-}
-.settings-cards .setting-card:nth-child(2) .chevron-slot {
-    left: 268px;
-}
-.settings-cards .setting-card:nth-child(3) .setting-value {
-    left: 216px;
-}
-.settings-cards .setting-card:nth-child(3) .chevron-slot {
-    left: 267px;
-}
-.settings-cards .setting-card:nth-child(4) .setting-value {
-    left: 215px;
-}
-.settings-cards .setting-card:nth-child(4) .chevron-slot {
-    left: 265px;
-}
-.settings-cards .setting-card:nth-child(5) .chevron-slot {
-    left: 264px;
-}
 .language-options .design-button > * {
     transform: translateY(-2px);
 }

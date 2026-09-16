@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { MapShell } from '@/layouts/MapShell'
 import { usePlaceBrowse } from '@/features/places/usePlaceBrowse'
+import { UiLanguage } from '@/shared/i18n/ui'
 import { useLanguage } from '@/shared/i18n'
 import { isValidLatitude, isValidLongitude } from '@/features/map/coords'
 import '@/features/places/places.css'
@@ -18,9 +19,16 @@ export function MapPage() {
     const accountFlow = useAccountFlow()
     const previousScope = useRef(session.scope)
     const params = new URLSearchParams(route.search)
-    const { language: preferred } = useLanguage()
-    const lang = params.get('lang')
-    const language = lang === 'en' || lang === 'zh' ? lang : preferred
+    const { language, userSelected } = useLanguage()
+    useEffect(() => {
+        if (!userSelected || params.get('lang') === language) return
+        const next = new URLSearchParams(route.search)
+        next.set('lang', language)
+        void navigate(
+            { pathname: route.pathname, search: next.toString(), hash: route.hash },
+            { replace: true, state: route.state },
+        )
+    }, [language, userSelected, route, navigate])
     const rawPanel = params.get('panel')
     const rawId = params.get('markerId')
     const legacyQuery = route.pathname === '/search' ? (params.get('q') ?? '') : ''
@@ -64,7 +72,7 @@ export function MapPage() {
               }
             : undefined
     return (
-        <>
+        <UiLanguage language={language}>
             <MapShell browse={browse} sharedTarget={sharedTarget} />
             {accountFlow?.view && (
                 <Suspense fallback={null}>
@@ -89,6 +97,6 @@ export function MapPage() {
                     />
                 </Suspense>
             )}
-        </>
+        </UiLanguage>
     )
 }

@@ -74,6 +74,7 @@ export type Translator = (key: MessageKey, values?: Record<string, string | numb
 type LanguageContextValue = {
     language: Language
     preference: LanguagePreference
+    userSelected: boolean
     setPreference: (value: LanguagePreference) => void
     t: Translator
 }
@@ -83,6 +84,7 @@ const LanguageContext = createContext<LanguageContextValue | null>(null)
 type LanguageProviderProps = {
     children: ReactNode
     /** Explicit preference, e.g. `?lang=en` from a shared link. */
+    override?: Language | undefined
     initialPreference?: LanguagePreference
     /** Injectable for tests; `undefined` uses `window.localStorage`. */
     storage?: Storage | null
@@ -93,6 +95,7 @@ type LanguageProviderProps = {
 export function LanguageProvider({
     children,
     initialPreference,
+    override,
     storage,
     navigatorLanguage,
 }: LanguageProviderProps) {
@@ -113,7 +116,10 @@ export function LanguageProvider({
         resolveSystemLanguage(resolveNavigatorLanguage()),
     )
 
-    const language: Language = preference === 'system' ? systemLanguage : preference
+    const [userSelected, setUserSelected] = useState(false)
+    const language: Language =
+        (userSelected ? undefined : override) ??
+        (preference === 'system' ? systemLanguage : preference)
 
     useEffect(() => {
         if (typeof document === 'undefined') return
@@ -128,10 +134,20 @@ export function LanguageProvider({
         return () => window.removeEventListener('languagechange', onLanguageChange)
     }, [navigatorLanguage])
 
+    useEffect(() => {
+        const sync = (event: StorageEvent) => {
+            if (event.key === LANGUAGE_STORAGE_KEY || event.key === null)
+                setPreferenceState(readStoredPreference(resolveStorage()))
+        }
+        window.addEventListener('storage', sync)
+        return () => window.removeEventListener('storage', sync)
+    }, [resolveStorage])
+
     const setPreference = useCallback(
         (value: LanguagePreference) => {
             persistPreference(resolveStorage(), value)
             setPreferenceState(value)
+            setUserSelected(true)
         },
         [resolveStorage],
     )
@@ -139,11 +155,15 @@ export function LanguageProvider({
     const t = useCallback<Translator>((key, values) => translate(language, key, values), [language])
 
     const value = useMemo(
-        () => ({ language, preference, setPreference, t }),
-        [language, preference, setPreference, t],
+        () => ({ language, preference, userSelected, setPreference, t }),
+        [language, preference, userSelected, setPreference, t],
     )
 
     return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>
+}
+
+export function useOptionalLanguage() {
+    return useContext(LanguageContext)
 }
 
 export function useLanguage(): LanguageContextValue {

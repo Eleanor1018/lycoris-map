@@ -1,3 +1,4 @@
+import { useUi } from '@/shared/i18n/ui'
 import { useState } from 'react'
 import type { Marker } from '@/shared/api/markers'
 import { DesignButton, SearchField, CategoryBadge } from '@/shared/ui/design-primitives'
@@ -65,6 +66,7 @@ export function BookmarksPanel(props: Props) {
     return <ActiveBookmarksPanel {...props} />
 }
 function ActiveBookmarksPanel({ browse, onSelect, mobile = false, preview = false }: Props) {
+    const ui = useUi()
     const bookmarks = useBookmarks(browse.language, true),
         flow = useAccountFlow()!,
         session = useSession()
@@ -74,11 +76,13 @@ function ActiveBookmarksPanel({ browse, onSelect, mobile = false, preview = fals
         return (
             <div className={mobile ? 'mobile-saved-content' : 'saved-auth-notice'}>
                 <p role="status">
-                    {session.status === 'checking'
-                        ? 'Checking your session…'
-                        : session.status === 'error'
-                          ? 'Could not confirm your session.'
-                          : 'Log in to view your bookmarks.'}
+                    {ui.message(
+                        session.status === 'checking'
+                            ? 'Checking your session…'
+                            : session.status === 'error'
+                              ? 'Could not confirm your session.'
+                              : 'Log in to view your bookmarks.',
+                    )}
                 </p>
                 <DesignButton
                     className="read-retry"
@@ -89,7 +93,7 @@ function ActiveBookmarksPanel({ browse, onSelect, mobile = false, preview = fals
                     }
                 >
                     {' '}
-                    {session.status === 'error' ? 'Try again' : 'Login'}
+                    {ui.text(session.status === 'error' ? 'Try again' : 'Login')}
                 </DesignButton>
             </div>
         )
@@ -113,7 +117,7 @@ function ActiveBookmarksPanel({ browse, onSelect, mobile = false, preview = fals
         >
             {!preview && (
                 <>
-                    <h2 className="saved-mobile-title">Bookmarks</h2>
+                    <h2 className="saved-mobile-title">{ui.text('Bookmarks')}</h2>
                     <SearchField bookmarks mobile={false} value={filter} onChange={setFilter} />
                 </>
             )}
@@ -126,12 +130,16 @@ function ActiveBookmarksPanel({ browse, onSelect, mobile = false, preview = fals
             >
                 {!preview && (
                     <h2 className="results-heading">
-                        {position ? 'Nearest Locations' : 'Locations'}
+                        {ui.text(position ? 'Nearest Locations' : 'Locations')}
                     </h2>
                 )}
                 <ReadMessage state={bookmarks.listState} empty={!places.length} />
                 {!bookmarks.listState.pending && !bookmarks.listState.error && (
-                    <div className="saved-place-list" role="list" aria-label="Bookmarked places">
+                    <div
+                        className="saved-place-list"
+                        role="list"
+                        aria-label={ui.text('Bookmarked places')}
+                    >
                         {(preview ? places.slice(0, 2) : places).map((place) => (
                             <div role="listitem" key={place.id}>
                                 <SavedPlaceRow

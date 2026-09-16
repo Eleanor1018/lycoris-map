@@ -1,3 +1,5 @@
+import { useLocation } from 'react-router'
+import { UiLanguage } from '@/shared/i18n/ui'
 import { MapShell } from '@/layouts/MapShell'
 import type { DesignSample } from '@/layouts/types'
 import desktop from '@/assets/figma/fixtures/desktop-map.png'
@@ -25,5 +27,10 @@ const sample: DesignSample = {
     maps: { desktop, mobile, desktopPin, mobilePin, desktopPlace, mobilePlace },
 }
 export default function DesignPage() {
-    return <MapShell sample={sample} />
+    const lang = new URLSearchParams(useLocation().search).get('lang')
+    return (
+        <UiLanguage language={lang === 'zh' ? 'zh' : 'en'}>
+            <MapShell sample={sample} />
+        </UiLanguage>
+    )
 }

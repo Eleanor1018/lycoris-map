@@ -1,3 +1,4 @@
+import { useUi } from '@/shared/i18n/ui'
 import { useState, type ReactNode } from 'react'
 import type { Marker } from '@/shared/api/markers'
 import type { Language } from '@/shared/query/keys'
@@ -16,6 +17,7 @@ export function PlaceActions({
     children?: ReactNode
     mobile?: boolean | undefined
 }) {
+    const ui = useUi()
     const [status, setStatus] = useState<{ id: number; text: string } | null>(null)
     const share = async () => {
         const url = placeShareUrl(window.location.origin, place.id, language)
@@ -34,7 +36,7 @@ export function PlaceActions({
         <>
             <div className="place-actions">
                 <DesignButton className="share-button" onClick={() => void share()}>
-                    <span>Share</span>
+                    <span>{ui.text('Share')}</span>
                     <FigmaIcon name={mobile ? 'mobileShare' : 'share'} />
                 </DesignButton>
                 <a
@@ -42,16 +44,18 @@ export function PlaceActions({
                     href={navigationUrl(place)}
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label={`Navigate to ${place.title} in Google Maps`}
+                    aria-label={ui.text('Navigate to {title} in Google Maps', {
+                        title: place.title,
+                    })}
                 >
-                    <span>Navigate</span>
+                    <span>{ui.text('Navigate')}</span>
                     <FigmaIcon name="forward" />
                 </a>
                 {children}
             </div>
             {status?.id === place.id && (
                 <p className="place-action-status" role="status">
-                    {status.text}
+                    {ui.message(status.text)}
                 </p>
             )}
         </>

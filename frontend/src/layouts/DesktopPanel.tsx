@@ -1,3 +1,5 @@
+import { isSettingsPanel, settingsTitles, SettingsContent } from '@/features/preferences/Settings'
+import { useUi } from '@/shared/i18n/ui'
 import { FigmaIcon } from '@/shared/ui/figma-icon'
 import { CategoryBadge, DesignButton, IconButton, NearbyCards, SearchField } from './primitives'
 import type { DesignSample, Panel } from './types'
@@ -14,10 +16,8 @@ type Props = {
     sample: DesignSample | undefined
     search: string
     bookmarksSearch: string
-    language: 'en' | 'zh'
     setSearch: (value: string) => void
     setBookmarksSearch: (value: string) => void
-    setLanguage: (value: 'en' | 'zh') => void
     open: (panel: Panel, focusId?: string) => void
     close: () => void
     contribution?: Omit<ContributionFormProps, 'mobile'>
@@ -28,11 +28,15 @@ type Props = {
 }
 
 export function DesktopPanel(props: Props) {
+    const ui = useUi()
     const { panel, sample, close, open } = props
     if (panel === 'initial') return null
     if (panel === 'contribute-form' && props.contribution)
         return (
-            <section className="desktop-panel panel-contribute-form" aria-label="Contribute">
+            <section
+                className="desktop-panel panel-contribute-form"
+                aria-label={ui.text('Contribute')}
+            >
                 <ContributionForm {...props.contribution} />
             </section>
         )
@@ -40,14 +44,16 @@ export function DesktopPanel(props: Props) {
         return (
             <div className="contribution-bar">
                 <FigmaIcon name="info" />
-                <span>Click on the map to add points.</span>
+                <span>{ui.text('Click on the map to add points.')}</span>
                 <IconButton icon="close" label="Close contribution mode" onClick={close} />
             </div>
         )
-    const heading = panel.charAt(0).toUpperCase() + panel.slice(1)
+    const heading = isSettingsPanel(panel)
+        ? settingsTitles[panel]
+        : panel.charAt(0).toUpperCase() + panel.slice(1)
     return (
-        <section className={`desktop-panel panel-${panel}`} aria-label={heading}>
-            <h1>{heading}</h1>
+        <section className={`desktop-panel panel-${panel}`} aria-label={ui.message(heading)}>
+            <h1>{ui.message(heading)}</h1>
             <IconButton className="panel-close" icon="close" label="Close panel" onClick={close} />
             {panel === 'search' && (
                 <>
@@ -58,7 +64,7 @@ export function DesktopPanel(props: Props) {
                         <PlaceResults browse={props.browse} onSelect={props.selectPlace} />
                     ) : (
                         <>
-                            <h2 className="nearby-heading">Find Nearby</h2>
+                            <h2 className="nearby-heading">{ui.text('Find Nearby')}</h2>
                             <NearbyCards onSelect={props.chooseCategory} />
                         </>
                     )}
@@ -77,7 +83,7 @@ export function DesktopPanel(props: Props) {
                         value={props.bookmarksSearch}
                         onChange={props.setBookmarksSearch}
                     />
-                    <h2 className="nearby-heading">Nearest Locations</h2>
+                    <h2 className="nearby-heading">{ui.text('Nearest Locations')}</h2>
                     {sample && (
                         <div className="nearby-cards">
                             <DesignButton
@@ -90,75 +96,19 @@ export function DesktopPanel(props: Props) {
                             </DesignButton>
                             <DesignButton className="category-card" available={false}>
                                 <CategoryBadge category="nursing" />
-                                <span className="card-title">Nursing Rooms</span>
+                                <span className="card-title">{ui.text('Nursing Rooms')}</span>
                             </DesignButton>
                             <DesignButton className="category-card" available={false}>
                                 <CategoryBadge category="medical" />
-                                <span className="card-title">Medical Institutions</span>
+                                <span className="card-title">
+                                    {ui.text('Medical Institutions')}
+                                </span>
                             </DesignButton>
                         </div>
                     )}
                 </>
             )}
-            {panel === 'languages' && (
-                <div className="language-options" role="radiogroup" aria-label="Language">
-                    {(['en', 'zh'] as const).map((lang) => (
-                        <DesignButton
-                            key={lang}
-                            role="radio"
-                            aria-checked={props.language === lang}
-                            tabIndex={props.language === lang ? 0 : -1}
-                            onClick={() => props.setLanguage(lang)}
-                            onKeyDown={(event) => {
-                                if (
-                                    ['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(
-                                        event.key,
-                                    )
-                                ) {
-                                    event.preventDefault()
-                                    props.setLanguage(lang === 'en' ? 'zh' : 'en')
-                                    const siblings =
-                                        event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
-                                            '[role=radio]',
-                                        )
-                                    siblings?.[lang === 'en' ? 1 : 0]?.focus()
-                                }
-                            }}
-                        >
-                            <span lang={lang === 'en' ? 'en' : 'zh-CN'}>
-                                {lang === 'en' ? 'English' : '简体中文'}
-                            </span>
-                            {props.language === lang && <FigmaIcon name="check" size={20} />}
-                        </DesignButton>
-                    ))}
-                </div>
-            )}
-            {panel === 'settings' && (
-                <div className="settings-cards">
-                    {[
-                        ['Choose Language', 'English'],
-                        ['Searching Range', '1km'],
-                        ['Searching Type', 'toilet'],
-                        ['Map Source', 'OSM'],
-                        ['About Lycoris Maps', ''],
-                    ].map(([title, value], index) => (
-                        <DesignButton
-                            key={title}
-                            id={`setting-${index}`}
-                            aria-label={`${title}${value ? ` ${value}` : ''}`}
-                            className="setting-card"
-                            available={index === 0}
-                            onClick={() => open('languages', 'setting-0')}
-                        >
-                            <span>{title}</span>
-                            <span className="setting-value">{value}</span>
-                            <span className="chevron-slot">
-                                <FigmaIcon name="chevron" />
-                            </span>
-                        </DesignButton>
-                    ))}
-                </div>
-            )}
+            {isSettingsPanel(panel) && <SettingsContent panel={panel} open={open} />}
             {panel === 'details' && (
                 <>
                     <IconButton
@@ -198,7 +148,7 @@ export function DesktopPanel(props: Props) {
                         <>
                             <ShareButton />
                             <DesignButton className="navigate-button" available={false}>
-                                <span>Navigate</span>
+                                <span>{ui.text('Navigate')}</span>
                                 <FigmaIcon name="forward" />
                             </DesignButton>
                         </>
@@ -226,9 +176,10 @@ export function PlaceSummary({ place }: { place: DesignSample['place'] }) {
     )
 }
 export function ShareButton({ mobile = false }: { mobile?: boolean }) {
+    const ui = useUi()
     return (
         <DesignButton className="share-button" available={false}>
-            <span>Share</span>
+            <span>{ui.text('Share')}</span>
             <FigmaIcon name={mobile ? 'mobileShare' : 'share'} />
         </DesignButton>
     )

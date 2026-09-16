@@ -1,3 +1,6 @@
+import { SettingsRows } from '@/features/preferences/Settings'
+import type { Panel } from './types'
+import { useUi } from '@/shared/i18n/ui'
 import { useEffect, useRef, type PointerEvent, type ReactNode } from 'react'
 import { FigmaIcon } from '@/shared/ui/figma-icon'
 import { PlaceMeta, PlaceSummary, ShareButton } from './DesktopPanel'
@@ -29,6 +32,8 @@ export function MobileSheet({
     secondary,
     secondaryLabel = 'Bookmarks',
     openBookmarks,
+    showBookmarks,
+    openSettings,
     editPlace,
 }: {
     snap: Snap
@@ -47,9 +52,12 @@ export function MobileSheet({
     chooseCategory?: ((category: 'toilet' | 'nursing' | 'medical') => void) | undefined
     secondaryLabel?: string
     secondary?: ReactNode
+    openSettings: (panel: Panel, focusId?: string) => void
     openBookmarks?: (() => void) | undefined
+    showBookmarks: boolean
     editPlace?: (() => void) | undefined
 }) {
+    const ui = useUi()
     const hasPlaceResults = browse?.mode === 'search' || browse?.mode === 'cluster'
     const sheet = useRef<HTMLElement>(null)
     const composing = !!contribution
@@ -145,13 +153,15 @@ export function MobileSheet({
             className={`mobile-sheet ${detail ? 'mobile-detail' : ''} ${contribution ? 'mobile-contribution' : ''}`}
             data-snap={snap}
             aria-label={
-                contribution
-                    ? 'Contribute'
-                    : secondary
-                      ? secondaryLabel
-                      : detail
-                        ? 'Details'
-                        : 'Search positions'
+                ui.message(
+                    contribution
+                        ? 'Contribute'
+                        : secondary
+                          ? secondaryLabel
+                          : detail
+                            ? 'Details'
+                            : 'Search positions',
+                ) ?? undefined
             }
             style={dragHeight === null ? undefined : { height: dragHeight }}
         >
@@ -159,13 +169,15 @@ export function MobileSheet({
                 id="sheet-handle"
                 className="sheet-handle"
                 aria-label={
-                    secondary
-                        ? `Close ${secondaryLabel.toLowerCase()}`
-                        : contribution
-                          ? 'Close contribution panel'
-                          : detail
-                            ? 'Close details'
-                            : `Change panel height (${snap})`
+                    ui.message(
+                        secondary
+                            ? `Close ${secondaryLabel.toLowerCase()}`
+                            : contribution
+                              ? 'Close contribution panel'
+                              : detail
+                                ? 'Close details'
+                                : ui.text('Change panel height ({snap})', { snap }),
+                    ) ?? undefined
                 }
                 aria-expanded={expandedPanel || snap !== 'collapsed'}
                 onPointerDown={begin}
@@ -262,7 +274,7 @@ export function MobileSheet({
                     <div
                         className={`mobile-search-content ${hasPlaceResults ? 'has-place-results' : ''}`}
                     >
-                        <div className="mobile-logo">Lycoris Maps</div>
+                        <div className="mobile-logo">{ui.text('Lycoris Maps')}</div>
                         <SearchField mobile value={search} onChange={setSearch} />
                         {!sample ? (
                             <AccountEntry mobile />
@@ -270,7 +282,7 @@ export function MobileSheet({
                             <DesignButton
                                 className="mobile-avatar"
                                 available={false}
-                                aria-label="Account"
+                                aria-label={ui.text('Account')}
                             >
                                 AA
                             </DesignButton>
@@ -280,7 +292,9 @@ export function MobileSheet({
                         ) : (
                             snap !== 'collapsed' && (
                                 <>
-                                    <h2 className="mobile-nearby-heading">Find Nearby</h2>
+                                    <h2 className="mobile-nearby-heading">
+                                        {ui.text('Find Nearby')}
+                                    </h2>
                                     <NearbyCards
                                         mobile
                                         half={snap === 'half'}
@@ -291,66 +305,52 @@ export function MobileSheet({
                         )}
                         {snap === 'full' && !hasPlaceResults && (
                             <>
-                                <DesignButton
-                                    className="mobile-section-heading mobile-bookmarks-heading"
-                                    available={!!openBookmarks}
-                                    onClick={openBookmarks}
-                                >
-                                    <span>Bookmarks</span>
-                                    <FigmaIcon name="mobileChevronDark" />
-                                </DesignButton>
-                                {!sample && browse && selectPlace && (
-                                    <BookmarksPanel
-                                        browse={browse}
-                                        onSelect={selectPlace}
-                                        mobile
-                                        preview
-                                    />
-                                )}
-                                {sample && (
-                                    <div className="mobile-bookmarks">
-                                        {[0, 1].map((index) => (
-                                            <DesignButton
-                                                id={`mobile-place-${index}`}
-                                                className="mobile-place-row"
-                                                key={index}
-                                                onClick={() => openDetails(`mobile-place-${index}`)}
-                                            >
-                                                <CategoryBadge category="toilet" />
-                                                <PlaceSummary place={sample.place} />
-                                            </DesignButton>
-                                        ))}
-                                    </div>
+                                {showBookmarks && (
+                                    <>
+                                        <DesignButton
+                                            className="mobile-section-heading mobile-bookmarks-heading"
+                                            available={!!openBookmarks}
+                                            onClick={openBookmarks}
+                                        >
+                                            <span>{ui.text('Bookmarks')}</span>
+                                            <FigmaIcon name="mobileChevronDark" />
+                                        </DesignButton>
+                                        {!sample && browse && selectPlace && (
+                                            <BookmarksPanel
+                                                browse={browse}
+                                                onSelect={selectPlace}
+                                                mobile
+                                                preview
+                                            />
+                                        )}
+                                        {sample && (
+                                            <div className="mobile-bookmarks">
+                                                {[0, 1].map((index) => (
+                                                    <DesignButton
+                                                        id={`mobile-place-${index}`}
+                                                        className="mobile-place-row"
+                                                        key={index}
+                                                        onClick={() =>
+                                                            openDetails(`mobile-place-${index}`)
+                                                        }
+                                                    >
+                                                        <CategoryBadge category="toilet" />
+                                                        <PlaceSummary place={sample.place} />
+                                                    </DesignButton>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                                 <h2 className="mobile-section-heading mobile-settings-heading">
-                                    <span>Settings</span>
+                                    <span>{ui.text('Settings')}</span>
                                 </h2>
-                                <div className="mobile-settings">
-                                    <MobileSetting label="Choose Language" value="English" />
-                                    <div className="mobile-map-settings">
-                                        <MobileSetting label="Map Source" value="OSM" />
-                                        <MobileSetting label="Searching Range" value="1km" />
-                                        <MobileSetting label="Searching Type" value="Toilet" />
-                                    </div>
-                                    <MobileSetting label="About Lycoris Maps" />
-                                </div>
+                                <SettingsRows mobile open={openSettings} />
                             </>
                         )}
                     </div>
                 )}
             </div>
         </section>
-    )
-}
-
-function MobileSetting({ label, value }: { label: string; value?: string }) {
-    return (
-        <DesignButton className="setting-card" available={false}>
-            <span>{label}</span>
-            {value && <span className="setting-value">{value}</span>}
-            <span className="chevron-slot">
-                <FigmaIcon name="mobileChevronBlue" />
-            </span>
-        </DesignButton>
     )
 }

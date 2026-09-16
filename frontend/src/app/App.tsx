@@ -1,21 +1,33 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter } from 'react-router'
+import { BrowserRouter, useLocation } from 'react-router'
 import { MapPage } from './MapPage'
 import { AppProviders } from './providers'
+const AdminPage = lazy(() => import('@/features/admin/AdminPage'))
 const DevelopmentPage = import.meta.env.DEV ? lazy(() => import('./devRoutes')) : null
 export function App() {
-    const isDevelopmentPath = /^\/__(dev|design)\//.test(window.location.pathname)
     return (
-        <AppProviders>
-            <BrowserRouter>
-                {DevelopmentPage && isDevelopmentPath ? (
-                    <Suspense fallback={null}>
-                        <DevelopmentPage />
-                    </Suspense>
-                ) : (
-                    <MapPage />
-                )}
-            </BrowserRouter>
+        <BrowserRouter>
+            <Application />
+        </BrowserRouter>
+    )
+}
+function Application() {
+    const location = useLocation()
+    const lang = new URLSearchParams(location.search).get('lang')
+    const isDevelopmentPath = /^\/__(dev|design)\//.test(location.pathname)
+    return (
+        <AppProviders languageOverride={lang === 'en' || lang === 'zh' ? lang : undefined}>
+            {location.pathname === '/admin' || location.pathname.startsWith('/admin/') ? (
+                <Suspense fallback={null}>
+                    <AdminPage />
+                </Suspense>
+            ) : DevelopmentPage && isDevelopmentPath ? (
+                <Suspense fallback={null}>
+                    <DevelopmentPage />
+                </Suspense>
+            ) : (
+                <MapPage />
+            )}
         </AppProviders>
     )
 }

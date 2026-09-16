@@ -1,3 +1,4 @@
+import { useUi } from '@/shared/i18n/ui'
 import { IconButton } from '@/shared/ui/design-primitives'
 import type { Marker } from '@/shared/api/markers'
 import type { Language } from '@/shared/query/keys'
@@ -20,6 +21,7 @@ export function BookmarkButton(props: Props) {
     return <ActiveBookmarkButton {...props} />
 }
 function ActiveBookmarkButton({ place, language, mobile = false }: Props) {
+    const ui = useUi()
     const bookmarks = useBookmarks(language),
         flow = useAccountFlow()!
     const saved = bookmarks.saved.has(place.id),
@@ -46,12 +48,12 @@ function ActiveBookmarkButton({ place, language, mobile = false }: Props) {
             />
             {bookmarks.error && (
                 <p className="bookmark-feedback" role="status">
-                    {bookmarks.error}
+                    {ui.message(bookmarks.error)}
                 </p>
             )}
             {bookmarks.idsError && (
                 <p className="bookmark-feedback" role="status">
-                    Could not load bookmarks. Click the bookmark to retry.
+                    {ui.text('Could not load bookmarks. Click the bookmark to retry.')}
                 </p>
             )}
         </>

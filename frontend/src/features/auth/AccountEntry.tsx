@@ -1,3 +1,4 @@
+import { useUi } from '@/shared/i18n/ui'
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSession } from './SessionProvider'
@@ -42,6 +43,7 @@ export function AccountAvatar() {
     )
 }
 export function AccountEntry({ mobile = false }: { mobile?: boolean }) {
+    const ui = useUi()
     const flow = useAccountFlow(),
         session = useSession()
     if (!mobile && !session.user)
@@ -49,9 +51,9 @@ export function AccountEntry({ mobile = false }: { mobile?: boolean }) {
             <div className="desktop-guest-account">
                 <p className="desktop-login-hint" id="desktop-login-hint">
                     <span>
-                        Login to bookmark points
+                        {ui.text('Login to bookmark points')}
                         <br />
-                        or contribute.
+                        {ui.text('or contribute.')}
                     </span>
                 </p>
                 <DesignButton
@@ -60,7 +62,7 @@ export function AccountEntry({ mobile = false }: { mobile?: boolean }) {
                     aria-describedby="desktop-login-hint"
                     onClick={() => flow?.open()}
                 >
-                    <span>Login</span>
+                    <span>{ui.text('Login')}</span>
                     <FigmaIcon name="authLogin" size={24} />
                 </DesignButton>
             </div>
@@ -69,7 +71,7 @@ export function AccountEntry({ mobile = false }: { mobile?: boolean }) {
         <DesignButton
             id={mobile ? 'mobile-account' : 'desktop-account'}
             className={mobile ? 'mobile-avatar' : 'desktop-account live-account'}
-            aria-label={session.user ? 'Account' : 'Login'}
+            aria-label={ui.text(session.user ? 'Account' : 'Login')}
             onClick={() => flow?.open()}
         >
             {mobile ? (

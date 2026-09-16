@@ -1,3 +1,4 @@
+import { useUi } from '@/shared/i18n/ui'
 import { useState, type FormEvent } from 'react'
 import { DesignButton } from '@/shared/ui/design-primitives'
 import { useAccountFlow } from './AccountFlow'
@@ -7,6 +8,7 @@ import apple from '@/assets/figma/auth-apple.svg'
 import google from '@/assets/figma/auth-google.svg'
 
 export function AuthForm({ register, mobile }: { register: boolean; mobile: boolean }) {
+    const ui = useUi()
     const session = useSession(),
         flow = useAccountFlow()!
     const [identity, setIdentity] = useState(''),
@@ -84,22 +86,22 @@ export function AuthForm({ register, mobile }: { register: boolean; mobile: bool
                             className="verification-field"
                             label="Verification Code"
                             disabled
-                            placeholder="Not enabled yet"
+                            placeholder={ui.text('Not enabled yet')}
                         />
                     )}
                 </div>
                 <p className="auth-switch">
-                    {register ? 'Already have an account?' : 'Haven’t got an account?'}{' '}
+                    {ui.text(register ? 'Already have an account?' : 'Haven’t got an account?')}{' '}
                     <DesignButton
                         onClick={() => flow.setView(register ? 'login' : 'register')}
                         disabled={session.busy}
                     >
-                        {register ? 'Login Here.' : 'Register Here.'}
+                        {ui.text(register ? 'Login Here.' : 'Register Here.')}
                     </DesignButton>
                 </p>
                 {(error || flow.message) && (
                     <p className="account-status" role="alert">
-                        {error ?? flow.message}
+                        {ui.message(error ?? flow.message)}
                     </p>
                 )}
                 <AccountSubmit disabled={session.busy} aria-busy={session.busy}>
@@ -107,7 +109,7 @@ export function AuthForm({ register, mobile }: { register: boolean; mobile: bool
                 </AccountSubmit>
             </form>
             <div className="auth-social">
-                <h3>{mobile ? 'Third Party Login' : '--OR--'}</h3>
+                <h3>{ui.text(mobile ? 'Third Party Login' : '--OR--')}</h3>
                 <div className="auth-social-buttons">
                     <DesignButton
                         className="auth-apple"
@@ -118,7 +120,7 @@ export function AuthForm({ register, mobile }: { register: boolean; mobile: bool
                         }
                     >
                         <img src={apple} alt="" width={24} height={24} />
-                        <span>Continue with Apple</span>
+                        <span>{ui.text('Continue with Apple')}</span>
                     </DesignButton>
                     <DesignButton
                         className="auth-google"
@@ -129,7 +131,7 @@ export function AuthForm({ register, mobile }: { register: boolean; mobile: bool
                         }
                     >
                         <img src={google} alt="" width={23} height={23} />
-                        <span>Continue with Google</span>
+                        <span>{ui.text('Continue with Google')}</span>
                     </DesignButton>
                 </div>
             </div>
