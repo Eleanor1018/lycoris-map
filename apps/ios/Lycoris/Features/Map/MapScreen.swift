@@ -289,6 +289,7 @@ struct MapScreen: View {
     }
     .onChange(of: preferences.language) { _, _ in applyPreferences() }
     .onChange(of: preferences.radius) { _, _ in applyPreferences() }
+    .onChange(of: preferences.searchType) { _, _ in applyPreferences() }
     .onChange(of: location.isAuthorized) { _, authorized in
       if !authorized { store.revokeLocation() }
     }
@@ -358,7 +359,9 @@ struct MapScreen: View {
   }
 
   private func applyPreferences() {
-    store.updatePreferences(language: preferences.language.rawValue, radius: preferences.radius)
+    store.updatePreferences(
+      language: preferences.language.rawValue, radius: preferences.radius,
+      searchType: preferences.searchType)
     account.updateLanguage(preferences.language.rawValue)
   }
 
@@ -408,42 +411,39 @@ struct MapScreen: View {
         .padding(.horizontal, 14)
         .padding(.bottom, detent == .collapsed ? 14 : detent == .nearby ? 7 : 11)
 
-        ScrollView {
-          VStack(spacing: 8) {
-            if store.browse != nil || store.pendingNearby != nil {
+        Group {
+          if store.browse != nil || store.pendingNearby != nil {
+            ScrollView {
               PlaceResultsView(store: store, onSelect: selectPlace) {
                 query = ""
                 store.closeResults()
               }
-            } else {
-              if case .failed = store.viewportState {
-                PlaceLoadStatus(state: store.viewportState, retry: store.retryResults)
-              }
-              MapPanelContent(
-                preferences: preferences,
-                onSettings: {
-                  isSearchFocused = false
-                  modal = .settings($0)
-                },
-                cardHeight: cardHeight, showsSettings: detent == .expanded,
-                bookmarks: store.isPreview ? bookmarks : account.bookmarks.map(store.presentation),
-                showsBookmarks: account.user != nil,
-                bookmarksLoading: account.libraryLoading, bookmarksMessage: account.libraryMessage,
-                onBookmarks: {
-                  if store.isPreview {
-                    showsUnavailableAction = true
-                  } else {
-                    modal = .account(.bookmarks)
-                  }
-                },
-                onCategory: showNearby, onSelect: selectPlace,
-                onUnavailableAction: { showsUnavailableAction = true })
+              .padding(.horizontal, 14)
+              .padding(.bottom, keyboardHeight > 0 ? 12 : max(layout.bottomInset, 12))
             }
+          } else {
+            MapPanelContent(
+              preferences: preferences,
+              onSettings: {
+                isSearchFocused = false
+                modal = .settings($0)
+              },
+              cardHeight: cardHeight, showsSettings: detent == .expanded,
+              bottomInset: keyboardHeight > 0 ? 12 : max(layout.bottomInset, 12),
+              viewportState: store.viewportState, onRetry: store.retryResults,
+              bookmarks: store.isPreview ? bookmarks : account.bookmarks.map(store.presentation),
+              showsBookmarks: account.user != nil,
+              bookmarksLoading: account.libraryLoading, bookmarksMessage: account.libraryMessage,
+              onBookmarks: {
+                if store.isPreview {
+                  showsUnavailableAction = true
+                } else {
+                  modal = .account(.bookmarks)
+                }
+              },
+              onCategory: showNearby, onSelect: selectPlace,
+              onUnavailableAction: { showsUnavailableAction = true })
           }
-          .padding(.horizontal, 14)
-          // The keyboard already includes the home-indicator area. Otherwise
-          // keep one device safe-area inset, without ScrollView adding it again.
-          .padding(.bottom, keyboardHeight > 0 ? 12 : max(layout.bottomInset, 12))
         }
         .scrollIndicators(.hidden)
         .scrollDismissesKeyboard(.interactively)

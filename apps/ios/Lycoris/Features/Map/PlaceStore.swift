@@ -16,7 +16,16 @@ final class PlaceStore {
   private let api: any MarkerServing
   private(set) var viewport: MapViewport?
   private(set) var viewportMarkers: [Marker] = []
-  private(set) var results: [Marker] = []
+  private var unfilteredResults: [Marker] = []
+  private(set) var searchType: SearchType = .all
+  var results: [Marker] {
+    // Search returns the complete set. Derive from the latest preference so a response
+    // already in flight also respects category changes, without another network request.
+    guard case .search = browse, let category = searchType.category else {
+      return unfilteredResults
+    }
+    return unfilteredResults.filter { $0.category == category }
+  }
   private(set) var browse: Browse?
   private(set) var pendingNearby: PlaceCategory?
   private(set) var viewportState: LoadState = .idle
@@ -37,7 +46,8 @@ final class PlaceStore {
   private var detailGeneration = UUID()
   private var locationGeneration = UUID()
 
-  func updatePreferences(language: String, radius: Int) {
+  func updatePreferences(language: String, radius: Int, searchType: SearchType = .all) {
+    self.searchType = searchType
     let changedLanguage = self.language != language
     let changedRadius = self.radius != radius
     guard changedLanguage || changedRadius else { return }
@@ -248,7 +258,7 @@ final class PlaceStore {
     viewportGeneration = UUID()
     browseGeneration = UUID()
     viewportMarkers.removeAll { $0.id == id }
-    results.removeAll { $0.id == id }
+    unfilteredResults.removeAll { $0.id == id }
     viewportState = .idle
     resultsState = .loaded
     if let viewport { viewportChanged(viewport, debounce: false) }
@@ -269,7 +279,7 @@ final class PlaceStore {
     browseTask?.cancel()
     browse = nil
     pendingNearby = nil
-    results = []
+    unfilteredResults = []
     resultsState = .idle
   }
 
@@ -303,7 +313,7 @@ final class PlaceStore {
     browseTask?.cancel()
     let generation = UUID()
     browseGeneration = generation
-    results = []
+    unfilteredResults = []
     resultsState = .loading
     let language = language
     browseTask = Task { [weak self, api] in
@@ -312,7 +322,7 @@ final class PlaceStore {
         let markers = try await api.markers(query, language: language)
         try Task.checkCancellation()
         guard let self, generation == self.browseGeneration else { return }
-        self.results = markers
+        self.unfilteredResults = markers
         self.resultsState = .loaded
       } catch {
         guard !Task.isCancelled, let self, generation == self.browseGeneration else { return }

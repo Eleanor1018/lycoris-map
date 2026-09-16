@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum SettingsDestination: String, Identifiable {
-  case language, range, source, about
+  case language, searchType, range, source, about
   var id: String { rawValue }
 }
 
@@ -20,6 +20,13 @@ struct SettingsSheet: View {
           Picker("Choose Language", selection: $preferences.language) {
             ForEach(AppLanguage.allCases) { Text($0.name).tag($0) }
           }.pickerStyle(.inline).accessibilityIdentifier("settings.language")
+        case .searchType:
+          Picker("Search Type", selection: $preferences.searchType) {
+            ForEach(SearchType.allCases) { type in
+              Text(type.title(language: preferences.language)).tag(type)
+                .accessibilityIdentifier("settings.searchType.\(type.rawValue)")
+            }
+          }.pickerStyle(.inline)
         case .range:
           Section {
             ForEach([1000, 2500], id: \.self) { value in
@@ -89,6 +96,7 @@ struct SettingsSheet: View {
   private var title: String {
     switch destination {
     case .language: String(appLocalized: "Choose Language", language: preferences.language)
+    case .searchType: String(appLocalized: "Search Type", language: preferences.language)
     case .range: String(appLocalized: "Searching Range", language: preferences.language)
     case .source: String(appLocalized: "Map Source", language: preferences.language)
     case .about: String(appLocalized: "About Lycoris Maps", language: preferences.language)

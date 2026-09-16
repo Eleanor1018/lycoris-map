@@ -13,6 +13,27 @@ enum AppLanguage: String, CaseIterable, Identifiable, Sendable {
   }
 }
 
+enum SearchType: String, CaseIterable, Identifiable, Sendable {
+  case all, toilet, nursing, medical
+  var id: String { rawValue }
+  var category: PlaceCategory? {
+    switch self {
+    case .all: nil
+    case .toilet: .toilet
+    case .nursing: .nursing
+    case .medical: .medical
+    }
+  }
+  func title(language: AppLanguage) -> String {
+    switch self {
+    case .all: String(appLocalized: "All", language: language)
+    case .toilet: String(appLocalized: "Accessible Toilets", language: language)
+    case .nursing: String(appLocalized: "Nursing Rooms", language: language)
+    case .medical: String(appLocalized: "Medical Institutions", language: language)
+    }
+  }
+}
+
 @MainActor @Observable
 final class AppPreferences {
   private let defaults: UserDefaults
@@ -20,6 +41,9 @@ final class AppPreferences {
     didSet { defaults.set(language.rawValue, forKey: "lycoris.language") }
   }
   private(set) var radius: Int
+  var searchType: SearchType {
+    didSet { defaults.set(searchType.rawValue, forKey: "lycoris.searchType") }
+  }
   var mapAppearance: MapAppearance {
     didSet { defaults.set(mapAppearance.rawValue, forKey: "lycoris.mapAppearance") }
   }
@@ -27,7 +51,11 @@ final class AppPreferences {
   init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
     language = .current(in: defaults)
-    mapAppearance = defaults.string(forKey: "lycoris.mapAppearance")
+    searchType =
+      defaults.string(forKey: "lycoris.searchType")
+      .flatMap(SearchType.init(rawValue:)) ?? .all
+    mapAppearance =
+      defaults.string(forKey: "lycoris.mapAppearance")
       .flatMap(MapAppearance.init(rawValue:)) ?? .explore
     let saved = defaults.integer(forKey: "lycoris.radius")
     radius = Self.validRadius(saved) ? saved : 1000

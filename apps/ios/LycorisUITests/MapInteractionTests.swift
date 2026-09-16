@@ -8,6 +8,7 @@ final class MapInteractionTests: XCTestCase {
       "-AppleLanguages", "(en)", "-lycoris-preview", "details",
       "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
     ]
+    app.launchArguments += ["-lycoris.language", "en"]
     app.launch()
     let title = app.staticTexts["place.title"]
     XCTAssertTrue(title.waitForExistence(timeout: 10))
@@ -36,6 +37,7 @@ final class MapInteractionTests: XCTestCase {
     app.launchArguments = [
       "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-lycoris-preview", "expanded",
     ]
+    app.launchArguments += ["-lycoris.language", "en"]
     app.launch()
     let heading = app.buttons["map.bookmarks.heading"]
     XCTAssertTrue(heading.waitForExistence(timeout: 10))
@@ -73,6 +75,7 @@ final class MapInteractionTests: XCTestCase {
 
     app.terminate()
     app.launchArguments = ["-AppleLanguages", "(en)", "-lycoris-preview", "anonymousExpanded"]
+    app.launchArguments += ["-lycoris.language", "en"]
     app.launch()
     XCTAssertTrue(app.staticTexts["Settings"].waitForExistence(timeout: 10))
     XCTAssertFalse(app.buttons["map.bookmarks.heading"].exists)
@@ -85,6 +88,7 @@ final class MapInteractionTests: XCTestCase {
     app.launchArguments = [
       "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-lycoris-preview", "collapsed",
     ]
+    app.launchArguments += ["-lycoris.language", "en"]
     app.launch()
     let handle = app.buttons["map.panel.handle"]
     XCTAssertTrue(handle.waitForExistence(timeout: 10))
@@ -121,7 +125,7 @@ final class MapInteractionTests: XCTestCase {
     let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.48))
     let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.24))
     start.press(forDuration: 0.1, thenDragTo: end)
-    let about = app.staticTexts["About Lycoris Maps"]
+    let about = app.buttons["settings.about"]
     XCTAssertTrue(about.isHittable)
     XCTAssertLessThan(about.frame.maxY, keyboard.frame.minY)
     attach(app, name: "05-content-scroll-with-keyboard")

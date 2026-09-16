@@ -11,25 +11,77 @@ import Testing
     defer { defaults.removePersistentDomain(forName: name) }
     let preferences = AppPreferences(defaults: defaults)
     #expect(preferences.radius == 1000)
+    #expect(preferences.searchType == .all)
     preferences.language = .chinese
     preferences.mapAppearance = .satellite
+    preferences.searchType = .nursing
     #expect(preferences.setRadius(2500))
     #expect(!preferences.setRadius(0))
     #expect(!preferences.setRadius(50_001))
     let restored = AppPreferences(defaults: defaults)
     #expect(restored.language == .chinese && restored.radius == 2500)
     #expect(restored.mapAppearance == .satellite)
+    #expect(restored.searchType == .nursing)
     defaults.set(-1, forKey: "lycoris.radius")
     defaults.set("unknown", forKey: "lycoris.language")
     defaults.set("unknown", forKey: "lycoris.mapAppearance")
+    defaults.set("unknown", forKey: "lycoris.searchType")
     #expect(AppPreferences(defaults: defaults).radius == 1000)
     #expect(AppPreferences(defaults: defaults).mapAppearance == .explore)
+    #expect(AppPreferences(defaults: defaults).searchType == .all)
   }
 
   @Test func derivedStringsUseSelectedBundle() {
     #expect(String(appLocalized: "Hours not provided", language: .english) == "Hours not provided")
     #expect(String(appLocalized: "Hours not provided", language: .chinese) != "Hours not provided")
     #expect(String(appLocalized: "Searching Range", language: .chinese) == "搜索范围")
+    #expect(SearchType.all.title(language: .chinese) == "全部")
+    #expect(String(appLocalized: "Search Type", language: .chinese) == "搜索类型")
+  }
+
+  @Test func searchTypeFiltersCurrentAndPendingResultsWithoutAffectingNearby() async throws {
+    let api = DeferredMarkers()
+    let store = PlaceStore(api: api, language: "en")
+    store.search("places", debounce: false)
+    try await waitFor { await api.count() == 1 }
+    store.updatePreferences(language: "en", radius: 1000, searchType: .nursing)
+    await api.finish(
+      0,
+      .success([
+        sampleMarker(1), sampleMarker(2, category: .nursing),
+        sampleMarker(3, category: .medical), sampleMarker(4, category: .other),
+      ]))
+    try await waitFor { store.resultsState == .loaded }
+    #expect(store.results.map(\.id) == [2])
+    #expect(store.resultPlaces.map(\.id) == ["2"])
+    #expect(store.mapPlaces.map(\.id) == ["2"])
+    store.updatePreferences(language: "en", radius: 1000, searchType: .medical)
+    #expect(store.results.map(\.id) == [3])
+    store.updatePreferences(language: "en", radius: 1000, searchType: .toilet)
+    #expect(store.results.map(\.id) == [1])
+    store.updatePreferences(language: "en", radius: 1000, searchType: .all)
+    #expect(store.results.map(\.id) == [1, 2, 3, 4])
+    #expect(await api.count() == 1)
+
+    store.search("no medical places", debounce: false)
+    try await waitFor { await api.count() == 2 }
+    store.updatePreferences(language: "en", radius: 1000, searchType: .medical)
+    await api.finish(1, .success([sampleMarker(1)]))
+    try await waitFor { store.resultsState == .loaded }
+    #expect(store.results.isEmpty)
+
+    let token = store.nearby(.nursing)
+    let center = GeoPoint(latitude: 31, longitude: 121)!
+    store.resolveNearbyLocation(center, token: token)
+    try await waitFor { await api.count() == 3 }
+    #expect(await api.requests.last == .list(.nearby(center, .nursing)))
+    await api.finish(2, .success([sampleMarker(2, category: .nursing)]))
+    try await waitFor { store.resultsState == .loaded }
+    #expect(store.results.map(\.id) == [2])
+    store.updatePreferences(language: "en", radius: 1000, searchType: .toilet)
+    #expect(store.results.map(\.id) == [2])
+    #expect(await api.count() == 3)
+    store.stop()
   }
 
   @Test func radiusAndLanguageReachTheActualRequest() throws {

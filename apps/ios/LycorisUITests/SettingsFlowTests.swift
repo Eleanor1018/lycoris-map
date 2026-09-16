@@ -3,9 +3,10 @@ import XCTest
 @MainActor final class SettingsFlowTests: XCTestCase {
   override func setUp() { continueAfterFailure = false }
 
-  private func launch(largeText: Bool = false) -> XCUIApplication {
+  private func launch(largeText: Bool = false, englishOverride: Bool = false) -> XCUIApplication {
     let app = XCUIApplication()
     app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+    if englishOverride { app.launchArguments += ["-lycoris.language", "en"] }
     if largeText {
       app.launchArguments += [
         "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
@@ -20,7 +21,7 @@ import XCTest
     let handle = app.buttons["map.panel.handle"]
     handle.tap()
     handle.tap()
-    XCTAssertTrue(app.buttons["settings.language"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.collectionViews["map.panel.content"].waitForExistence(timeout: 5))
   }
 
   func testLanguageAndRadiusPersistAndUseNativeSettings() {
@@ -30,17 +31,17 @@ import XCTest
     app.buttons["简体中文"].tap()
     XCTAssertTrue(app.navigationBars["选择语言"].waitForExistence(timeout: 5))
     app.buttons["settings.done"].tap()
-    XCTAssertTrue(app.staticTexts["搜索范围"].waitForExistence(timeout: 5))
+    XCTAssertEqual(app.buttons["settings.range"].label, "搜索范围")
     app.buttons["settings.range"].tap()
     app.buttons["settings.radius.2500"].tap()
     attach(app, "i6-native-range-zh")
     app.buttons["settings.done"].tap()
-    XCTAssertTrue(app.staticTexts["2.5km"].exists)
+    XCTAssertEqual(app.buttons["settings.range"].value as? String, "2.5km")
     app.terminate()
     app.launch()
     expand(app)
-    XCTAssertTrue(app.staticTexts["搜索范围"].exists)
-    XCTAssertTrue(app.staticTexts["2.5km"].exists)
+    XCTAssertEqual(app.buttons["settings.range"].label, "搜索范围")
+    XCTAssertEqual(app.buttons["settings.range"].value as? String, "2.5km")
     attach(app, "i6-settings-persisted-zh")
     app.buttons["settings.source"].tap()
     XCTAssertTrue(app.staticTexts["Apple 地图"].exists)
@@ -49,7 +50,7 @@ import XCTest
     app.buttons["English"].tap()
     XCTAssertTrue(app.navigationBars["Choose Language"].waitForExistence(timeout: 5))
     app.buttons["settings.done"].tap()
-    XCTAssertTrue(app.staticTexts["Searching Range"].waitForExistence(timeout: 5))
+    XCTAssertEqual(app.buttons["settings.range"].label, "Searching Range")
     app.buttons["settings.range"].tap()
     app.buttons["settings.radius.1000"].tap()
     app.buttons["settings.done"].tap()
@@ -62,7 +63,7 @@ import XCTest
     let about = app.buttons["settings.about"]
     for _ in 0..<8 {
       if about.isHittable { break }
-      app.scrollViews.firstMatch.swipeUp()
+      app.collectionViews["map.panel.content"].swipeUp()
     }
     XCTAssertTrue(about.isHittable)
     about.tap()
@@ -86,6 +87,33 @@ import XCTest
     keyboard.tap()
     XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
     XCTAssertTrue(app.textFields["map.search"].isHittable)
+  }
+
+  func testSearchTypeUsesNativePickerAndPersists() {
+    let app = launch(englishOverride: true)
+    expand(app)
+    let rows = ["language", "searchType", "range", "source", "about"]
+    for row in rows {
+      XCTAssertEqual(app.buttons["settings.\(row)"].frame.height, 44, accuracy: 1)
+    }
+    app.buttons["settings.searchType"].tap()
+    for type in ["all", "toilet", "nursing", "medical"] {
+      XCTAssertTrue(app.buttons["settings.searchType.\(type)"].exists)
+    }
+    app.buttons["settings.searchType.nursing"].tap()
+    attach(app, "native-search-type-picker")
+    app.buttons["settings.done"].tap()
+    XCTAssertEqual(app.buttons["settings.searchType"].value as? String, "Nursing Rooms")
+    app.terminate()
+    app.launch()
+    expand(app)
+    XCTAssertEqual(app.buttons["settings.searchType"].value as? String, "Nursing Rooms")
+    attach(app, "native-settings-search-type-persisted")
+    app.buttons["settings.searchType"].tap()
+    XCTAssertTrue(app.buttons["settings.searchType.nursing"].isSelected)
+    app.buttons["settings.searchType.all"].tap()
+    app.buttons["settings.done"].tap()
+    XCTAssertEqual(app.buttons["settings.searchType"].value as? String, "All")
   }
 
   func testPublicPlaceLinkColdAndWarmLaunch() async throws {
