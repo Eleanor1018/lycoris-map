@@ -513,6 +513,9 @@
 }
 .mobile-sheet {
     --mobile-content-inset: 11px;
+    transition:
+        height 180ms ease-out,
+        bottom 180ms ease-out;
     position: absolute;
     bottom: env(safe-area-inset-bottom, 0px);
     left: 0;
@@ -538,20 +541,31 @@
 .sheet-handle {
     position: absolute;
     top: 0;
-    left: calc(50% - 30.5px);
-    width: 56px;
+    left: 0;
+    width: 100%;
     height: 24px;
     z-index: 2;
     touch-action: none;
 }
 .sheet-handle span {
     position: absolute;
-    left: 10px;
+    left: calc(50% - 18px);
     top: 7px;
     width: 36px;
     height: 5px;
     border-radius: 4px;
     background: #bebfc0;
+}
+.mobile-sheet[data-dragging='true'] {
+    transition: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+.sheet-handle {
+    cursor: grab;
+}
+.mobile-sheet[data-dragging='true'] .sheet-handle {
+    cursor: grabbing;
 }
 .sheet-scroll {
     position: absolute;
@@ -828,4 +842,10 @@
 }
 .language-options .design-button > * {
     transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .mobile-sheet {
+        transition: none;
+    }
 }
