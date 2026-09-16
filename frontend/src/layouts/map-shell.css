@@ -355,6 +355,7 @@
     z-index: 10;
 }
 .contribution-bar span {
+    text-align: center;
     white-space: nowrap;
     flex: 1;
 }
@@ -439,6 +440,12 @@
     left: 10px;
     width: 144px;
     height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 8px;
+    text-align: center;
     border-radius: 71px;
     border: 1px solid var(--ui-brand);
     background: var(--ui-brand-blush);
@@ -446,29 +453,16 @@
     letter-spacing: 0.1px;
     color: var(--ui-brand);
 }
-.share-button span {
-    position: absolute;
-    left: 30px;
-    top: 9px;
-}
-.share-button img {
-    position: absolute;
-    left: 95px;
-    top: 9px;
+.share-button span,
+.navigate-button span,
+.share-button img,
+.navigate-button img {
+    position: static;
+    flex: none;
 }
 .navigate-button {
     left: 160px;
     background: #d0bcff;
-}
-.navigate-button span {
-    position: absolute;
-    left: 15px;
-    top: 11px;
-}
-.navigate-button img {
-    position: absolute;
-    left: 107px;
-    top: 9px;
 }
 .desktop-place-pin {
     position: absolute;
@@ -514,11 +508,7 @@
 .mobile-sheet {
     --mobile-content-inset: 11px;
     transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
-    transform: translate3d(
-        0,
-        max(0px, calc(100% - var(--sheet-visual-height, var(--sheet-height)))),
-        0
-    );
+    transform: translate3d(0, max(0px, calc(100% - var(--sheet-height))), 0);
     will-change: transform;
     position: absolute;
     bottom: 0;
@@ -557,7 +547,8 @@
     border-radius: 4px;
     background: #bebfc0;
 }
-.mobile-sheet[data-dragging='true'] {
+.mobile-sheet[data-dragging='true'],
+.mobile-sheet[data-holding='true'] {
     transition: none;
     user-select: none;
     -webkit-user-select: none;
@@ -593,7 +584,7 @@
     padding-top: 310px;
     padding-bottom: 22px;
 }
-.mobile-sheet:not([data-dragging]) .mobile-search-content > [inert] {
+.mobile-sheet:not([data-dragging]):not([data-settling]) .mobile-search-content > [inert] {
     visibility: hidden;
 }
 .mobile-logo {
@@ -807,11 +798,8 @@
 }
 .map-shell[data-mobile='true'] .leaflet-bottom {
     bottom: 4px;
-    transform: translateY(calc(0px - var(--sheet-visual-height, var(--sheet-height))));
+    transform: translateY(calc(0px - var(--sheet-height)));
     transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.map-shell[data-sheet-dragging='true'] .leaflet-bottom {
-    transition: none;
 }
 .map-shell[data-mobile='true'] {
     --sheet-height: min(158px, calc(100dvh - 46px));

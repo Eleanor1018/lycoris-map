@@ -72,7 +72,8 @@ function setup(initial?: Snap, expanded = false) {
     }
 }
 function visualHeight() {
-    return screen.getByTestId('viewport').style.getPropertyValue('--sheet-visual-height')
+    const transform = screen.getByTestId('sheet').style.transform
+    return transform ? `${754 - Number(transform.match(/translate3d\(0, ([\d.-]+)px/)?.[1])}px` : ''
 }
 beforeEach(() => {
     now = 0
@@ -91,7 +92,11 @@ beforeEach(() => {
         const viewport = this.dataset.testid === 'viewport'
         const owner = this.parentElement
         const visible = parseFloat(
-            owner?.style.getPropertyValue('--sheet-visual-height') ||
+            (this.style.transform
+                ? String(
+                      754 - Number(this.style.transform.match(/translate3d\(0, ([\d.-]+)px/)?.[1]),
+                  )
+                : '') ||
                 owner?.style.getPropertyValue('--sheet-height') ||
                 '754',
         )
@@ -289,4 +294,38 @@ it('finishes mouse dragging even when the pointer leaves the sheet', () => {
     pointer(window, 'pointerup', 250)
     expect(sheet.dataset.snap).toBe('full')
     expect(sheet.dataset.dragging).toBeUndefined()
+})
+it('moves on the first touch frame without invalidating the map root', () => {
+    const { sheet, title } = setup()
+    touch(title, 'start', 700)
+    const point = { identifier: 1, clientX: 100, clientY: 690 }
+    fireEvent.touchMove(title, { touches: [point], changedTouches: [point] })
+    // No requestAnimationFrame flush: the current touch must already be painted.
+    expect(visualHeight()).toBe('168px')
+    expect(screen.getByTestId('viewport').style.getPropertyValue('--sheet-visual-height')).toBe('')
+    expect(sheet.dataset.dragging).toBe('true')
+})
+it('catches an interrupted settle at the visible position before any movement', () => {
+    const { sheet } = setup('full')
+    const original = sheet.getBoundingClientRect()
+    vi.spyOn(sheet, 'getBoundingClientRect').mockReturnValue({ ...original, top: 400, height: 754 })
+    const handle = screen.getByRole('button', { name: 'Handle' })
+    touch(handle, 'start', 410)
+    expect(sheet.dataset.holding).toBe('true')
+    expect(visualHeight()).toBe('400px')
+    touch(handle, 'move', 400)
+    expect(visualHeight()).toBe('410px')
+    touch(handle, 'cancel', 400)
+    expect(sheet.dataset.holding).toBeUndefined()
+})
+it('keeps outgoing content visible until its settling transition finishes', () => {
+    const { sheet, title } = setup('full')
+    touch(title, 'start', 100)
+    touch(title, 'move', 500)
+    touch(title, 'end', 500)
+    expect(sheet.dataset.settling).toBe('true')
+    const end = new Event('transitionend', { bubbles: true })
+    Object.defineProperty(end, 'propertyName', { value: 'transform' })
+    fireEvent(sheet, end)
+    expect(sheet.dataset.settling).toBeUndefined()
 })

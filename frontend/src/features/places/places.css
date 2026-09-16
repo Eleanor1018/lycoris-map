@@ -133,7 +133,7 @@
     position: static;
     width: calc(100% - 5px);
     height: auto;
-    min-height: 60px;
+    min-height: 0;
     display: block;
     overflow-wrap: anywhere;
 }
@@ -142,14 +142,14 @@
     gap: 6px;
 }
 .live-place-detail .place-actions {
-    margin: 10px -6px 0;
+    margin: 22px -6px 0;
 }
 .place-actions .share-button,
 .place-actions .navigate-button {
     position: relative;
     top: auto;
     left: auto;
-    display: block;
+    display: flex;
     flex: none;
     text-decoration: none;
 }
@@ -198,9 +198,6 @@
     min-width: 0;
     max-width: 144px;
 }
-.live-mobile-detail .place-actions .navigate-button span {
-    left: 15px;
-}
 .live-mobile-detail .place-actions .mobile-bookmark {
     position: relative;
     top: 6px;
@@ -242,16 +239,8 @@
     .live-mobile-detail .place-actions .navigate-button {
         font-size: 18px;
     }
-    .live-mobile-detail .place-actions .share-button span {
-        left: 20px;
-    }
-    .live-mobile-detail .place-actions .navigate-button span {
-        left: 12px;
-    }
     .live-mobile-detail .place-actions .share-button img,
     .live-mobile-detail .place-actions .navigate-button img {
-        left: auto;
-        right: 8px;
         width: 20px;
     }
 }

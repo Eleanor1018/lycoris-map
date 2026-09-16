@@ -165,6 +165,7 @@ export const uiMessages = {
     'Could not load your places. Try again.': '无法加载你的点位，请重试。',
     'Could not load bookmarks. Click the bookmark to retry.': '收藏加载失败，请点击收藏按钮重试。',
     'Bookmarked places': '收藏的点位',
+    'Login to bookmark points or contribute.': '登录后收藏点位或参与贡献。',
     'Login to bookmark points': '登录后收藏点位',
     'or contribute.': '或参与贡献。',
     Nickname: '昵称',

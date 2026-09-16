@@ -321,9 +321,12 @@ body:has(.account-mobile) .mobile-sheet {
     width: 208px;
     height: 66px;
     margin: 0;
-    font: 590 17px/normal var(--ui-font-body);
+    font: 590 17px/22px var(--ui-font-body);
     letter-spacing: -0.8px;
     color: var(--ui-brand-deep);
+    white-space: normal;
+    overflow-wrap: break-word;
+    text-align: left;
 }
 .desktop-guest-account .desktop-login-button {
     position: absolute;

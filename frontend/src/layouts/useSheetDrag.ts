@@ -35,6 +35,9 @@ export function useSheetDrag({
 }) {
     const gesture = useRef<Gesture | null>(null)
     const frame = useRef(0)
+    const physicalHeight = useRef(0)
+    const attribution = useRef<HTMLElement[]>([])
+    const settling = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
     const suppressClickUntil = useRef(0)
     const clearMotion = useEffectEvent(() => {
         cancelAnimationFrame(frame.current)
@@ -43,10 +46,19 @@ export function useSheetDrag({
     const rest = useEffectEvent(() => {
         const element = sheet.current
         if (!element) return
+        if (element.hasAttribute('data-dragging')) {
+            // Keep outgoing content painted until it has moved below the viewport.
+            element.dataset.settling = 'true'
+            clearTimeout(settling.current)
+            settling.current = setTimeout(() => delete element.dataset.settling, 350)
+        }
         delete element.dataset.dragging
-        const owner = element.parentElement
-        owner?.style.removeProperty('--sheet-visual-height')
-        owner?.removeAttribute('data-sheet-dragging')
+        delete element.dataset.holding
+        element.style.removeProperty('transform')
+        for (const item of attribution.current) {
+            item.style.removeProperty('transform')
+            item.style.removeProperty('transition')
+        }
     })
     const cancel = useEffectEvent(() => {
         gesture.current = null
@@ -56,15 +68,18 @@ export function useSheetDrag({
     const paint = useEffectEvent((visibleHeight: number, dragging: boolean) => {
         const element = sheet.current
         if (!element) return
-        const owner = element.parentElement
         if (dragging) {
             element.dataset.dragging = 'true'
-            owner?.setAttribute('data-sheet-dragging', 'true')
         } else {
             delete element.dataset.dragging
-            owner?.removeAttribute('data-sheet-dragging')
         }
-        owner?.style.setProperty('--sheet-visual-height', `${visibleHeight}px`)
+        // Only these composited layers change; per-move styles stay off the map
+        // root and don't cascade into its tiles and pins.
+        element.style.transform = `translate3d(0, ${physicalHeight.current - visibleHeight}px, 0)`
+        for (const item of attribution.current) {
+            item.style.transition = 'none'
+            item.style.transform = `translateY(${-visibleHeight}px)`
+        }
     })
     useEffect(() => {
         if (expandedPanel || snap === 'full') return
@@ -94,6 +109,16 @@ export function useSheetDrag({
             (viewport?.bottom || window.innerHeight) - bottom - box.top,
         )
         clearMotion()
+        clearTimeout(settling.current)
+        delete element.dataset.settling
+        physicalHeight.current = box.height
+        attribution.current = Array.from(
+            element.parentElement?.querySelectorAll<HTMLElement>('.leaflet-bottom') ?? [],
+        )
+        // Catch a settling sheet where it is now, rather than letting its old
+        // transition continue underneath the finger until the drag threshold.
+        element.dataset.holding = 'true'
+        paint(visibleHeight, false)
         // Nearby/search lists may scroll inside .sheet-scroll. Check the entire
         // target ancestry so a scrolled nested list never dismisses the sheet.
         let scrolled = false
@@ -123,7 +148,7 @@ export function useSheetDrag({
         if (!current) return
         const delta = current.y - y
         if (!current.dragging) {
-            if (Math.max(Math.abs(delta), Math.abs(x - current.x)) < 6) return
+            if (Math.max(Math.abs(delta), Math.abs(x - current.x)) < 3) return
             if (
                 Math.abs(x - current.x) > Math.abs(delta) ||
                 (!current.handle &&
@@ -143,11 +168,9 @@ export function useSheetDrag({
         while (current.samples.length > 2 && current.samples[1]!.time < time - 80)
             current.samples.shift()
         const visibleHeight = Math.max(current.min, Math.min(current.max, current.height + delta))
-        cancelAnimationFrame(frame.current)
-        frame.current = requestAnimationFrame(() => {
-            frame.current = 0
-            paint(visibleHeight, true)
-        })
+        // Paint the latest finger position in this frame rather than enqueueing
+        // another animation frame before the layer can move.
+        paint(visibleHeight, true)
     })
     const finish = useEffectEvent((y: number) => {
         const current = gesture.current
@@ -246,6 +269,11 @@ export function useSheetDrag({
                 suppressClickUntil.current = 0
             }
         }
+        const settled = (event: TransitionEvent) => {
+            if (event.target !== element || event.propertyName !== 'transform') return
+            clearTimeout(settling.current)
+            delete element.dataset.settling
+        }
         element.addEventListener('touchstart', touchStart, { passive: true })
         element.addEventListener('touchmove', touchMove, { passive: false })
         element.addEventListener('touchend', touchEnd)
@@ -255,10 +283,13 @@ export function useSheetDrag({
         window.addEventListener('pointerup', pointerUp)
         element.addEventListener('pointercancel', cancelPointer)
         element.addEventListener('click', click, true)
+        element.addEventListener('transitionend', settled)
         window.addEventListener('blur', cancel)
         window.addEventListener('resize', cancel)
         return () => {
             cancel()
+            clearTimeout(settling.current)
+            delete element.dataset.settling
             element.removeEventListener('touchstart', touchStart)
             element.removeEventListener('touchmove', touchMove)
             element.removeEventListener('touchend', touchEnd)
@@ -268,6 +299,7 @@ export function useSheetDrag({
             window.removeEventListener('pointerup', pointerUp)
             element.removeEventListener('pointercancel', cancelPointer)
             element.removeEventListener('click', click, true)
+            element.removeEventListener('transitionend', settled)
             window.removeEventListener('blur', cancel)
             window.removeEventListener('resize', cancel)
         }
