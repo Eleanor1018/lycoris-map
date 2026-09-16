@@ -1,6 +1,6 @@
 # Lycoris Web v2（`frontend/`）
 
-Web v2 新工程，当前已完成 **S4 账号与收藏**：登录/注册/退出、资料、头像、改密、收藏、本人点位已接通 Rust 接口。温晓亲自编码，结合 Figma MCP 与 Computer Use 核对。当前仅供本机开发与验收，贡献提交和完整设置留在 S5–S6。
+Lycoris 的正式 Web 工程，已部署至 [lycoris-map.com](https://lycoris-map.com)。地图、搜索、账号、收藏、贡献、设置和管理功能使用 Rust 接口。温晓亲自编码，结合 Figma MCP 与 Computer Use 核对。自动部署及域名配置见 [Cloudflare 说明](deploy/cloudflare/README.md)。
 
 ## 环境与命令
 

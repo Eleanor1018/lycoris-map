@@ -4,15 +4,9 @@
 
 **Lycoris** is a platform offering **accessible facility information** and **community support information** for **transgender people**. 💗
 
-The project currently includes these pages:
+Production website: [lycoris-map.com](https://lycoris-map.com). The new Web app provides the map, nearby search, place details, bookmarks, contributions, accounts and settings, backed by Rust. The native iOS project is in `apps/ios/`; the React Native app is retained only as a historical reference.
 
-- Map: the **core of Lycoris**, where people can share accessible restrooms, trans-friendly clinics, baby care rooms, and other places.
-- Documents: currently featuring **Nora's HRT Guide**, written to share practical HRT experience and lessons learned in clear, approachable language.
-- About: the project's values, background, and contact details, explaining why we built this small light for our community.
-
-Lycoris provides a **web application** and a previously published React Native app. The old app source is now retained locally in preparation for a native rewrite.
-
-## Android APK download
+## Historical Android APK (legacy)
 
 [Download the Lycoris 1.0.1 Android APK](https://github.com/Eleanor1018/lycoris/releases/download/v1.0.1/Lycoris-v1.0.1.apk) · [SHA-256 checksum file](https://github.com/Eleanor1018/lycoris/releases/download/v1.0.1/Lycoris-v1.0.1.apk.sha256) · [Release notes](https://github.com/Eleanor1018/lycoris/releases/tag/v1.0.1)
 
@@ -22,12 +16,12 @@ This release is **Lycoris 1.0.1 (versionCode 3)** for **Android 7.0 and later**,
 
 The **1.0.3 test build (versionCode 2) from 2026-09-06, signed with the same certificate, can be updated directly** without uninstalling. This release displays version 1.0.1, while the `versionCode` Android uses to determine update order has increased from 2 to 3.
 
-JavaScript and document assets are bundled, so **Metro is not required**. The APK connects to the production API at `https://api.lycoris.online`; online features such as maps and accounts require a network connection.
+This historical APK is tied to `https://api.lycoris.online`. That backend has been retired, so use the new website instead; these download links are release archives.
 
 ## Built-in map features
 
 - Places: share accessible restrooms, friendly clinics, baby care rooms, and other places with names, photos, opening hours, and more.
-- Nearby search: find accessible restrooms and other places within 0–10,000 meters of your location.
+- Nearby search: find accessible restrooms and other places within a configurable radius of your location.
 - Favorites: save places to a personal list for easy access later.
 
 **New places and edits require administrator review to help prevent malicious changes. Thank you for understanding.**
@@ -50,11 +44,11 @@ If this small light helps someone through a difficult night, everything we have 
 
 Developer overview: [Rust backend guide (Chinese)](./backend/README.md).
 
-- `frontend`: new Web v2 project, React 19 + TypeScript 7 + Vite 8 + Tailwind 4 (S1 engineering foundation; pages incomplete)
-- `frontend-old`: archived legacy web app, React + MUI + Leaflet, kept for behaviour comparison and rollback; no new features
+- `frontend`: new Web v2 project, React 19 + TypeScript 7 + Vite 8 + Tailwind 4 (production Web app on Cloudflare Pages)
+- `frontend-old`: local-only legacy Web archive, removed from Git tracking and ignored; historical source remains in Git history
 - `backend`: Rust, Axum, and SQLx (default backend; no ORM)
-- `backend-old`: deprecated Java / Spring Boot source, retained for current production and rollback reference
-- `mobile`: legacy React Native app, retained locally; native rewrite pending
+- `backend-old`: retired Java / Spring Boot implementation, retained as historical source
+- `apps/ios`: native Swift / SwiftUI iOS app; legacy React Native `mobile/` is local-only
 - Database: PostgreSQL with PostGIS; Redis for sessions, caching, and rate limiting
 
 ## License
@@ -63,7 +57,7 @@ This project is open source under the [MIT License](./LICENSE).
 
 ## Clone and initialize
 
-This monorepo contains `backend` and `frontend`; `backend-old` holds legacy Java and `frontend-old` the archived legacy web app. The local `mobile/` tree is excluded from Git.
+This monorepo contains `backend`, `frontend` and `apps/ios`. `backend-old` holds legacy Java; `frontend-old/` and `mobile/` are local archives excluded from Git.
 
 ### 1. Prerequisites and source code
 
@@ -74,17 +68,17 @@ This monorepo contains `backend` and `frontend`; `backend-old` holds legacy Java
 | Database | Local Compose pins PostgreSQL 18.6 with PostGIS 3.6.4. Nearby queries use PostGIS candidate filtering and distance calculation. |
 | Cache and sessions | Local Compose pins Redis 8.10.1. Login sessions require Redis. |
 
-The examples check out `refactor/rust-backend`, which contains the features described in this README:
+The examples check out the main branch:
 
 ```bash
-git clone --branch refactor/rust-backend https://github.com/Eleanor1018/lycoris-map.git
+git clone --branch main https://github.com/Eleanor1018/lycoris-map.git
 cd lycoris-map
 ```
 
 For an existing checkout, switch to that branch and update it. Install dependencies and configure each machine separately; do not copy `node_modules` from another computer.
 
 ```bash
-git switch refactor/rust-backend
+git switch main
 git pull
 ```
 
@@ -92,7 +86,7 @@ Start each section below from the repository root. Keep the backend and web serv
 
 ### 2. Backend: Rust, database, and local startup
 
-**`backend/` (Axum + SQLx) is the repository and local default.** Legacy Java in `backend-old/` remains available for current production and rollback reference. This change does not switch the production API.
+**`backend/` (Axum + SQLx) is the repository and local default.** The production API at `https://api.lycoris-map.com` already runs on the new server. `backend-old/` is historical source; do not restart a writer on the obsolete database copy.
 
 Start PostgreSQL / PostGIS and Redis with Docker from the repository root:
 
@@ -137,7 +131,7 @@ Python development scripts and root `docs/` remain local and are excluded from G
 
 ### 3. Web: install dependencies and start Vite
 
-> **Current state: Web v2 is at the S1 engineering foundation.** The new project only contains the engineering shell and a backend-connectivity status screen; the full Figma pages arrive in later stages and this is not yet a usable product. For legacy behaviour, see [frontend-old](./frontend-old) (archived, no new features; its MUI/Cypress/legacy build commands apply to the old project only).
+> **`frontend/` is the sole production Web project.** Use it for development, testing and deployment. See the [Cloudflare deployment guide](./frontend/deploy/cloudflare/README.md).
 
 In a new terminal, start from the repository root:
 
@@ -160,34 +154,12 @@ pnpm test:unit
 
 Static output is written to `frontend/dist/`. The project has no ESLint or lint script; type boundaries are enforced by TypeScript 7 strict.
 
-### S1 development verification entries (not product pages; the S1 build is not deployable)
+### 3.1 Production deployment and development diagnostics
 
-S1 delivers only the engineering foundation and verification tools; the real map and account flows arrive in S2 and S4. The following paths are **included in the current S1 build output** (they are not dev-server-only and are not excluded from a production build), but are agreed to be used locally and not published, and they are not shippable features:
+Cloudflare Pages Git integration tracks `main`, builds from `frontend/` and publishes `dist/`. Tests and type checks must pass before publishing the assets and same-origin API proxy. Development branches produce previews; merging a PR updates production without a manual ZIP upload.
 
-| Path | Purpose |
-| --- | --- |
-| `/` | Status screen: backend `/health/live` and `/health/ready` connectivity with retry |
-| `/__dev/map-spike` | Map lifecycle verification: 200 fixed **synthetic** Shanghai points, a persistent Leaflet instance, language/panel/field-update/add-remove controls and an update cost reading |
-| `/__dev/qa` | Local browser diagnostics: a 375×812 fixed CSS viewport iframe preview plus a dev session form (real `/api/login`, `/api/me`, avatar Blob, `/api/logout`; no registration, no password change, no hardcoded credentials) |
+`/__dev/map-spike`, `/__dev/qa` and `/__dev/places-performance` load synthetic diagnostics only in development mode and are excluded from production. Existing local `frontend-old/` copies are retained; fresh clones omit this archive. Retrieve historical source from a commit before the cutover if needed.
 
-These diagnostics ship no deployment scripts, and the S1 build/static output is **not a deployable artefact**. Release and traffic switching belong to later tasks.
+### 4. Native apps
 
-### 3.1 Legacy web app (frontend-old, archived reference)
-
-`frontend-old` is the pre-refactor web app: React 19.2 + TypeScript 5.9 + Vite 7 + MUI + Leaflet, with Cypress specs. It exists only for rollback and behaviour comparison, and its install and build commands belong to that project:
-
-```bash
-cd frontend-old
-npm ci
-npm run dev
-npm run build
-npm run lint
-```
-
-Legacy notes about MUI components, Cypress end-to-end specs and the old `.env.local`/basemap key configuration apply to `frontend-old` only and do not affect the new `frontend`.
-
-### 4. App: preparing for a native rewrite
-
-The legacy React Native application remains in the local `mobile/` directory. Git ignores the entire directory, so fresh checkouts do not include it. Its previous development instructions remain locally in `mobile/README.md` and `mobile/IOS.md`.
-
-A native application rewrite is planned. This change only reorganizes the repository; it does not create a new native app project. The APK download information above remains as a reference for the previously published version.
+See [apps/ios/README.md](./apps/ios/README.md) for the native iOS project. Native Android development follows later. Git ignores the legacy `mobile/` tree; APK links above document historical releases only.
