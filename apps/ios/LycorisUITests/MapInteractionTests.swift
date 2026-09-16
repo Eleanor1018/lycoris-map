@@ -2,6 +2,35 @@ import XCTest
 
 @MainActor
 final class MapInteractionTests: XCTestCase {
+  func testAccessibilityTextKeepsDetailActionsReachable() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-AppleLanguages", "(en)", "-lycoris-preview", "details",
+      "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+    ]
+    app.launch()
+    let title = app.staticTexts["place.title"]
+    XCTAssertTrue(title.waitForExistence(timeout: 10))
+    XCTAssertGreaterThan(title.frame.height, 150)
+    let handle = app.buttons["map.panel.handle"]
+    handle.tap()
+    let expanded = XCTNSPredicateExpectation(
+      predicate: NSPredicate { object, _ in
+        guard let element = object as? XCUIElement else { return false }
+        return element.value as? String == "Expanded" && element.frame.minY < 100
+      }, object: handle)
+    XCTAssertEqual(XCTWaiter.wait(for: [expanded], timeout: 3), .completed)
+    let scroll = app.scrollViews["place.details"]
+    for _ in 0..<6 {
+      if app.buttons["Bookmark place"].isHittable { break }
+      scroll.swipeUp()
+    }
+    XCTAssertTrue(app.buttons["Share"].isHittable)
+    XCTAssertTrue(app.buttons["Navigate"].isHittable)
+    XCTAssertTrue(app.buttons["Bookmark place"].isHittable)
+    attach(app, name: "10-accessibility-detail-actions")
+  }
+
   func testBookmarkPreviewOpensAndDismissesDetails() throws {
     let app = XCUIApplication()
     app.launchArguments = [

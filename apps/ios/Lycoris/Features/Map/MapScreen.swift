@@ -35,7 +35,9 @@ struct MapScreen: View {
         bottomInset: geometry.safeAreaInsets.bottom,
         headerHeight: max(38, searchHeight) + 28,
         nearbyContentHeight: titleHeight + 8 + cardHeight * 2 + 12,
-        detailHeight: selectedPlace == nil ? nil : 406 + max(geometry.safeAreaInsets.bottom, 29)
+        detailHeight: selectedPlace == nil
+          ? nil
+          : 208 + (geometry.size.width - 50) * 198 / 353 + max(geometry.safeAreaInsets.bottom, 29)
       )
       let panelTop = layout.clampedTop(layout.top(for: detent) + dragTranslation)
       let panelHeight = layout.height(at: panelTop)

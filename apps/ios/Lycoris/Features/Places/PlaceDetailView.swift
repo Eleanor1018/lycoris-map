@@ -41,7 +41,7 @@ struct PlaceDetailView: View {
 
         let actionLayout =
           dynamicTypeSize.isAccessibilitySize
-          ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 12))
+          ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 14))
         actionLayout {
           actionLabel("Share", image: "PlaceShare", size: 20)
             .buttonStyle(.glass)
@@ -53,7 +53,7 @@ struct PlaceDetailView: View {
           }
           .buttonStyle(.plain).accessibilityLabel("Bookmark place")
         }
-        .padding(.horizontal, 16).padding(.top, 8)
+        .padding(.leading, 16).padding(.trailing, 22).padding(.top, 8)
         .padding(.bottom, max(bottomInset, 29))
       }
     }
