@@ -54,3 +54,22 @@ Cookie domain empty so the same-origin Pages proxy works. Do not reuse the
 local synthetic runtime or the release rehearsal Compose defaults in production.
 Complete read-only API/health checks and user-approved account verification
 after the service is ready.
+
+## Mobile sheet P0 hotfix — 2026-09-16
+
+Commit `eecff63` restores dragging from the panel header and content, expands the
+handle hit area to its full row, and separates touch cancellation from the
+browser's companion pointer cancellation. Expanded content retains native
+scrolling; a downward drag at the top collapses the panel. Form inputs retain
+native editing. Drag release uses bounded momentum and a short settling
+transition, with reduced-motion support. Interrupted gestures cancel cleanly;
+collapsing restores the content to the top and drag gestures do not click cards.
+
+Validation: all 233 frontend tests passed (including nine gesture regressions),
+strict TypeScript and the production build passed, and changed files passed
+format checks. Chrome's iPhone 16 Pro Max touch emulation verified the complete
+collapsed → half → full → half → collapsed sequence both locally and at the
+production custom domain. Physical-device Safari was not tested in this run.
+Cloudflare reported deployment success, and the live HTML references
+`index-DGjWsXvp.js` and `index-p4JTL1Pr.css`. Backend availability remains as
+recorded above; no backend or old-domain changes were part of this hotfix.
