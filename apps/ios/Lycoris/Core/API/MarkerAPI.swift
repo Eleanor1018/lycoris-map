@@ -13,6 +13,8 @@ struct Marker: Decodable, Equatable, Sendable {
   let openTimeEnd: String?
   let markImage: String?
   let contentLanguage: String
+  var isPublic: Bool? = nil
+  var reviewStatus: String? = nil
 
   var point: GeoPoint? { GeoPoint(latitude: lat, longitude: lng) }
 }
