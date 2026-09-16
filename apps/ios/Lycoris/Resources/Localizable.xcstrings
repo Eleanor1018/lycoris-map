@@ -1,0 +1,2557 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "All": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部"
+          }
+        }
+      }
+    },
+    "Search Type": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索类型"
+          }
+        }
+      }
+    },
+    "Explore": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "探索"
+          }
+        }
+      }
+    },
+    "Map Style": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地图样式"
+          }
+        }
+      }
+    },
+    "Satellite": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卫星"
+          }
+        }
+      }
+    },
+    "Search Maps": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search Maps"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索地图"
+          }
+        }
+      }
+    },
+    "Find Nearby": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find Nearby"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查找附近"
+          }
+        }
+      }
+    },
+    "Map panel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Map panel"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地图面板"
+          }
+        }
+      }
+    },
+    "Collapsed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collapsed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已收起"
+          }
+        }
+      }
+    },
+    "Nearby": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nearby"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "附近"
+          }
+        }
+      }
+    },
+    "Expanded": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expanded"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已展开"
+          }
+        }
+      }
+    },
+    "Account": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "账号"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Map source": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Map source"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地图来源"
+          }
+        }
+      }
+    },
+    "Current location": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current location"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前位置"
+          }
+        }
+      }
+    },
+    "Contribute": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contribute"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "贡献"
+          }
+        }
+      }
+    },
+    "Accessible Toilets": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accessible Toilets"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无障碍卫生间"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Nursing Rooms": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nursing Rooms"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "母婴室"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Medical Institutions": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medical Institutions"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "医疗机构"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Settings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置"
+          }
+        }
+      }
+    },
+    "Choose Language": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose Language"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择语言"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Searching Range": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Searching Range"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索范围"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Map Source": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Map Source"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地图来源"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "About Lycoris Maps": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About Lycoris Maps"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关于 Lycoris Maps"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Bookmarks": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bookmarks"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收藏"
+          }
+        }
+      }
+    },
+    "Place details": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Place details"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点位详情"
+          }
+        }
+      }
+    },
+    "Place photo": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Place photo"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点位照片"
+          }
+        }
+      }
+    },
+    "Edit place": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit place"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑点位"
+          }
+        }
+      }
+    },
+    "Bookmark place": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bookmark place"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收藏点位"
+          }
+        }
+      }
+    },
+    "Share": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分享"
+          }
+        }
+      }
+    },
+    "Navigate": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navigate"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导航"
+          }
+        }
+      }
+    },
+    "Not available yet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not available yet"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂不可用"
+          }
+        }
+      }
+    },
+    "OK": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "好"
+          }
+        }
+      }
+    },
+    "Voice search": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voice search"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音搜索"
+          }
+        }
+      }
+    },
+    "Places": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Places"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点位"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "The map service is not configured yet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The map service is not configured yet."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地图服务尚未配置。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "This place is no longer available.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This place is no longer available."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个点位已不可用。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Could not load places. Please try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not load places. Please try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法加载点位，请重试。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Straight-line distance from your location": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Straight-line distance from your location"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "距你当前位置的直线距离"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Straight-line distance from map center": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Straight-line distance from map center"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "距地图中心的直线距离"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Hours not provided": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hours not provided"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开放时间未提供"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Open 24 hours": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open 24 hours"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全天开放"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Search results": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search results"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索结果"
+          }
+        }
+      }
+    },
+    "Close results": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close results"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭结果"
+          }
+        }
+      }
+    },
+    "Around your location": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Around your location"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以你的位置为中心"
+          }
+        }
+      }
+    },
+    "Around map center": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Around map center"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以地图中心为准"
+          }
+        }
+      }
+    },
+    "Loading places…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading places…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在加载点位…"
+          }
+        }
+      }
+    },
+    "Try again": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重试"
+          }
+        }
+      }
+    },
+    "No places found.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No places found."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未找到点位。"
+          }
+        }
+      }
+    },
+    "Photo unavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photo unavailable"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图片暂时无法显示"
+          }
+        }
+      }
+    },
+    "Location unavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Location unavailable"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂时无法定位"
+          }
+        }
+      }
+    },
+    "You can browse the map without location access. To use your location, enable it in Settings and try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can browse the map without location access. To use your location, enable it in Settings and try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你仍可浏览地图。如需使用定位，请在系统设置中开启位置权限后重试。"
+          }
+        }
+      }
+    },
+    "Could not open Apple Maps": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not open Apple Maps"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法打开 Apple 地图"
+          }
+        }
+      }
+    },
+    "Login": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Login"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录"
+          }
+        }
+      }
+    },
+    "Register": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Register"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "注册"
+          }
+        }
+      }
+    },
+    "Email": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Email"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "邮箱"
+          }
+        }
+      }
+    },
+    "Username": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Username"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用户名"
+          }
+        }
+      }
+    },
+    "Email or Username": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Email or Username"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "邮箱或用户名"
+          }
+        }
+      }
+    },
+    "Password": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Password"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密码"
+          }
+        }
+      }
+    },
+    "Verification Code": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verification Code"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证码"
+          }
+        }
+      }
+    },
+    "Verification Code, not available yet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verification Code, not available yet"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证码，暂未启用"
+          }
+        }
+      }
+    },
+    "Verification is not enabled; no code is required.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verification is not enabled; no code is required."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证码暂未启用，无需填写。"
+          }
+        }
+      }
+    },
+    "No account? Register": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No account? Register"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有账号？注册"
+          }
+        }
+      }
+    },
+    "Already have an account? Login": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Already have an account? Login"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已有账号？登录"
+          }
+        }
+      }
+    },
+    "Close account": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close account"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭账号页面"
+          }
+        }
+      }
+    },
+    "OR": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OR"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "或"
+          }
+        }
+      }
+    },
+    "Continue with Apple": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue with Apple"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用 Apple 继续"
+          }
+        }
+      }
+    },
+    "Continue with Google": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue with Google"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用 Google 继续"
+          }
+        }
+      }
+    },
+    "Apple and Google login are not enabled yet. Please use your account password.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple and Google login are not enabled yet. Please use your account password."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple 和 Google 登录暂未启用，请使用账号密码登录。"
+          }
+        }
+      }
+    },
+    "Password is too short or too long. Use at least 4 characters, up to 72 bytes.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Password is too short or too long. Use at least 4 characters, up to 72 bytes."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密码过短或过长，请使用至少 4 个字符，最多 72 字节。"
+          }
+        }
+      }
+    },
+    "Could not reach the service. Please try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not reach the service. Please try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法连接服务，请重试。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Please log in again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Please log in again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请重新登录。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "This item is no longer available.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This item is no longer available."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此内容已不可用。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Your account changed. Reload it before trying again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your account changed. Reload it before trying again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "账号信息已变更，请重新加载后再试。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Choose a smaller photo.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a smaller photo."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择较小的照片。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Too many attempts. Please try again later.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too many attempts. Please try again later."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尝试次数过多，请稍后再试。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Check your details and try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check your details and try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请检查填写的信息后重试。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "The account service is not configured yet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The account service is not configured yet."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "账号服务尚未配置。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "The service is unavailable. Please try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The service is unavailable. Please try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务暂不可用，请重试。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "The username or password is incorrect.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The username or password is incorrect."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用户名或密码不正确。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Registration could not be confirmed. Your account may have been created; try logging in.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Registration could not be confirmed. Your account may have been created; try logging in."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚无法确认注册结果。账号可能已创建，请尝试登录。"
+          }
+        }
+      }
+    },
+    "Check your details. That username or email may already be in use.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check your details. That username or email may already be in use."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请检查填写的信息，用户名或邮箱可能已被使用。"
+          }
+        }
+      }
+    },
+    "Logout could not be confirmed. Please try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logout could not be confirmed. Please try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚无法确认是否已退出，请重试。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Password changed. Please log in again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Password changed. Please log in again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密码已修改，请重新登录。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Password changed.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Password changed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密码已修改。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Check your current password and the new password.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check your current password and the new password."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请检查当前密码和新密码。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "The password change could not be confirmed. Check your connection, then try logging in before retrying.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The password change could not be confirmed. Check your connection, then try logging in before retrying."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚无法确认密码修改结果。请检查网络，并先尝试登录后再决定是否重试。"
+          }
+        }
+      }
+    },
+    "Change avatar": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change avatar"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更换头像"
+          }
+        }
+      }
+    },
+    "Nickname": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nickname"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "昵称"
+          }
+        }
+      }
+    },
+    "Pronouns": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pronouns"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "代词"
+          }
+        }
+      }
+    },
+    "Signature": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signature"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "签名"
+          }
+        }
+      }
+    },
+    "Save": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存"
+          }
+        }
+      }
+    },
+    "Profile saved.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profile saved."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "资料已保存。"
+          }
+        }
+      }
+    },
+    "Maximum lengths: nickname 255, pronouns 64, signature 200.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maximum lengths: nickname 255, pronouns 64, signature 200."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "长度上限：昵称 255，代词 64，签名 200。"
+          }
+        }
+      }
+    },
+    "Change password": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Change password"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "修改密码"
+          }
+        }
+      }
+    },
+    "My Places": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "My Places"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我的点位"
+          }
+        }
+      }
+    },
+    "Log out": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log out"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出登录"
+          }
+        }
+      }
+    },
+    "Could not read that photo. Please choose another.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read that photo. Please choose another."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取照片，请选择其他照片。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Current password": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current password"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前密码"
+          }
+        }
+      }
+    },
+    "New password": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New password"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新密码"
+          }
+        }
+      }
+    },
+    "Confirm password": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm password"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认密码"
+          }
+        }
+      }
+    },
+    "Use at least 4 characters and no more than 72 UTF-8 bytes.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use at least 4 characters and no more than 72 UTF-8 bytes."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请使用至少 4 个字符，且不超过 72 个 UTF-8 字节。"
+          }
+        }
+      }
+    },
+    "The new passwords do not match.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The new passwords do not match."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "两次输入的新密码不一致。"
+          }
+        }
+      }
+    },
+    "No places yet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No places yet."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无点位。"
+          }
+        }
+      }
+    },
+    "No bookmarks yet.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No bookmarks yet."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无收藏。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Public": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Public"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公开"
+          }
+        }
+      }
+    },
+    "Private": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Private"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私有"
+          }
+        }
+      }
+    },
+    "Approved": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Approved"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已通过"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Pending review": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pending review"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待审核"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Rejected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rejected"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未通过"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Unknown review status": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown review status"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "审核状态未知"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Remove bookmark": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove bookmark"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消收藏"
+          }
+        }
+      }
+    },
+    "Done": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Done"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
+          }
+        }
+      }
+    },
+    "Password changed, but the session could not be checked. Please check your connection.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Password changed, but the session could not be checked. Please check your connection."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密码已修改，但暂时无法核验会话。请检查网络。"
+          }
+        }
+      }
+    },
+    "Could not save your session securely. Please try again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not save your session securely. Please try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法安全保存会话，请重试。"
+          }
+        }
+      },
+      "extractionState": "manual"
+    },
+    "Add opening hours": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加开放时间"
+          }
+        }
+      }
+    },
+    "Another account action is still running. Please try again.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "账号操作尚未结束，请稍后重试。"
+          }
+        }
+      }
+    },
+    "Category": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "类别"
+          }
+        }
+      }
+    },
+    "Choose location": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择位置"
+          }
+        }
+      }
+    },
+    "Close": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭"
+          }
+        }
+      }
+    },
+    "Closing Time": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭时间"
+          }
+        }
+      }
+    },
+    "Could not clear the saved contribution.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法清除本机保存的贡献。"
+          }
+        }
+      }
+    },
+    "Could not prepare or save the photo. Please try another image.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法处理或保存照片，请尝试其他图片。"
+          }
+        }
+      }
+    },
+    "Could not read the saved contribution.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取已保存的贡献。"
+          }
+        }
+      }
+    },
+    "Could not save or verify the contribution. Please try again.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法保存或确认贡献，请重试。"
+          }
+        }
+      }
+    },
+    "Could not save the contribution on this device.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法在此设备上保存贡献。"
+          }
+        }
+      }
+    },
+    "Description": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "描述"
+          }
+        }
+      }
+    },
+    "Discard": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "舍弃"
+          }
+        }
+      }
+    },
+    "Discard saved contribution…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "舍弃已保存的贡献…"
+          }
+        }
+      }
+    },
+    "Discard this saved contribution?": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "舍弃这份已保存的贡献？"
+          }
+        }
+      }
+    },
+    "Location": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位置"
+          }
+        }
+      }
+    },
+    "Matching opening and closing times mean open 24 hours.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开放和关闭时间相同表示全天开放。"
+          }
+        }
+      }
+    },
+    "Opening Time": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开放时间"
+          }
+        }
+      }
+    },
+    "Photo upload": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上传照片"
+          }
+        }
+      }
+    },
+    "Photos are submitted for review. Interrupted uploads resume when you return to the app.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "照片提交后需要审核。返回应用后会继续未完成的上传。"
+          }
+        }
+      }
+    },
+    "Please choose the photo again. Your place submission is saved.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请重新选择照片。点位提交记录已保存。"
+          }
+        }
+      }
+    },
+    "Preparing photo…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在处理照片…"
+          }
+        }
+      }
+    },
+    "Remove opening hours": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除开放时间"
+          }
+        }
+      }
+    },
+    "Remove photo": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除照片"
+          }
+        }
+      }
+    },
+    "Replace photo": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更换照片"
+          }
+        }
+      }
+    },
+    "Resend edit": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新提交编辑"
+          }
+        }
+      }
+    },
+    "Resend edit…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新提交编辑…"
+          }
+        }
+      }
+    },
+    "Resend this edit?": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新提交这次编辑？"
+          }
+        }
+      }
+    },
+    "Saved on this device. Submission will resume when the connection returns.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保存在此设备，网络恢复后将继续提交。"
+          }
+        }
+      }
+    },
+    "Selected photo": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选照片"
+          }
+        }
+      }
+    },
+    "Submit": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提交"
+          }
+        }
+      }
+    },
+    "Submitted for review": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已提交，等待审核"
+          }
+        }
+      }
+    },
+    "Submitting…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在提交…"
+          }
+        }
+      }
+    },
+    "The edit could not be confirmed. It may already be awaiting review.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法确认编辑结果，它可能已经在等待审核。"
+          }
+        }
+      }
+    },
+    "The previous submission may have succeeded. Resending can create a duplicate proposal.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次提交可能已经成功，重新提交可能产生重复提案。"
+          }
+        }
+      }
+    },
+    "The saved photo is unavailable. Please choose it again.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本机保存的照片不可用，请重新选择。"
+          }
+        }
+      }
+    },
+    "This removes the local draft and photo. Anything already submitted remains awaiting review.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这会移除本机草稿和照片。已提交的内容仍将等待审核。"
+          }
+        }
+      }
+    },
+    "Title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "标题"
+          }
+        }
+      }
+    },
+    "Your contribution will appear after it is approved.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "贡献通过审核后才会显示。"
+          }
+        }
+      }
+    },
+    "Move the map to choose a location.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移动地图以选择位置。"
+          }
+        }
+      }
+    },
+    "Use this location": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用此位置"
+          }
+        }
+      }
+    },
+    "Upload Photo (Optional)": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上传照片（可选）"
+          }
+        }
+      }
+    },
+    "Apple Maps": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple 地图"
+          }
+        }
+      }
+    },
+    "Distance in meters": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "距离（米）"
+          }
+        }
+      }
+    },
+    "Apply": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用"
+          }
+        }
+      }
+    },
+    "Enter a distance from 1 to 50,000 meters.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请输入 1 至 50,000 米之间的距离。"
+          }
+        }
+      }
+    },
+    "The map and walking directions use Apple Maps. Attribution appears on the map.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地图与步行导航使用 Apple 地图，来源署名显示在地图上。"
+          }
+        }
+      }
+    },
+    "A simple map for finding accessible toilets, nursing rooms, and medical institutions.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一款简洁的地图，帮你找到无障碍卫生间、母婴室和医疗机构。"
+          }
+        }
+      }
+    },
+    "Shared Lycoris links open places in the installed app. Place availability depends on your access.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lycoris 分享链接在已安装的 App 中打开点位，是否可见取决于你的访问权限。"
+          }
+        }
+      }
+    },
+    "Place unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点位不可用"
+          }
+        }
+      }
+    },
+    "Audio stays on this device. Only the confirmed search text is sent to Lycoris.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音频仅在此设备上处理，确认后的搜索文字才会发送给 Lycoris。"
+          }
+        }
+      }
+    },
+    "Stop recording": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止录音"
+          }
+        }
+      }
+    },
+    "Start recording": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开始录音"
+          }
+        }
+      }
+    },
+    "Use keyboard": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用键盘"
+          }
+        }
+      }
+    },
+    "Open Settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开设置"
+          }
+        }
+      }
+    },
+    "Ready to listen": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "准备聆听"
+          }
+        }
+      }
+    },
+    "Waiting for permission…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待授权…"
+          }
+        }
+      }
+    },
+    "Listening…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在聆听…"
+          }
+        }
+      }
+    },
+    "Ready to search": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可以开始搜索"
+          }
+        }
+      }
+    },
+    "On-device speech recognition is unavailable. Please use the keyboard.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此设备暂不支持离线语音识别，请使用键盘输入。"
+          }
+        }
+      }
+    },
+    "Allow microphone and speech recognition access in Settings, or use the keyboard.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请在系统设置中允许麦克风和语音识别权限，或使用键盘输入。"
+          }
+        }
+      }
+    },
+    "Could not recognize speech. Try again or use the keyboard.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未能识别语音，请重试或使用键盘输入。"
+          }
+        }
+      }
+    },
+    "Could not get your location. You can try again or browse around the map center.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂时无法获取位置。你可以重试，或浏览地图中心附近。"
+          }
+        }
+      }
+    },
+    "Could not open place link": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法打开点位链接"
+          }
+        }
+      }
+    },
+    "Check the link and close any open sheet before trying again.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请检查链接，并关闭当前弹出的页面后重试。"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

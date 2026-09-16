@@ -1,0 +1,7 @@
+#include "Base.xcconfig"
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG
+SWIFT_OPTIMIZATION_LEVEL = -Onone
+// Loopback reaches the Mac from the simulator, not from a physical iPhone.
+LYCORIS_API_BASE_URL = http:/$()/127.0.0.1:8080
+INFOPLIST_FILE = Config/Debug-Info.plist
+#include? "Local.xcconfig"

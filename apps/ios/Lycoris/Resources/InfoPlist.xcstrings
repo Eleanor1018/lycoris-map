@@ -1,0 +1,57 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "NSLocationWhenInUseUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use your location to find nearby places and center the map."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用你的位置查找附近点位，并将地图移至当前位置。"
+          }
+        }
+      }
+    },
+    "NSMicrophoneUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use the microphone only when you start voice search."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅在你开始语音搜索时使用麦克风。"
+          }
+        }
+      }
+    },
+    "NSSpeechRecognitionUsageDescription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recognize your search on this device without sending audio to a server."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在此设备上识别你的搜索语音，不将音频发送到服务器。"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}
