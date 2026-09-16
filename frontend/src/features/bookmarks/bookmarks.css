@@ -21,9 +21,10 @@
     position: relative;
     margin-top: -24px;
     padding: 29px 11px 27px;
-    min-height: calc(100dvh - 54px);
+    min-height: calc(100dvh - 46px);
 }
 .mobile-saved-content .saved-mobile-title {
+    padding-right: 44px;
     display: block;
     margin: 0;
     font: 500 28px/20px var(--ui-font-logo);

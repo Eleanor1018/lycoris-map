@@ -517,7 +517,7 @@
         height 180ms ease-out,
         bottom 180ms ease-out;
     position: absolute;
-    bottom: env(safe-area-inset-bottom, 0px);
+    bottom: 0;
     left: 0;
     right: 0;
     height: min(158px, calc(100dvh - 46px));
@@ -531,12 +531,11 @@
     height: min(320px, calc(100dvh - 46px));
 }
 .mobile-sheet[data-snap='full'] {
-    height: calc(100dvh - 54px - env(safe-area-inset-bottom, 0px));
-    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    height: calc(100dvh - 46px);
 }
 .mobile-sheet.mobile-detail {
     height: min(433px, calc(100dvh - 46px));
-    bottom: env(safe-area-inset-bottom, 0px);
+    bottom: 0;
 }
 .sheet-handle {
     position: absolute;
@@ -546,6 +545,14 @@
     height: 24px;
     z-index: 2;
     touch-action: none;
+}
+.mobile-sheet-close {
+    position: absolute;
+    top: 17px;
+    right: calc(var(--mobile-content-inset) - 10px);
+    width: 44px;
+    height: 44px;
+    z-index: 3;
 }
 .sheet-handle span {
     position: absolute;
@@ -570,6 +577,7 @@
 .sheet-scroll {
     position: absolute;
     inset: 24px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: none;
@@ -738,7 +746,7 @@
     position: absolute;
     top: 29px;
     left: var(--mobile-content-inset);
-    right: calc(var(--mobile-content-inset) + 24px);
+    right: calc(var(--mobile-content-inset) + 58px);
     height: 40px;
     margin: 0;
     font: 500 20px/20px var(--ui-font-logo);
@@ -748,7 +756,7 @@
 }
 .mobile-place-edit {
     position: absolute;
-    right: var(--mobile-content-inset);
+    right: calc(var(--mobile-content-inset) + 34px);
     top: 29px;
     width: 20px;
     height: 20px;
@@ -803,9 +811,7 @@
     top: 152px;
 }
 .map-shell[data-mobile='true'] .leaflet-bottom {
-    bottom: calc(
-        var(--sheet-height) + var(--sheet-gap, 0px) + 4px + env(safe-area-inset-bottom, 0px)
-    );
+    bottom: calc(var(--sheet-height) + 4px);
 }
 .map-shell[data-mobile='true'] {
     --sheet-height: min(158px, calc(100dvh - 46px));
@@ -814,12 +820,10 @@
     --sheet-height: min(320px, calc(100dvh - 46px));
 }
 .map-shell[data-mobile='true'][data-snap='full'] {
-    --sheet-height: calc(100dvh - 54px - env(safe-area-inset-bottom, 0px));
-    --sheet-gap: 8px;
+    --sheet-height: calc(100dvh - 46px);
 }
 .map-shell[data-mobile='true'][data-panel='details'] {
     --sheet-height: min(433px, calc(100dvh - 46px));
-    --sheet-gap: 0px;
 }
 @media (max-width: 374px) {
     .mobile-sheet .category-card {

@@ -53,12 +53,8 @@ export function useSheetDrag({
             return
         const scroll = element.querySelector<HTMLElement>('.sheet-scroll')
         const viewport = element.parentElement?.getBoundingClientRect().height || window.innerHeight
-        const safeBottom = Math.max(
-            0,
-            (parseFloat(getComputedStyle(element).bottom) || 0) -
-                (snap === 'full' && !element.classList.contains('mobile-detail') ? 8 : 0),
-        )
-        const max = Math.max(1, viewport - 54 - safeBottom)
+        const bottom = Math.max(0, parseFloat(getComputedStyle(element).bottom) || 0)
+        const max = Math.max(1, viewport - 46 - bottom)
         gesture.current = {
             id,
             x,

@@ -151,7 +151,7 @@ it('shows legacy phone search results immediately, and restores a virtualized fa
     const offset = list.scrollTop
     fireEvent.click(last)
     await screen.findByRole('heading', { name: 'Synthetic place 300' })
-    fireEvent.click(screen.getByRole('button', { name: 'Close details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
     const restored = await screen.findByRole('button', { name: /^Synthetic place 300\s*08:00/ })
     await waitFor(() => expect(restored).toHaveFocus())
     expect(screen.getByRole('list', { name: 'Search Results' }).scrollTop).toBe(offset)
@@ -260,7 +260,7 @@ it('restores the phone Nearby category, scroll and focused title after viewing a
     fireEvent.scroll(list, { target: { scrollTop: 400 } })
     fireEvent.click(within(list).getByRole('button', { name: 'Synthetic place 3' }))
     await screen.findByRole('heading', { name: 'Synthetic place 3' })
-    fireEvent.click(screen.getByRole('button', { name: 'Close details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
     const restored = await screen.findByRole('list', { name: 'Nursing Rooms in 1km' })
     expect(restored.scrollTop).toBe(400)
     expect(within(restored).getByRole('button', { name: 'Synthetic place 3' })).toHaveFocus()
@@ -288,7 +288,7 @@ it('windows a long Nearby list and restores a far item after mobile detail witho
     const offset = list.scrollTop
     fireEvent.click(last)
     await screen.findByRole('heading', { name: 'Synthetic place 500' })
-    fireEvent.click(screen.getByRole('button', { name: 'Close details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
     await waitFor(() =>
         expect(
             within(screen.getByRole('list', { name: 'Nursing Rooms in 1km' })).getByRole('button', {
@@ -352,7 +352,7 @@ it('keeps End and the return target visible when measured Nearby cards exceed th
     const offset = list.scrollTop
     fireEvent.click(last)
     await screen.findByRole('heading', { name: 'Synthetic place 500' })
-    fireEvent.click(screen.getByRole('button', { name: 'Close details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
     const restored = await screen.findByRole('list', { name: 'Accessible Toilets in 1km' })
     await waitFor(() =>
         expect(within(restored).getByRole('button', { name: 'Synthetic place 500' })).toHaveFocus(),
@@ -391,4 +391,37 @@ it('uses a saved range and radar category while the category cards remain explic
             ),
         ).toBe(true),
     )
+})
+
+it.each([
+    ['Choose Language English', 'Languages'],
+    ['Searching Range 1km', 'Range'],
+    ['Searching Type Toilet', 'Category'],
+    ['Map Source OSM', 'Map Source'],
+    ['About Lycoris Maps', 'About'],
+])('closes the phone %s option and restores the main menu', async (option, title) => {
+    const { container } = app('/?lang=en&snap=full', true)
+    const map = container.querySelector('.leaflet-container')
+    fireEvent.click(screen.getByRole('button', { name: option }))
+    expect(screen.getByRole('heading', { name: title })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
+    await waitFor(() =>
+        expect(screen.queryByRole('heading', { name: title })).not.toBeInTheDocument(),
+    )
+    expect(screen.getByRole('button', { name: option })).toHaveFocus()
+    expect(document.getElementById('map-shell')).toHaveAttribute('data-snap', 'full')
+    expect(container.querySelector('.leaflet-container')).toBe(map)
+})
+it('closes phone Nearby back to its original menu height without remounting the map', async () => {
+    const { container } = app('/?lang=en&snap=half', true)
+    const map = container.querySelector('.leaflet-container')
+    fireEvent.click(screen.getByRole('button', { name: 'Find nearby' }))
+    await screen.findByRole('heading', { name: 'Nearby' })
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
+    await waitFor(() =>
+        expect(screen.queryByRole('heading', { name: 'Nearby' })).not.toBeInTheDocument(),
+    )
+    expect(document.getElementById('map-shell')).toHaveAttribute('data-snap', 'half')
+    expect(screen.getByRole('button', { name: 'Find nearby' })).toHaveFocus()
+    expect(container.querySelector('.leaflet-container')).toBe(map)
 })

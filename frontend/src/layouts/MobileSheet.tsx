@@ -161,6 +161,14 @@ export function MobileSheet({
             >
                 <span />
             </DesignButton>
+            {(secondary || detail) && (
+                <IconButton
+                    className="mobile-sheet-close"
+                    icon="close"
+                    label="Close panel"
+                    onClick={close}
+                />
+            )}
             <div
                 className="sheet-scroll"
                 key={

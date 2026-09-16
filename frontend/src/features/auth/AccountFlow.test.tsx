@@ -242,3 +242,29 @@ it('shows own private places without publishing them into the map', async () => 
     expect(screen.getByText(/Private · pending/)).toBeInTheDocument()
     expect(screen.getByTestId('persistent-map')).toBeEmptyDOMElement()
 })
+
+it.each(['login', 'register'])(
+    'closes the mobile %s window with its visible cross',
+    async (view) => {
+        vi.stubGlobal('matchMedia', () => ({
+            matches: true,
+            addEventListener: () => {},
+            removeEventListener: () => {},
+        }))
+        setup()
+        await openAccount()
+        if (view === 'register')
+            fireEvent.click(screen.getByRole('button', { name: 'Register Here.' }))
+        fireEvent.change(screen.getByLabelText('Password', { exact: true }), {
+            target: { value: 'synthetic-draft' },
+        })
+        const close = screen.getByRole('button', { name: 'Close account window' })
+        expect(close.querySelector('img')).not.toBeNull()
+        fireEvent.click(close)
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+        await openAccount()
+        expect(screen.getByLabelText('Password', { exact: true })).toHaveValue('')
+        expect(api.login).not.toHaveBeenCalled()
+        expect(api.register).not.toHaveBeenCalled()
+    },
+)

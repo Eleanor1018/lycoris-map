@@ -213,7 +213,7 @@
 }
 .account-mobile {
     top: 46px;
-    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    bottom: 0;
     left: 0;
     right: 0;
     border-radius: 10px 10px 0 0;
@@ -230,9 +230,16 @@ body:has(.account-mobile) .mobile-sheet {
 .account-mobile .account-dialog-inner {
     align-items: stretch;
     min-height: 0;
-    padding: 5px 11px 27px;
+    padding: 5px 11px calc(27px + env(safe-area-inset-bottom, 0px));
+}
+.account-mobile .account-close {
+    top: 17px;
+    right: 1px;
+    width: 44px;
+    height: 44px;
 }
 .account-mobile h2 {
+    padding-right: 44px;
     font-size: 28px;
     line-height: 20px;
 }

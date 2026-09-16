@@ -79,9 +79,10 @@
     gap: 7px;
 }
 .mobile-nearby-results {
-    inset: 0 var(--mobile-content-inset) 11px;
+    inset: 0 var(--mobile-content-inset) calc(11px + env(safe-area-inset-bottom, 0px));
 }
 .mobile-nearby-results .nearby-title {
+    padding-right: 44px;
     flex: none;
     margin: 5px 0 24px;
     color: var(--ui-brand-deep);

@@ -55,16 +55,22 @@ export function AccountDialog({
                     }}
                     onEscapeKeyDown={(event) => event.stopPropagation()}
                 >
+                    {mobile && (
+                        <Dialog.Close asChild>
+                            <DesignButton
+                                className="account-sheet-handle"
+                                aria-label={ui.text('Close panel')}
+                            >
+                                <span />
+                            </DesignButton>
+                        </Dialog.Close>
+                    )}
                     <Dialog.Close asChild>
                         <DesignButton
-                            className={mobile ? 'account-sheet-handle' : 'account-close'}
+                            className="account-close"
                             aria-label={ui.text('Close account window')}
                         >
-                            {mobile ? (
-                                <span />
-                            ) : (
-                                <img src={closeIcon} alt="" width={24} height={24} />
-                            )}
+                            <img src={closeIcon} alt="" width={24} height={24} />
                         </DesignButton>
                     </Dialog.Close>
                     <div className="account-dialog-scroll">

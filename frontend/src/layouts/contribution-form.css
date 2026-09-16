@@ -164,8 +164,8 @@
     top: 9px;
 }
 .mobile-sheet.mobile-contribution {
-    height: calc(100dvh - 54px - env(safe-area-inset-bottom, 0px));
-    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    height: calc(100dvh - 46px);
+    bottom: 0;
 }
 .contribution-form-mobile {
     min-height: 758px;
@@ -327,18 +327,14 @@
     opacity: 1;
 }
 .mobile-sheet.mobile-contribution {
-    max-height: calc(
-        var(--contribution-viewport-height, 100dvh) - 54px - env(safe-area-inset-bottom, 0px)
-    );
-    bottom: calc(var(--contribution-keyboard-offset, 0px) + 8px + env(safe-area-inset-bottom, 0px));
+    max-height: calc(var(--contribution-viewport-height, 100dvh) - 46px);
+    bottom: var(--contribution-keyboard-offset, 0px);
 }
 .mobile-contribution .sheet-scroll {
     scroll-padding: 16px;
 }
 @media (max-height: 480px) {
     .mobile-sheet.mobile-contribution {
-        max-height: calc(
-            var(--contribution-viewport-height, 100dvh) - 16px - env(safe-area-inset-bottom, 0px)
-        );
+        max-height: calc(var(--contribution-viewport-height, 100dvh) - 8px);
     }
 }

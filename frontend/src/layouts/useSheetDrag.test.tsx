@@ -23,7 +23,7 @@ function Harness({
                 ref={sheet}
                 data-testid="sheet"
                 data-snap={snap}
-                style={{ height: height ?? { collapsed: 158, half: 320, full: 746 }[snap] }}
+                style={{ height: height ?? { collapsed: 158, half: 320, full: 754 }[snap] }}
             >
                 <button className="sheet-handle" onClick={action}>
                     Handle

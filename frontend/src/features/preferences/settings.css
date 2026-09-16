@@ -55,9 +55,10 @@
     overflow-wrap: anywhere;
 }
 .mobile-preferences {
-    margin: 29px var(--mobile-content-inset) 22px;
+    margin: 5px var(--mobile-content-inset) 22px;
 }
 .mobile-preferences h1 {
+    padding-right: 44px;
     font: 400 32px/1.2 var(--ui-font-heading);
     letter-spacing: 0.1px;
     margin: 0 0 22px;

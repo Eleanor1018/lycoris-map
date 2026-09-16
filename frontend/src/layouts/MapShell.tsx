@@ -84,9 +84,9 @@ export function MapShell({
         (panel === 'details'
             ? Math.min(433, viewportHeight - 46)
             : snap === 'full'
-              ? viewportHeight - 54
+              ? viewportHeight - 46
               : Math.min(snap === 'half' ? 320 : 158, viewportHeight - 46))
-    const sheetTop = viewportHeight - sheetHeight - (panel !== 'details' && snap === 'full' ? 8 : 0)
+    const sheetTop = viewportHeight - sheetHeight
     const setSnap = (next: Snap) => {
         const nextParams = new URLSearchParams(location.search)
         nextParams.set(mobileFixture ? 'screen' : 'snap', next)

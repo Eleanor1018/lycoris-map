@@ -80,7 +80,7 @@
 }
 .mobile-sheet[data-snap='full'] .mobile-search-content.has-place-results {
     padding: 0;
-    height: calc(100dvh - 54px - env(safe-area-inset-bottom, 0px));
+    height: calc(100dvh - 46px - env(safe-area-inset-bottom, 0px));
 }
 .mobile-place-results {
     top: 131px;
@@ -170,7 +170,7 @@
     position: static;
     height: auto;
     min-height: 40px;
-    padding-right: 24px;
+    padding-right: 58px;
     overflow-wrap: anywhere;
 }
 .mobile-detail .live-mobile-detail .place-meta {
