@@ -478,7 +478,6 @@ export function MapShell({
                             ? editPlace
                             : undefined
                     }
-                    openSettings={open}
                     secondaryLabel={
                         isSettingsPanel(panel)
                             ? settingsTitles[panel]
@@ -488,7 +487,7 @@ export function MapShell({
                     }
                     secondary={
                         isSettingsPanel(panel) ? (
-                            <SettingsContent panel={panel} open={open} mobile />
+                            <SettingsContent panel={panel} mobile />
                         ) : panel === 'nearby' && browse ? (
                             <NearbyResults browse={browse} onSelect={selectPlace} mobile />
                         ) : panel === 'bookmarks' && browse && !sample ? (

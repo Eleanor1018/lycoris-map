@@ -366,7 +366,7 @@ it('keeps a chosen phone language after closing the panel and updates the real r
     fireEvent.click(screen.getByRole('button', { name: 'Choose Language English' }))
     fireEvent.click(screen.getByRole('radio', { name: '简体中文' }))
     expect(document.documentElement.lang).toBe('zh-CN')
-    fireEvent.click(screen.getByRole('button', { name: '关闭语言设置' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     await screen.findByRole('button', { name: '选择语言 简体中文' })
     expect(container.querySelector('.leaflet-container')).toBe(map)
     await waitFor(() =>
@@ -403,8 +403,10 @@ it.each([
     const { container } = app('/?lang=en&snap=full', true)
     const map = container.querySelector('.leaflet-container')
     fireEvent.click(screen.getByRole('button', { name: option }))
-    expect(screen.getByRole('heading', { name: title })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
+    const popup = screen.getByRole('dialog', { name: title })
+    expect(popup).toBeInTheDocument()
+    expect(screen.getByTestId('route')).toHaveTextContent('?lang=en&snap=full')
+    fireEvent.click(within(popup).getByRole('button', { name: 'Close panel' }))
     await waitFor(() =>
         expect(screen.queryByRole('heading', { name: title })).not.toBeInTheDocument(),
     )

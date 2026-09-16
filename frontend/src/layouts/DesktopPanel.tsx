@@ -108,7 +108,7 @@ export function DesktopPanel(props: Props) {
                     )}
                 </>
             )}
-            {isSettingsPanel(panel) && <SettingsContent panel={panel} open={open} />}
+            {isSettingsPanel(panel) && <SettingsContent panel={panel} />}
             {panel === 'details' && (
                 <>
                     <IconButton

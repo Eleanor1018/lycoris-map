@@ -1,5 +1,4 @@
 import { SettingsRows } from '@/features/preferences/Settings'
-import type { Panel } from './types'
 import { useUi } from '@/shared/i18n/ui'
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { FigmaIcon } from '@/shared/ui/figma-icon'
@@ -34,7 +33,6 @@ export function MobileSheet({
     secondaryLabel = 'Bookmarks',
     openBookmarks,
     showBookmarks,
-    openSettings,
     editPlace,
 }: {
     snap: Snap
@@ -53,7 +51,6 @@ export function MobileSheet({
     chooseCategory?: ((category: 'toilet' | 'nursing' | 'medical') => void) | undefined
     secondaryLabel?: string
     secondary?: ReactNode
-    openSettings: (panel: Panel, focusId?: string) => void
     openBookmarks?: (() => void) | undefined
     showBookmarks: boolean
     editPlace?: (() => void) | undefined
@@ -330,7 +327,7 @@ export function MobileSheet({
                                 <h2 className="mobile-section-heading mobile-settings-heading">
                                     <span>{ui.text('Settings')}</span>
                                 </h2>
-                                <SettingsRows mobile open={openSettings} />
+                                <SettingsRows mobile />
                             </div>
                         )}
                     </div>
