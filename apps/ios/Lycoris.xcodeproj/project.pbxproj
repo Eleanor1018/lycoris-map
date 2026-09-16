@@ -23,6 +23,7 @@
 		7194A3F7997A23E0DEEA0320 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
 		77EB3AD38D803EC3C3DF9309 /* LycorisTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LycorisTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C2B6AF95E5FB6AF04547C8EA /* Lycoris.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Lycoris.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		602E0EB2F3D0114BFD17840F /* Test.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Test.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -62,6 +63,7 @@
 				20FE01F4FDC69033CBD3D0CC /* Debug.xcconfig */,
 				295E1CE0161A73DBAF3BD01A /* Release.xcconfig */,
 				7194A3F7997A23E0DEEA0320 /* Base.xcconfig */,
+				602E0EB2F3D0114BFD17840F /* Test.xcconfig */,
 			);
 			path = Config;
 			sourceTree = "<group>";
@@ -350,6 +352,57 @@
 			};
 			name = Release;
 		};
+		95F992C65D42D767CACC7D4A /* Test */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lycoris.maps.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Lycoris.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Lycoris";
+			};
+			name = Test;
+		};
+		049AA259E55B10E2D642F47A /* Test */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 602E0EB2F3D0114BFD17840F /* Test.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+			};
+			name = Test;
+		};
+		CBC4134EDACDB2F08DD3E56B /* Test */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lycoris.maps.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Lycoris;
+			};
+			name = Test;
+		};
+		B697755DF106C0BF6274FC55 /* Test */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG LYCORIS_LOCAL_TESTS";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Test;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -357,6 +410,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				BFD315016DE16320F7E2120C /* Debug */,
+				B697755DF106C0BF6274FC55 /* Test */,
 				1D8C0C6B1D22EA8C7669B263 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
@@ -366,6 +420,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				3A77CD648711364E9A877D62 /* Debug */,
+				049AA259E55B10E2D642F47A /* Test */,
 				066776A1C212750E8BE506A2 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
@@ -375,6 +430,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				651D637619756FF1A8400F67 /* Debug */,
+				CBC4134EDACDB2F08DD3E56B /* Test */,
 				93D1ABD72F8ECFF4A5798A0D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
@@ -384,6 +440,7 @@
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				34BE6D4215B8B1C254345416 /* Debug */,
+				95F992C65D42D767CACC7D4A /* Test */,
 				FADCA9E4220DCCB4910052B3 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;

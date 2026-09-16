@@ -1,0 +1,7 @@
+#include "Base.xcconfig"
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = $(inherited) DEBUG LYCORIS_LOCAL_TESTS
+SWIFT_OPTIMIZATION_LEVEL = -Onone
+INFOPLIST_FILE = Config/Debug-Info.plist
+// Fixture tests must stay on loopback, including cold deep-link launches.
+// Deliberately do not include Local.xcconfig.
+LYCORIS_API_BASE_URL = http:/$()/127.0.0.1:8080

@@ -1,7 +1,7 @@
 import XCTest
 
 @MainActor
-final class MapInteractionTests: XCTestCase {
+final class MapInteractionTests: LocalBackendTestCase {
   func testAccessibilityTextKeepsDetailActionsReachable() {
     let app = XCUIApplication()
     app.launchArguments = [

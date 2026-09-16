@@ -1,6 +1,6 @@
 import XCTest
 
-@MainActor final class ContributionFlowTests: XCTestCase {
+@MainActor final class ContributionFlowTests: LocalBackendTestCase {
   private let base = URL(string: "http://127.0.0.1:8080")!
   private struct Fixture: Codable {
     let username: String
