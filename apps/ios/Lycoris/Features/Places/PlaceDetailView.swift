@@ -8,6 +8,7 @@ struct PlaceDetailView: View {
   var onRetry: () -> Void = {}
   var onShare: () -> Void = {}
   var onNavigate: () -> Void = {}
+  var onEdit: () -> Void = {}
   var isBookmarked = false
   var bookmarkBusy = false
   var onBookmark: (() -> Void)? = nil
@@ -25,11 +26,13 @@ struct PlaceDetailView: View {
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("place.title")
-          Button(action: onUnavailableAction) {
+          Button(action: onEdit) {
             Image("PlaceEdit").resizable().frame(width: 20, height: 20)
               .frame(width: 28, height: 28)
+              .contentShape(Rectangle())
           }
           .buttonStyle(.plain).accessibilityLabel("Edit place")
+          .accessibilityIdentifier("place.edit")
         }
         .padding(.horizontal, 24).padding(.top, 10)
 

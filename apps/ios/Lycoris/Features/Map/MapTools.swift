@@ -4,6 +4,7 @@ struct MapTools: View {
   var spacing: CGFloat = 23
   var locate: () -> Void = {}
   var showNearby: () -> Void
+  var contribute: () -> Void = {}
   var onUnavailableAction: () -> Void
 
   var body: some View {
@@ -20,9 +21,10 @@ struct MapTools: View {
       .glassEffect(in: .rect(cornerRadius: 24))
 
       VStack(spacing: 0) {
-        Button(action: onUnavailableAction) {
+        Button(action: contribute) {
           Image("Contribute").resizable().frame(width: 20, height: 20).frame(width: 48, height: 48)
-        }.accessibilityLabel("Contribute")
+            .contentShape(Rectangle())
+        }.accessibilityLabel("Contribute").accessibilityIdentifier("map.contribute")
         Button(action: showNearby) {
           Image("Nearby").resizable().frame(width: 20, height: 20)
             .frame(width: 48, height: 48).contentShape(Rectangle())

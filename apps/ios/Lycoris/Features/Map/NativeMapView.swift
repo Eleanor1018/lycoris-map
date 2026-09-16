@@ -11,6 +11,7 @@ struct NativeMapView: UIViewRepresentable {
   var animated = true
   var onViewport: (MapViewport) -> Void = { _ in }
   var onSelect: (PlacePresentation) -> Void = { _ in }
+  var onScreenCenter: (GeoPoint) -> Void = { _ in }
 
   func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
@@ -96,6 +97,12 @@ struct NativeMapView: UIViewRepresentable {
     func mapViewDidFinishLoadingMap(_ mapView: MKMapView) { publishViewport(mapView) }
 
     private func publishViewport(_ map: MKMapView) {
+      guard map.bounds.width > 0, map.bounds.height > 0 else { return }
+      let coordinate = map.convert(
+        CGPoint(x: map.bounds.midX, y: map.bounds.midY), toCoordinateFrom: map)
+      if let point = GeoPoint(latitude: coordinate.latitude, longitude: coordinate.longitude) {
+        Task { @MainActor [weak self] in self?.parent.onScreenCenter(point) }
+      }
       guard map.bounds.width > 0,
         let viewport = MapViewport(rect: map.visibleMapRect, center: map.centerCoordinate),
         viewport != lastViewport

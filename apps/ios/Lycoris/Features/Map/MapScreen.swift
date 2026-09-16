@@ -6,6 +6,14 @@ struct MapScreen: View {
   @State private var store: PlaceStore
   @State private var location = LocationProvider()
   @State private var account = AccountStore()
+  @State private var contribution = ContributionStore()
+  @State private var selectingLocation = false
+  @State private var screenCenter: GeoPoint?
+  @State private var contributionIntent: ContributionIntent?
+  @State private var queuedContribution: ContributionIntent?
+  @State private var chooseLocationAfterDismiss = false
+  @State private var contributionError: String?
+  @State private var editLoadTask: Task<Void, Never>?
   @State private var modal: MapModal?
   @State private var pendingBookmark: Int64?
   @State private var bookmarkIntent = UUID()
@@ -64,7 +72,7 @@ struct MapScreen: View {
       )
       let panelTop = layout.clampedTop(layout.top(for: detent) + dragTranslation)
       let panelHeight = layout.height(at: panelTop)
-      let toolsVisible = panelTop > layout.topInset + 270 && !isSearchFocused
+      let toolsVisible = panelTop > layout.topInset + 270 && !isSearchFocused && !selectingLocation
       // Keep attribution fixed above the panel's lowest resting position.
       let mapBottomInset = layout.viewport.height - layout.collapsedTop + 10
 
@@ -74,7 +82,9 @@ struct MapScreen: View {
           places: mapPlaces, focus: store.focus,
           showsUserLocation: !store.isPreview && location.hasRequestedLocation
             && location.isAuthorized, animated: !reduceMotion,
-          onViewport: { store.viewportChanged($0) }, onSelect: selectPlace
+          onViewport: { store.viewportChanged($0) },
+          onSelect: { if !selectingLocation { selectPlace($0) } },
+          onScreenCenter: { screenCenter = $0 }
         )
         .accessibilityIdentifier("map.canvas")
 
@@ -82,6 +92,7 @@ struct MapScreen: View {
           spacing: selectedPlace == nil ? 23 : 10,
           locate: locate,
           showNearby: { showNearby(.toilet) },
+          contribute: { beginContribution(.create) },
           onUnavailableAction: { showsUnavailableAction = true }
         )
         .position(x: layout.viewport.width - 40, y: panelTop - (selectedPlace == nil ? 131.5 : 116))
@@ -107,6 +118,40 @@ struct MapScreen: View {
           .clipShape(RoundedRectangle(cornerRadius: 26))
           .shadow(color: .black.opacity(0.12), radius: 16, y: 4)
           .position(x: layout.viewport.width / 2, y: panelTop + panelHeight / 2)
+          .opacity(selectingLocation ? 0 : 1)
+          .allowsHitTesting(!selectingLocation)
+          .accessibilityHidden(selectingLocation)
+
+        if selectingLocation {
+          Image(systemName: "scope").font(.largeTitle).foregroundStyle(.tint)
+            .position(x: layout.viewport.width / 2, y: layout.viewport.height / 2)
+            .allowsHitTesting(false).accessibilityHidden(true)
+          VStack {
+            HStack {
+              Button("Cancel", systemImage: "xmark") {
+                selectingLocation = false
+                if contribution.draft?.editable == true { modal = .contribution }
+              }
+              .buttonStyle(.glass).labelStyle(.iconOnly)
+              .accessibilityIdentifier("contribution.cancel-location")
+              Spacer()
+              Button("Current location", systemImage: "location", action: locate)
+                .buttonStyle(.glass).labelStyle(.iconOnly)
+            }
+            Spacer()
+            VStack(spacing: 12) {
+              Text("Move the map to choose a location.")
+              Button("Use this location") { confirmLocation() }
+                .buttonStyle(.borderedProminent).disabled(screenCenter == nil)
+                .accessibilityIdentifier("contribution.confirm-location")
+            }
+            .padding().frame(maxWidth: .infinity).background(
+              .regularMaterial, in: .rect(cornerRadius: 26))
+          }
+          .padding(.horizontal).padding(.top, layout.topInset + 8)
+          .padding(.bottom, max(layout.bottomInset, 16))
+          .frame(width: layout.viewport.width, height: layout.viewport.height)
+        }
       }
       .frame(width: layout.viewport.width, height: layout.viewport.height)
       .offset(y: -geometry.safeAreaInsets.top)
@@ -130,14 +175,27 @@ struct MapScreen: View {
       onDismiss: {
         pendingBookmark = nil
         bookmarkIntent = UUID()
+        contributionIntent = nil
+        if let intent = queuedContribution {
+          queuedContribution = nil
+          beginContribution(intent)
+        } else if chooseLocationAfterDismiss {
+          chooseLocationAfterDismiss = false
+          selectingLocation = true
+        }
       }
     ) { item in
       switch item {
       case .share(let place): PlaceShareSheet(place: place)
       case .account(let destination):
         AccountSheet(
-          store: account, destination: destination, onAuthenticated: resumeBookmark,
+          store: account, destination: destination, onAuthenticated: resumeAuthenticatedAction,
           onSelect: selectAccountPlace)
+      case .contribution:
+        ContributionSheet(store: contribution) {
+          chooseLocationAfterDismiss = true
+          modal = nil
+        }
       }
     }
     .alert("Account", isPresented: $showsAccountError) {
@@ -145,9 +203,39 @@ struct MapScreen: View {
     } message: {
       Text(account.message ?? "")
     }
-    .task { if !store.isPreview { await account.restore() } }
+    .alert(
+      "Contribute",
+      isPresented: Binding(
+        get: { contributionError != nil }, set: { if !$0 { contributionError = nil } })
+    ) {
+      Button("OK", role: .cancel) { contributionError = nil }
+    } message: {
+      Text(contributionError ?? "")
+    }
+    .task {
+      if !store.isPreview {
+        contribution.connect(account)
+        await account.restore()
+        contribution.synchronize()
+      }
+    }
     .onChange(of: scenePhase) { _, phase in
-      if phase == .active && !store.isPreview { Task { await account.restore() } }
+      guard !store.isPreview else { return }
+      contribution.setActive(phase == .active)
+      if phase == .active {
+        Task {
+          await account.restore()
+          contribution.synchronize()
+        }
+      }
+    }
+    .onChange(of: account.epoch) { _, _ in
+      contribution.synchronize()
+      if account.user == nil {
+        editLoadTask?.cancel()
+        selectingLocation = false
+        if case .contribution = modal { modal = nil }
+      }
     }
     .onChange(of: account.detailState) { _, state in
       if state == .failed(.unavailable), let id = account.selectedMarker?.id {
@@ -204,6 +292,7 @@ struct MapScreen: View {
             }
           },
           onNavigate: { navigate(selectedPlace) },
+          onEdit: { if let id = Int64(selectedPlace.id) { beginContribution(.edit(id)) } },
           isBookmarked: Int64(selectedPlace.id).map(account.isBookmarked) ?? false,
           bookmarkBusy: account.isBusy || account.libraryLoading || account.isChecking,
           onBookmark: { bookmark(selectedPlace) },
@@ -423,15 +512,80 @@ struct MapScreen: View {
       showsAccountError = account.message != nil
     }
   }
+
+  private func resumeAuthenticatedAction() {
+    contribution.synchronize()
+    if let intent = contributionIntent {
+      queuedContribution = intent
+      modal = nil
+    } else {
+      resumeBookmark()
+    }
+  }
+
+  private func beginContribution(_ intent: ContributionIntent) {
+    editLoadTask?.cancel()
+    guard !store.isPreview else {
+      showsUnavailableAction = true
+      return
+    }
+    guard account.user != nil else {
+      contributionIntent = intent
+      modal = .account(.profile)
+      return
+    }
+    contribution.synchronize()
+    isSearchFocused = false
+    if let draft = contribution.draft, draft.phase != .complete {
+      modal = .contribution
+      return
+    }
+    switch intent {
+    case .create:
+      movePanel(to: .collapsed)
+      selectingLocation = true
+    case .edit(let id):
+      editLoadTask = Task {
+        do {
+          try await contribution.edit(id)
+          modal = .contribution
+        } catch {
+          guard !Task.isCancelled, !(error is CancellationError) else { return }
+          contributionError =
+            (error as? AccountFailure)?.message
+            ?? String(localized: "Could not load places. Please try again.")
+        }
+      }
+    }
+  }
+
+  private func confirmLocation() {
+    guard let point = screenCenter else { return }
+    do {
+      try contribution.begin(at: point)
+      try contribution.move(to: point)
+      selectingLocation = false
+      modal = .contribution
+    } catch {
+      contributionError = String(localized: "Could not save the contribution on this device.")
+    }
+  }
+}
+
+private enum ContributionIntent {
+  case create
+  case edit(Int64)
 }
 
 private enum MapModal: Identifiable {
   case account(AccountDestination)
   case share(PlacePresentation)
+  case contribution
   var id: String {
     switch self {
     case .account: "account"
     case .share(let place): "share-\(place.id)"
+    case .contribution: "contribution"
     }
   }
 }
