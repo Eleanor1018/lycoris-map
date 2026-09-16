@@ -2,9 +2,15 @@
 
 Native SwiftUI application, Apple Maps / MapKit, iPhone, iOS 26+. Open `Lycoris.xcodeproj` in Xcode and select the shared **Lycoris** scheme.
 
-## I1 scope
+## Current scope: I2
 
-This is the engineering and interaction prototype: a live Apple map, three panel positions, search keyboard/focus, original Figma assets, String Catalog, build configuration and initial tests. Account, location requests, search results, contribution, settings destinations and marker APIs belong to later stages. Their reference content is intentionally static in I1. Bookmarks are absent in this anonymous prototype.
+The four Figma surfaces are available: collapsed, Nearby, expanded, and place details. The live Apple map remains stable while the panel moves. Original assets, String Catalog, configuration and meaningful interaction tests are included. Real API data and business actions start in I3. Unconnected controls use a native unavailable alert; they do not report a successful login, share, navigation, edit or saved bookmark.
+
+The default app is anonymous with no sample bookmarks or selected place. Xcode canvas previews and explicit Debug launch arguments inject design fixtures without creating a login session. Release ignores the preview arguments.
+
+In Xcode's Run scheme arguments, add `-lycoris-preview` followed by one of `collapsed`, `nearby`, `expanded`, `anonymousExpanded`, or `details`. `expanded` includes the three reference bookmark rows; tap one to open details. Clear the arguments to return to the anonymous default. The same variants are available in `App/MapPreviewScenario.swift` as named canvas previews.
+
+Fixture text, photo and coordinates are only visual reference data. The Figma toilet title, decorative photo and New Jersey map coordinate do not describe a verified real place. See `docs/i2-acceptance.md` for validation and phase boundaries.
 
 The initial map camera uses the public New Jersey area shown in the design. It is not the user's current location. No location permission is requested by I1.
 
@@ -49,7 +55,8 @@ The `$()` escape preserves the double slash in an xcconfig URL. The phone and Ma
 - `Features/Map`: persistent Map view, panel state, layout, search row, tool groups and prototype content.
 - `Core/API`: environment configuration and validation.
 - `Resources`: asset catalog and English / Simplified Chinese strings.
-- `LycorisTests`: configuration boundaries and panel geometry/landing behavior.
+- `LycorisTests`: configuration boundaries, panel geometry and map camera preservation.
+- `LycorisUITests`: keyboard/drag behavior, preview routing and anonymous bookmark visibility.
 - `docs`: design references, gaps and acceptance evidence.
 
 The system sheet was prototyped first. On iOS 26.5 its largest detent becomes edge-to-edge; the design keeps 10 points on both sides. `PanelLayout` therefore owns only the custom container's geometry. SwiftUI controls, MapKit and system materials remain native. The map is not conditionally removed or keyed by panel state.
