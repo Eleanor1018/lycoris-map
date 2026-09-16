@@ -170,25 +170,64 @@
     outline: 2px solid #007aff;
     outline-offset: -2px;
 }
-.settings-popover .preference-form {
-    margin: 8px 11px 11px;
+.settings-popover[data-panel='range'] {
+    border-radius: var(--ui-card-radius);
+    padding: 11px;
+    color: var(--ui-brand);
+}
+.settings-popover[data-panel='range'] .language-options,
+.settings-popover[data-panel='range'] .language-options .design-button {
+    border-radius: var(--ui-control-radius);
+}
+.settings-popover[data-panel='range'] .language-options .design-button[aria-checked='true'] {
+    background: var(--ui-selected);
+    color: var(--ui-brand);
+}
+.settings-popover[data-panel='range'] .language-options .design-button:focus-visible {
+    outline-color: var(--ui-brand);
+}
+@media (hover: hover) {
+    .settings-popover[data-panel='range'] .language-options .design-button:hover {
+        background: var(--ui-selected);
+    }
+}
+.settings-popover[data-panel='range'] .preference-form {
+    margin: 11px 0 0;
     padding-top: 11px;
-    border-top: 1px solid #3c3c4329;
-    gap: 8px;
+    border-top: 1px solid #5a385026;
+    gap: 11px;
 }
-.settings-popover .preference-form input {
-    min-height: 44px;
-    padding: 8px 11px;
-    background: #ffffffb3;
-    border-color: #3c3c4333;
+.settings-popover[data-panel='range'] .preference-form label {
+    padding-inline: 11px;
 }
-.settings-popover .preference-form input:focus-visible {
-    outline-color: #007aff;
+.settings-popover[data-panel='range'] .preference-form input {
+    min-height: var(--ui-control-height);
+    border: 1px solid white;
+    border-radius: var(--ui-control-radius);
+    padding: 11px;
+    background: #fafcf9;
+    color: #1d1b20;
+    box-shadow: 0 4px 32px #0000000a;
+    font: 400 17px/20px var(--ui-font-body);
 }
-.settings-popover .preference-form .design-button {
-    background: #007aff;
-    color: white;
-    border-radius: 10px;
+.settings-popover[data-panel='range'] .preference-form input:focus-visible {
+    outline: 3px solid var(--ui-brand-blush);
+    outline-offset: 0;
+}
+.settings-popover[data-panel='range'] .preference-form .design-button {
+    min-height: var(--ui-control-height);
+    border: 1px solid var(--ui-brand);
+    border-radius: var(--ui-control-radius);
+    background: var(--ui-brand-blush);
+    color: var(--ui-brand);
+    font: 500 16px/22px var(--ui-font-body);
+}
+.settings-popover[data-panel='range'] .preference-form .design-button:focus-visible {
+    outline: 2px solid var(--ui-brand);
+    outline-offset: 2px;
+}
+.settings-popover[data-panel='range'] .preference-form .design-button:active {
+    background: var(--ui-selected);
 }
 .settings-popover .preferences-content p {
     margin: 8px 11px 11px;

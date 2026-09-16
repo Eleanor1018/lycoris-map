@@ -77,6 +77,7 @@ export function SettingsRows({ mobile = false }: { mobile?: boolean }) {
             <Popover.Portal>
                 <Popover.Content
                     className="settings-popover"
+                    data-panel={panel}
                     lang={ui.language}
                     aria-label={ui.message(settingsTitles[panel])}
                     side={mobile ? 'bottom' : 'right'}
