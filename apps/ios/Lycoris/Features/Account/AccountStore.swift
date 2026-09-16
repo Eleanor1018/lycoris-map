@@ -393,6 +393,9 @@ final class AccountStore {
   }
 
   private func failureMessage(_ error: Error) -> String {
-    (error as? AccountFailure)?.message ?? AccountFailure(status: 0).message
+    if error is SessionStorageFailure {
+      return String(localized: "Could not save your session securely. Please try again.")
+    }
+    return (error as? AccountFailure)?.message ?? AccountFailure(status: 0).message
   }
 }

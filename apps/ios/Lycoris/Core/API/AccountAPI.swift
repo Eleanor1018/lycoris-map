@@ -58,9 +58,11 @@ protocol AccountServing: Sendable {
 struct AccountAPI: AccountServing {
   let baseURL: URL?
   let session: URLSession
+  private let cookieVault: SessionCookieVault?
 
   init(baseURL: URL? = (try? AppConfiguration.bundled())?.apiBaseURL, session: URLSession? = nil) {
     self.baseURL = baseURL
+    cookieVault = session == nil ? baseURL.map { SessionCookieVault(origin: $0) } : nil
     let configuration = URLSessionConfiguration.default
     configuration.httpCookieStorage = .shared
     configuration.httpShouldSetCookies = true
@@ -68,6 +70,7 @@ struct AccountAPI: AccountServing {
     configuration.urlCache = nil
     configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
     configuration.timeoutIntervalForRequest = 20
+    if let storage = configuration.httpCookieStorage { cookieVault?.restore(into: storage) }
     self.session = session ?? URLSession(configuration: configuration)
   }
 
@@ -91,6 +94,11 @@ struct AccountAPI: AccountServing {
     request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
     let (data, response) = try await session.data(for: request)
     guard let response = response as? HTTPURLResponse else { throw AccountFailure(status: 0) }
+    if response.value(forHTTPHeaderField: "Set-Cookie") != nil,
+      let storage = session.configuration.httpCookieStorage
+    {
+      try cookieVault?.save(from: storage)
+    }
     guard (200..<300).contains(response.statusCode) else {
       throw AccountFailure(
         status: response.statusCode,
