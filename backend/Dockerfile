@@ -32,8 +32,9 @@ ARG RUNTIME_IMAGE=debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e0
 FROM ${RUST_BUILDER_IMAGE} AS source
 
 # 离线编译固定 SQLx 查询；限制并行度，避免 8 GiB 宿主在构建时连同现有服务一起过载。
+ARG CARGO_BUILD_JOBS=2
 ENV SQLX_OFFLINE=true \
-    CARGO_BUILD_JOBS=2 \
+    CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS} \
     CARGO_TERM_COLOR=never
 
 WORKDIR /app
