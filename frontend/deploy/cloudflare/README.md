@@ -103,3 +103,31 @@ verified desktop and mobile layouts using live public reads through a local
 read-only preview, with an artificial eight-second image delay. Cloudflare
 reported success after uploading all 21 artifact files. The custom-domain HTML
 now references `index-DOmxOlNZ.js` and `index-Cwmq9PS3.css`.
+
+## Mobile sheet motion and content height — 2026-09-16
+
+Commit `b25c9d3` keeps the sheet's layout stable and moves it with a composited
+transform. Touch movement updates a CSS variable once per animation frame;
+React and the map rerender only when the resting snap changes. Main-menu
+sections are mounted ahead of dragging, while inactive sections remain inert
+and hidden at rest. Nested result scrollers keep native scrolling; downward
+sheet gestures settle before closing and cancel on navigation or interruption.
+
+Live place details use measured content height, capped at the available screen
+height. Short text and missing/failed photos no longer reserve a 433px panel.
+Photos retain their aspect ratio, long content scrolls, and action buttons have
+22px of internal bottom padding plus the device safe area. The panel stays
+flush with the viewport bottom.
+
+All 249 frontend tests, strict TypeScript, production build and formatting
+checks passed. Chrome touch emulation verified main-menu snapping, detail
+scrolling/dismissal, and nested Nearby scrolling in both directions. At a 667px
+viewport height, the no-image fixture measured 187px, a live photo detail 434px,
+and a 774px long-content fixture was capped to 621px with internal scrolling.
+The action row ended at 645px in all three cases. A failed image also shrank the
+panel after its request failed. Physical-device Safari was not tested.
+
+Cloudflare reported deployment success after all 21 artifact files uploaded.
+The custom-domain HTML references `index-DlFBwTjC.js` and
+`index-Y45GkDWD.css`; `/health/ready` returns HTTP 200 with PostgreSQL and Redis
+healthy. Chrome verified the deployed menu can be dragged open and closed.
