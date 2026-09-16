@@ -1,36 +1,46 @@
-import { StrictMode, useRef, useState } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { StrictMode, useRef, useState, type CSSProperties } from 'react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useSheetDrag } from './useSheetDrag'
 import type { Snap } from './types'
 
 let now = 0
 const close = vi.fn()
 const action = vi.fn()
+const rendered = vi.fn()
+let frames = new Map<number, FrameRequestCallback>()
+let nextFrame = 0
+function flushFrame() {
+    act(() => {
+        const pending = [...frames.values()]
+        frames.clear()
+        pending.forEach((callback) => callback(now))
+    })
+}
 function Harness({
     initial = 'collapsed',
     expanded = false,
+    route = 'search',
 }: {
     initial?: Snap
     expanded?: boolean
+    route?: string
 }) {
     const sheet = useRef<HTMLElement>(null)
     const [snap, setSnap] = useState<Snap>(initial)
-    const [height, setDragHeight] = useState<number | null>(null)
-    useSheetDrag({ sheet, snap, expandedPanel: expanded, close, setSnap, setDragHeight })
+    const height = { collapsed: 158, half: 320, full: 754 }[snap]
+    rendered()
+    useSheetDrag({ sheet, snap, height, resetKey: route, expandedPanel: expanded, close, setSnap })
     return (
-        <div data-testid="viewport">
-            <section
-                ref={sheet}
-                data-testid="sheet"
-                data-snap={snap}
-                style={{ height: height ?? { collapsed: 158, half: 320, full: 754 }[snap] }}
-            >
+        <div data-testid="viewport" style={{ '--sheet-height': `${height}px` } as CSSProperties}>
+            <section ref={sheet} data-testid="sheet" data-snap={snap} style={{ height: 754 }}>
                 <button className="sheet-handle" onClick={action}>
                     Handle
                 </button>
                 <div className="sheet-scroll" data-testid="scroll">
                     <h1>Lycoris Maps</h1>
-                    <button onClick={action}>Nearby</button>
+                    <div className="nearby-result-scroll" data-testid="nested-scroll">
+                        <button onClick={action}>Nearby</button>
+                    </div>
                     <input aria-label="Search" />
                 </div>
             </section>
@@ -46,6 +56,7 @@ function touch(target: Element, type: 'start' | 'move' | 'end' | 'cancel', y: nu
         changedTouches: { value: [point] },
     })
     fireEvent(target, event)
+    flushFrame()
     return event
 }
 function setup(initial?: Snap, expanded = false) {
@@ -60,27 +71,48 @@ function setup(initial?: Snap, expanded = false) {
         scroll: screen.getByTestId('scroll'),
     }
 }
+function visualHeight() {
+    return screen.getByTestId('viewport').style.getPropertyValue('--sheet-visual-height')
+}
 beforeEach(() => {
     now = 0
+    frames = new Map()
+    nextFrame = 0
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+        frames.set(++nextFrame, callback)
+        return nextFrame
+    })
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id))
+    vi.stubGlobal('matchMedia', () => ({ matches: false }))
     vi.spyOn(performance, 'now').mockImplementation(() => now)
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
         this: HTMLElement,
     ) {
+        const viewport = this.dataset.testid === 'viewport'
+        const owner = this.parentElement
+        const visible = parseFloat(
+            owner?.style.getPropertyValue('--sheet-visual-height') ||
+                owner?.style.getPropertyValue('--sheet-height') ||
+                '754',
+        )
+        const top = viewport ? 0 : 800 - visible
         return {
             x: 0,
-            y: 0,
-            top: 0,
+            y: top,
+            top,
             left: 0,
             right: 390,
-            bottom: 800,
+            bottom: viewport ? 800 : top + 754,
             width: 390,
-            height: this.dataset.testid === 'viewport' ? 800 : parseFloat(this.style.height),
+            height: viewport ? 800 : 754,
             toJSON: () => ({}),
         }
     })
 })
 afterEach(() => {
     cleanup()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
     vi.restoreAllMocks()
     vi.clearAllMocks()
 })
@@ -89,7 +121,7 @@ it('expands from the title through half and full, then collapses from the top of
     const { sheet, title } = setup()
     touch(title, 'start', 700)
     expect(touch(title, 'move', 520).defaultPrevented).toBe(true)
-    expect(sheet.style.height).toBe('338px')
+    expect(visualHeight()).toBe('338px')
     touch(title, 'end', 520)
     expect(sheet.dataset.snap).toBe('half')
     touch(title, 'start', 520)
@@ -149,14 +181,15 @@ it('cancels interrupted and multi-touch drags without changing the snap', () => 
     touch(title, 'start', 700)
     touch(title, 'move', 500)
     touch(title, 'cancel', 500)
-    expect(sheet.style.height).toBe('158px')
+    expect(visualHeight()).toBe('')
     touch(title, 'start', 700)
     touch(title, 'move', 500)
     fireEvent.touchStart(title, { touches: [{ identifier: 1 }, { identifier: 2 }] })
-    expect(sheet.style.height).toBe('158px')
+    expect(visualHeight()).toBe('')
     expect(sheet.dataset.snap).toBe('collapsed')
 })
-it('preserves the existing expanded-panel close gesture, but never closes on cancel', () => {
+it('settles an expanded panel before closing, and never closes on cancel', () => {
+    vi.useFakeTimers()
     const { title } = setup('full', true)
     touch(title, 'start', 100)
     touch(title, 'move', 250)
@@ -165,6 +198,8 @@ it('preserves the existing expanded-panel close gesture, but never closes on can
     touch(title, 'start', 100)
     touch(title, 'move', 250)
     touch(title, 'end', 250)
+    expect(close).not.toHaveBeenCalled()
+    act(() => vi.advanceTimersByTime(280))
     expect(close).toHaveBeenCalledOnce()
 })
 it('projects a short upward flick to the next snap', () => {
@@ -176,7 +211,6 @@ it('projects a short upward flick to the next snap', () => {
     touch(title, 'end', 670)
     expect(sheet.dataset.snap).toBe('half')
 })
-
 it('does not let the companion touch pointercancel discard an active touch gesture', () => {
     const { sheet, title } = setup()
     touch(title, 'start', 700)
@@ -187,7 +221,6 @@ it('does not let the companion touch pointercancel discard an active touch gestu
     touch(title, 'end', 520)
     expect(sheet.dataset.snap).toBe('half')
 })
-
 it('does not skip straight from full to collapsed on a short fast downward flick', () => {
     const { sheet, title } = setup('full')
     touch(title, 'start', 100)
@@ -196,4 +229,61 @@ it('does not skip straight from full to collapsed on a short fast downward flick
     now -= 99
     touch(title, 'end', 215)
     expect(sheet.dataset.snap).toBe('half')
+})
+it('does not rerender React during a continuous drag', () => {
+    const { sheet, title } = setup()
+    const renders = rendered.mock.calls.length
+    touch(title, 'start', 700)
+    for (let y = 690; y >= 450; y -= 10) touch(title, 'move', y)
+    expect(rendered).toHaveBeenCalledTimes(renders)
+    expect(sheet.dataset.snap).toBe('collapsed')
+    expect(sheet.style.height).toBe('754px')
+    expect(visualHeight()).toBe('408px')
+    touch(title, 'end', 450)
+    expect(sheet.dataset.snap).toBe('half')
+    expect(rendered.mock.calls.length).toBeGreaterThan(renders)
+})
+it('lets a nested nearby list scroll down without dismissing the panel', () => {
+    setup('full', true)
+    screen.getByTestId('nested-scroll').scrollTop = 120
+    const row = screen.getByRole('button', { name: 'Nearby' })
+    touch(row, 'start', 200)
+    expect(touch(row, 'move', 450).defaultPrevented).toBe(false)
+    touch(row, 'end', 450)
+    expect(close).not.toHaveBeenCalled()
+    expect(visualHeight()).toBe('')
+})
+it('cancels a pending dismissal when navigating to another panel', () => {
+    vi.useFakeTimers()
+    const view = render(<Harness initial="full" expanded route="detail" />)
+    const title = screen.getByRole('heading')
+    touch(title, 'start', 100)
+    touch(title, 'move', 300)
+    touch(title, 'end', 300)
+    expect(visualHeight()).toBe('0px')
+    view.rerender(<Harness initial="full" expanded route="bookmarks" />)
+    act(() => vi.advanceTimersByTime(300))
+    expect(close).not.toHaveBeenCalled()
+    expect(visualHeight()).toBe('')
+})
+it('finishes mouse dragging even when the pointer leaves the sheet', () => {
+    const { sheet, title } = setup()
+    function pointer(target: Element | Window, type: string, y: number) {
+        const event = new Event(type, { bubbles: true, cancelable: true })
+        Object.defineProperties(event, {
+            pointerType: { value: 'mouse' },
+            pointerId: { value: 4 },
+            button: { value: 0 },
+            clientX: { value: 100 },
+            clientY: { value: y },
+        })
+        now += 100
+        fireEvent(target, event)
+        flushFrame()
+    }
+    pointer(title, 'pointerdown', 700)
+    pointer(window, 'pointermove', 250)
+    pointer(window, 'pointerup', 250)
+    expect(sheet.dataset.snap).toBe('full')
+    expect(sheet.dataset.dragging).toBeUndefined()
 })

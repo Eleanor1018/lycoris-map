@@ -1,7 +1,7 @@
 import { SettingsRows } from '@/features/preferences/Settings'
 import type { Panel } from './types'
 import { useUi } from '@/shared/i18n/ui'
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { FigmaIcon } from '@/shared/ui/figma-icon'
 import { PlaceMeta, PlaceSummary, ShareButton } from './DesktopPanel'
 import { CategoryBadge, DesignButton, IconButton, NearbyCards, SearchField } from './primitives'
@@ -24,8 +24,8 @@ export function MobileSheet({
     setSearch,
     openDetails,
     close,
-    dragHeight,
-    setDragHeight,
+    height,
+    onDetailHeight,
     contribution,
     browse,
     selectPlace,
@@ -45,8 +45,8 @@ export function MobileSheet({
     setSearch: (value: string) => void
     openDetails: (focusId: string) => void
     close: () => void
-    dragHeight: number | null
-    setDragHeight: (height: number | null) => void
+    height: number
+    onDetailHeight: (height: number) => void
     contribution?: Omit<ContributionFormProps, 'mobile'> | undefined
     browse?: PlaceBrowse | undefined
     selectPlace?: ((place: Marker, focusId: string) => void) | undefined
@@ -62,6 +62,22 @@ export function MobileSheet({
     const hasPlaceResults = browse?.mode === 'search' || browse?.mode === 'cluster'
     const sheet = useRef<HTMLElement>(null)
     const composing = !!contribution
+    const liveDetail = detail && !!browse
+    useLayoutEffect(() => {
+        const content = sheet.current?.querySelector<HTMLElement>('.live-mobile-detail')
+        const scroll = content?.parentElement
+        if (!liveDetail || !content || !scroll) return
+        const measure = () => {
+            const natural = content.getBoundingClientRect().height
+            if (!natural) return
+            const safeArea = parseFloat(getComputedStyle(scroll).paddingBottom) || 0
+            onDetailHeight(Math.max(158, Math.ceil(natural + safeArea)))
+        }
+        measure()
+        const observer = new ResizeObserver(measure)
+        observer.observe(content)
+        return () => observer.disconnect()
+    }, [liveDetail, onDetailHeight])
     useEffect(() => {
         const element = sheet.current,
             viewport = window.visualViewport
@@ -102,13 +118,27 @@ export function MobileSheet({
         expandedPanel
             ? close()
             : setSnap(snap === 'collapsed' ? 'half' : snap === 'half' ? 'full' : 'collapsed')
-    useSheetDrag({ sheet, snap, expandedPanel, close, setSnap, setDragHeight })
+    useSheetDrag({
+        sheet,
+        snap,
+        height,
+        expandedPanel,
+        close,
+        setSnap,
+        resetKey: contribution
+            ? 'contribution'
+            : secondary
+              ? secondaryLabel
+              : detail
+                ? `detail-${browse?.detail?.id ?? 'loading'}`
+                : 'search',
+    })
     return (
         <section
             ref={sheet}
             className={`mobile-sheet ${detail ? 'mobile-detail' : ''} ${contribution ? 'mobile-contribution' : ''}`}
             data-snap={snap}
-            data-dragging={dragHeight !== null || undefined}
+            data-expanded-panel={expandedPanel || undefined}
             aria-label={
                 ui.message(
                     contribution
@@ -120,7 +150,6 @@ export function MobileSheet({
                             : 'Search positions',
                 ) ?? undefined
             }
-            style={dragHeight === null ? undefined : { height: dragHeight }}
         >
             <DesignButton
                 id="sheet-handle"
@@ -239,24 +268,28 @@ export function MobileSheet({
                                 AA
                             </DesignButton>
                         )}
-                        {browse && hasPlaceResults && snap !== 'collapsed' && selectPlace ? (
-                            <PlaceResults browse={browse} onSelect={selectPlace} mobile />
+                        {browse && hasPlaceResults && selectPlace ? (
+                            <div
+                                inert={snap === 'collapsed'}
+                                aria-hidden={snap === 'collapsed' || undefined}
+                            >
+                                <PlaceResults browse={browse} onSelect={selectPlace} mobile />
+                            </div>
                         ) : (
-                            snap !== 'collapsed' && (
-                                <>
-                                    <h2 className="mobile-nearby-heading">
-                                        {ui.text('Find Nearby')}
-                                    </h2>
-                                    <NearbyCards
-                                        mobile
-                                        half={snap === 'half'}
-                                        onSelect={chooseCategory}
-                                    />
-                                </>
-                            )
+                            <div
+                                inert={snap === 'collapsed'}
+                                aria-hidden={snap === 'collapsed' || undefined}
+                            >
+                                <h2 className="mobile-nearby-heading">{ui.text('Find Nearby')}</h2>
+                                <NearbyCards
+                                    mobile
+                                    half={snap === 'half'}
+                                    onSelect={chooseCategory}
+                                />
+                            </div>
                         )}
-                        {snap === 'full' && !hasPlaceResults && (
-                            <>
+                        {!hasPlaceResults && (
+                            <div inert={snap !== 'full'} aria-hidden={snap !== 'full' || undefined}>
                                 {showBookmarks && (
                                     <>
                                         <DesignButton
@@ -298,7 +331,7 @@ export function MobileSheet({
                                     <span>{ui.text('Settings')}</span>
                                 </h2>
                                 <SettingsRows mobile open={openSettings} />
-                            </>
+                            </div>
                         )}
                     </div>
                 )}

@@ -1,7 +1,7 @@
 import { usePreferences } from '@/features/preferences/PreferencesProvider'
 import { isSettingsPanel, settingsTitles, SettingsContent } from '@/features/preferences/Settings'
 import { useUi } from '@/shared/i18n/ui'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { Map as LeafletMap } from 'leaflet'
 import { useNavigate } from 'react-router'
 import { MobileSheet } from './MobileSheet'
@@ -78,14 +78,13 @@ export function MapShell({
               : browse && location.pathname === '/search' && params.get('q')?.trim() && !snapValue
                 ? 'full'
                 : 'collapsed'
-    const [dragHeight, setDragHeight] = useState<number | null>(null)
+    const [detailHeight, setDetailHeight] = useState(433)
     const sheetHeight =
-        dragHeight ??
-        (panel === 'details'
-            ? Math.min(433, viewportHeight - 46)
+        panel === 'details'
+            ? Math.min(detailHeight, viewportHeight - 46)
             : snap === 'full'
               ? viewportHeight - 46
-              : Math.min(snap === 'half' ? 320 : 158, viewportHeight - 46))
+              : Math.min(snap === 'half' ? 320 : 158, viewportHeight - 46)
     const sheetTop = viewportHeight - sheetHeight
     const setSnap = (next: Snap) => {
         const nextParams = new URLSearchParams(location.search)
@@ -270,6 +269,7 @@ export function MapShell({
             data-panel={panel}
             data-mobile={mobile}
             data-snap={snap}
+            style={mobile ? ({ '--sheet-height': `${sheetHeight}px` } as CSSProperties) : undefined}
         >
             {sample ? (
                 <div
@@ -443,8 +443,8 @@ export function MapShell({
                     setSearch={updateSearch}
                     openDetails={(focusId) => open('details', focusId)}
                     close={close}
-                    dragHeight={dragHeight}
-                    setDragHeight={setDragHeight}
+                    height={sheetHeight}
+                    onDetailHeight={setDetailHeight}
                     contribution={contributionOpen ? contribution : undefined}
                     browse={browse}
                     selectPlace={selectPlace}
