@@ -36,3 +36,11 @@ Local logs: `/tmp/lycoris-ios-i6-unit.log`, `/tmp/lycoris-ios-i6-ui2.log`, `/tmp
 - UI/API checks use existing synthetic fixtures on localhost. No real account or production data was needed. App signing, actual-device backend reachability, public domain/server configuration and distribution remain separate work.
 
 Design reference: [Figma native settings](https://www.figma.com/design/nmsiDbbgm0LG0CSwXUSLPW/Lycoris-v2-design?node-id=45-248). Speech behavior follows Apple's [on-device support check](https://developer.apple.com/documentation/speech/sfspeechrecognizer/supportsondevicerecognition) and [device-only request setting](https://developer.apple.com/documentation/speech/sfspeechrecognitionrequest/requiresondevicerecognition).
+
+## Speech callback correction (2026-09-17)
+
+The user's later voice attempt left Xcode paused in `_dispatch_assert_queue_fail`: the authorization callback in `VoiceSearchController.start` ran on a default-QoS worker while its closure had inherited MainActor isolation. This was an application bug, distinct from the earlier unsupported-device result; simulator speech availability can differ by language/state.
+
+Authorization and recognition callbacks are now explicitly Sendable. The audio tap is created by a nonisolated factory and consumes each buffer synchronously, while only extracted text/status values return to MainActor through the existing generation guard. No audio buffers cross into a Task and device-only recognition remains required.
+
+The existing accessibility/voice keyboard-fallback UI flow passed in `/tmp/lycoris-ios-map-appearance-tests.log`. Computer Use retried the previously crashing Chinese flow twice on iPhone 17 Pro: it now returns the native recognition-failure state and remains responsive. This validates recovery from the callback crash, not successful simulator transcription; physical-device speech testing remains outstanding.

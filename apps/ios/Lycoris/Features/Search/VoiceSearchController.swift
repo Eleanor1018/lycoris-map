@@ -28,7 +28,9 @@ final class VoiceSearchController {
     self.recognizer = recognizer
     state = .authorizing
     let authorization = await withCheckedContinuation { continuation in
-      SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
+      SFSpeechRecognizer.requestAuthorization { @Sendable status in
+        continuation.resume(returning: status)
+      }
     }
     guard token == generation, !Task.isCancelled else { return }
     guard authorization == .authorized else {
@@ -63,11 +65,11 @@ final class VoiceSearchController {
         state = .failed
         return
       }
-      input.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
-        request.append(buffer)
-      }
+      input.installTap(
+        onBus: 0, bufferSize: 1024, format: format, block: Self.audioTap(for: request))
       hasTap = true
-      recognition = recognizer.recognitionTask(with: request) { [weak self] result, error in
+      recognition = recognizer.recognitionTask(with: request) {
+        @Sendable [weak self] result, error in
         let text = result?.bestTranscription.formattedString
         let finished = result?.isFinal == true
         let failed = error != nil
@@ -92,6 +94,14 @@ final class VoiceSearchController {
       stop()
       state = .failed
     }
+  }
+
+  // AVAudioEngine invokes its tap on an audio thread. Build the callback outside
+  // MainActor and consume each buffer synchronously on that thread.
+  nonisolated private static func audioTap(
+    for request: SFSpeechAudioBufferRecognitionRequest
+  ) -> AVAudioNodeTapBlock {
+    { buffer, _ in request.append(buffer) }
   }
 
   /// Invalidates permission/recognition callbacks as well as stopping the microphone.
