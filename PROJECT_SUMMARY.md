@@ -6,7 +6,8 @@ Lycoris 是提供无障碍与友好设施信息的地图协作平台。核心能
 
 | 目录 | 当前职责 |
 | --- | --- |
-| `frontend/` | React + TypeScript + Vite + MUI + Leaflet 网页 |
+| `frontend/` | **Web v2 新工程（S1 工程基础）**：React 19.3 + TypeScript 7 strict + Vite 8 + Tailwind 4 + shadcn；Figma 页面尚未实现 |
+| `frontend-old/` | 重构前 Web 归档（React + MUI + Leaflet + Cypress），保留用于行为对照与回退，不再新增功能 |
 | `mobile/` | 旧 React Native 应用，仅保留本地并由 Git 忽略；后续重构为原生 App |
 | `backend/` | **默认后端**：Rust + Axum + SQLx；无 ORM，按业务划分模块的单体服务 |
 | `backend-old/` | 已弃用的 Java / Spring Boot 实现；保留供现有线上服务和回退参考 |
@@ -27,6 +28,21 @@ Rust 保留 Cookie、账号密码与管理员二次验证体验，通过类型�
 cd backend
 cargo run --locked
 ```
+
+Web v2 使用 Node 24.19.0（`frontend/.nvmrc`）与 pnpm 11.19.0，本机开发地址固定 `http://127.0.0.1:5173`：
+
+```bash
+cd frontend
+pnpm install
+pnpm dev          # 另外提供 pnpm build / typecheck / format:check / test:unit
+```
+
+本工程不包含 ESLint 或 lint 脚本，类型检查为 TypeScript 7 strict。
+
+S1 另有本地验证入口（包含在当前 S1 构建产物中，约定本机使用且不发布；非产品页面，S1 构建不可部署；正式地图与账号流程在 S2/S4）：
+
+- `/__dev/map-spike`：200 个固定合成上海点位的地图生命周期验证（常驻 Leaflet 实例、语言/面板/字段更新/增删与更新耗时）。
+- `/__dev/qa`：本机浏览器诊断（375×812 固定 CSS 视口 iframe；开发会话表单走真实 `/api/login`、`/api/me`、头像 Blob、`/api/logout`，不注册、不改密码、不硬编码凭据）。
 
 首次配置、数据库启动与显式迁移步骤见 [README](README.md#克隆与初始化)。普通启动不自动执行 DDL。
 

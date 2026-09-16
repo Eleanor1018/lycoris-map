@@ -1,0 +1,6 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Compas">
+<path d="M0 0H44V28C44 33.6005 44 36.4008 42.9101 38.5399C41.9513 40.4215 40.4215 41.9513 38.5399 42.9101C36.4008 44 33.6005 44 28 44H16C10.3995 44 7.59921 44 5.46009 42.9101C3.57847 41.9513 2.04867 40.4215 1.08993 38.5399C0 36.4008 0 33.6005 0 28V0Z" fill="#FBFBFB"/>
+<path id="Union" d="M29 23H15V21H29V23Z" fill="#666666"/>
+</g>
+</svg>

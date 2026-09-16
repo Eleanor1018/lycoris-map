@@ -1,0 +1,434 @@
+.account-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: transparent;
+}
+.account-dialog {
+    position: fixed;
+    z-index: 31;
+    outline: none;
+    color: #1d1b20;
+}
+.account-desktop {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 375px;
+    height: min(758px, calc(100dvh - 32px));
+    border-radius: 25px;
+    background: #e8def8;
+    box-shadow: 0 4px 4px #fcddec;
+}
+.account-dialog-scroll {
+    height: 100%;
+    overflow: auto;
+    overscroll-behavior: contain;
+    border-radius: inherit;
+    scrollbar-width: none;
+}
+.account-dialog-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 758px;
+    padding: 33px 11px 22px;
+}
+.account-desktop.account-login {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    max-height: calc(100dvh - 32px);
+    border: 3px solid var(--ui-brand);
+    box-shadow: 4px 4px 4px #e6cbff42;
+}
+.account-desktop.account-login .account-dialog-scroll {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+}
+.account-desktop.account-login .account-dialog-inner {
+    min-height: 0;
+}
+.account-dialog h2 {
+    margin: 0;
+    outline: none;
+    font: 500 32px/32px var(--ui-font-logo);
+    letter-spacing: 0.1px;
+    color: black;
+}
+.account-close {
+    position: absolute;
+    right: 11px;
+    top: 17px;
+    width: 24px;
+    height: 24px;
+    z-index: 2;
+}
+.auth-form {
+    width: 100%;
+    margin-top: 33px;
+}
+.account-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+}
+.account-field {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    min-width: 0;
+    color: var(--ui-brand);
+    font: 500 20px/20px var(--ui-font-nav);
+    letter-spacing: 0.1px;
+}
+.account-field input,
+.account-field textarea {
+    width: 100%;
+    height: 44px;
+    border: 1px solid white;
+    border-radius: 22px;
+    padding: 11px;
+    background: #fafcf9;
+    box-shadow: 0 4px 32px #0000000a;
+    outline: none;
+    font: 400 17px/20px var(--ui-font-body);
+    color: #1d1b20;
+}
+.account-field input:focus,
+.account-field textarea:focus {
+    outline: 3px solid var(--ui-brand-blush);
+    outline-offset: 0;
+}
+.account-field input::placeholder {
+    color: #88898b;
+    font-size: 14px;
+}
+.account-field input:disabled {
+    opacity: 1;
+}
+.verification-field {
+    margin-top: 11px;
+}
+.auth-switch {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    column-gap: 3px;
+    margin: 22px 0 0;
+    min-height: 22px;
+    font: 500 12px/20px var(--ui-font-nav);
+    letter-spacing: 0.1px;
+}
+.auth-switch button {
+    font: inherit;
+    text-decoration: none;
+}
+.account-dialog .account-submit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 208px;
+    height: 44px;
+    margin: 12px auto 0;
+    border: 1px solid var(--ui-brand);
+    border-radius: 71px;
+    background: var(--ui-brand-blush);
+    font: 500 20px/20px var(--ui-font-logo);
+    letter-spacing: 0.1px;
+    color: var(--ui-brand);
+}
+.account-submit img {
+    width: 24px;
+    height: 24px;
+    flex: none;
+}
+.account-register .account-submit {
+    margin-top: 1px;
+}
+.account-desktop .auth-form .account-submit {
+    transform: translateX(-6.5px);
+}
+.auth-social {
+    margin-top: auto;
+    padding-top: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.auth-social h3 {
+    margin: 0 0 22px;
+    font: 500 32px/32px var(--ui-font-logo);
+    letter-spacing: 0.1px;
+    color: black;
+}
+.account-desktop.account-login .auth-social {
+    margin-top: 22px;
+}
+.account-desktop.account-register .auth-social {
+    margin-top: -1px;
+}
+.auth-social-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+}
+.auth-social-buttons button {
+    width: 264px;
+    max-width: 100%;
+    height: 54px;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 15px;
+    padding: 15px;
+    border-radius: 24px;
+    font: 500 20px/20px var(--ui-font-nav);
+    letter-spacing: 0.1px;
+}
+.auth-social-buttons img {
+    width: 24px;
+    height: 24px;
+    flex: none;
+}
+.auth-social-buttons .auth-apple {
+    background: black;
+    color: white;
+}
+.auth-social-buttons .auth-google {
+    background: white;
+    color: #0000008a;
+    box-shadow:
+        0 0 1.5px #00000014,
+        0 2px 1.5px #0000002b;
+}
+.account-status {
+    margin: 11px 0;
+    font: 400 14px/20px var(--ui-font-body);
+    color: var(--ui-brand-deep);
+    overflow-wrap: anywhere;
+}
+.account-mobile {
+    top: 46px;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    left: 0;
+    right: 0;
+    border-radius: 10px 10px 0 0;
+    background: var(--ui-nav-surface);
+    box-shadow: 0 0 6px #00000021;
+}
+body:has(.account-mobile) .mobile-sheet {
+    visibility: hidden;
+}
+.account-mobile .account-dialog-scroll {
+    margin-top: 24px;
+    height: calc(100% - 24px);
+}
+.account-mobile .account-dialog-inner {
+    align-items: stretch;
+    min-height: 0;
+    padding: 5px 11px 27px;
+}
+.account-mobile h2 {
+    font-size: 28px;
+    line-height: 20px;
+}
+.account-sheet-handle {
+    position: absolute;
+    top: 0;
+    left: calc(50% - 30.5px);
+    width: 56px;
+    height: 24px;
+    z-index: 2;
+}
+.account-sheet-handle span {
+    width: 36px;
+    height: 5px;
+    position: absolute;
+    top: 7px;
+    left: 10px;
+    border-radius: 4px;
+    background: #bebfc0;
+}
+.account-mobile .auth-form {
+    margin-top: 27px;
+}
+.account-mobile.account-register .auth-form {
+    margin-top: 23px;
+}
+.account-mobile .auth-social {
+    margin-top: 23px;
+    align-items: flex-start;
+}
+.account-mobile .auth-social h3 {
+    font: 500 16px/20px var(--ui-font-nav);
+    color: var(--ui-brand);
+    margin: 0 0 12px;
+}
+.account-mobile .auth-social-buttons {
+    width: 100%;
+}
+.account-mobile .auth-social-buttons button {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr) 24px;
+    gap: 8px;
+    width: 100%;
+}
+.account-mobile .auth-social-buttons span {
+    min-width: 0;
+    text-align: center;
+}
+.account-mobile.account-register .auth-social {
+    margin-top: 20px;
+}
+.account-mobile.account-register .auth-social h3 {
+    margin-bottom: 21px;
+}
+@media (max-height: 480px) {
+    .account-mobile {
+        top: 8px;
+    }
+}
+.account-avatar-image {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.desktop-guest-account {
+    position: absolute;
+    left: 13px;
+    bottom: 0;
+    width: 215px;
+    height: 120px;
+}
+.desktop-login-hint {
+    position: absolute;
+    top: 0;
+    left: 7px;
+    display: flex;
+    align-items: center;
+    width: 208px;
+    height: 66px;
+    margin: 0;
+    font: 590 17px/normal var(--ui-font-body);
+    letter-spacing: -0.8px;
+    color: var(--ui-brand-deep);
+}
+.desktop-guest-account .desktop-login-button {
+    position: absolute;
+    left: 0;
+    bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 208px;
+    height: 44px;
+    border: 1px solid var(--ui-brand);
+    border-radius: 71px;
+    background: var(--ui-brand-blush);
+    color: var(--ui-brand);
+    font: 500 20px/20px var(--ui-font-logo);
+    letter-spacing: 0.1px;
+}
+.desktop-nav:has(.desktop-guest-account) nav {
+    bottom: 120px;
+}
+.live-account .account-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font: 400 12px/16px var(--ui-font-body);
+    color: white;
+}
+.live-account .account-entry-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    text-align: left;
+}
+.live-account .account-name,
+.live-account .account-handle {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.account-entry-more {
+    margin-left: auto;
+    width: 18px;
+    height: 4px;
+}
+.profile-content {
+    width: 100%;
+    margin-top: 33px;
+}
+.profile-avatar-control {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    font: 500 17px/22px var(--ui-font-nav);
+    color: var(--ui-brand);
+    cursor: pointer;
+}
+.profile-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: #c7c7cb;
+    color: #f7f7f6;
+    overflow: hidden;
+}
+.profile-identity {
+    margin: 11px 0 22px;
+    font: 400 15px/20px var(--ui-font-body);
+    color: var(--ui-brand-deep);
+    overflow-wrap: anywhere;
+}
+.profile-options {
+    display: grid;
+    gap: 11px;
+    margin-top: 22px;
+}
+.profile-options .setting-card {
+    height: 44px;
+    padding: 0 11px;
+}
+.profile-options .figma-icon {
+    margin-left: auto;
+    width: 24px;
+    height: 24px;
+}
+.created-places [role='listitem'] {
+    margin-bottom: 16px;
+}
+.created-places .place-summary {
+    min-width: 0;
+}
+.created-places .place-result-row {
+    width: 100%;
+}
+.created-state {
+    margin: 4px 11px 0;
+    font: 400 13px/18px var(--ui-font-body);
+    color: var(--ui-brand-deep);
+}
+.account-mobile .created-places .mobile-place-row {
+    height: auto;
+    min-height: 66px;
+    padding: 11px;
+    border-radius: 24px;
+    background: white;
+}
+.account-desktop.account-profile,
+.account-desktop.account-password,
+.account-desktop.account-created {
+    height: min(758px, calc(100dvh - 32px));
+}

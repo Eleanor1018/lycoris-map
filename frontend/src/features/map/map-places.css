@@ -1,0 +1,24 @@
+.map-location-marker {
+    overflow: hidden;
+    background: transparent;
+    border: 0;
+    border-radius: 50%;
+}
+.map-location-marker img {
+    position: absolute;
+    width: 86px;
+    height: 88px;
+    max-width: none;
+    left: -31px;
+    top: -31px;
+}
+.map-cluster-marker {
+    display: grid;
+    place-items: center;
+    background: #6393f2;
+    border: 2px solid white;
+    border-radius: 50%;
+    color: white;
+    font: 500 14px/20px var(--ui-font-nav);
+    box-shadow: 0 2px 4px #0002;
+}

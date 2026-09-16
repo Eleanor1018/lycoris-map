@@ -1,42 +1,53 @@
+import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import * as path from "node:path";
-import * as fs from 'node:fs'
+import tailwindcss from '@tailwindcss/vite'
+import { placeFixtureServer } from './src/features/dev/placeFixtureServer.ts'
 
-const certFile = process.env.VITE_HTTPS_CERT || path.resolve(__dirname, '.cert/localhost.pem')
-const keyFile = process.env.VITE_HTTPS_KEY || path.resolve(__dirname, '.cert/localhost-key.pem')
-const useHttps = fs.existsSync(certFile) && fs.existsSync(keyFile)
-// Rust 本地默认后端监听 8080 且只绑定 IPv4；用 127.0.0.1 避免 localhost 解析成 ::1 而连不上。
-// 需要时仍可用进程环境 VITE_BACKEND_URL 覆盖代理目标。
-const backendTarget = process.env.VITE_BACKEND_URL || 'http://127.0.0.1:8080'
+/**
+ * Local development only. The frontend never carries a server target or secrets.
+ *
+ * `/api`, `/uploads` and `/health` are proxied same-origin to the fixed local
+ * Rust backend at `http://127.0.0.1:8080`. There is deliberately no
+ * `VITE_BACKEND_URL` override: a `VITE_`-prefixed value is embedded into the
+ * client bundle and would misrepresent a client-visible setting. The proxy does
+ * not rewrite `Origin`, so browser writes keep the Vite origin that the backend
+ * `WRITE_ALLOWED_ORIGINS` allowlist expects.
+ *
+ * `strictPort` keeps the dev origin at 5173 instead of silently moving to 5174,
+ * which would fall outside that cookie/write allowlist.
+ */
+const LOCAL_BACKEND = 'http://127.0.0.1:8080'
+const DEV_PORT = 5173
 
-// https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
-  resolve:{
-    alias: {
-      '@': path.resolve(__dirname, 'src'),
-    }
-  },
-  server: {
-    https: useHttps
-      ? {
-          cert: fs.readFileSync(certFile),
-          key: fs.readFileSync(keyFile),
-        }
-      : undefined,
-    host: '0.0.0.0',
-    proxy: {
-      '/api':{
-        target: backendTarget,
-        changeOrigin: true,
-        secure: false,
-      },
-      '/uploads': {
-        target: backendTarget,
-        changeOrigin: true,
-        secure: false,
-      }
-    }
-  }
-});
+    plugins: [react(), tailwindcss(), placeFixtureServer()],
+    build: {
+        rolldownOptions: {
+            output: {
+                codeSplitting: {
+                    groups: [
+                        {
+                            name: 'map-engine',
+                            test: /\/node_modules\/(?:leaflet|react-leaflet|@react-leaflet)\//,
+                        },
+                    ],
+                },
+            },
+        },
+    },
+    resolve: {
+        alias: {
+            '@': fileURLToPath(new URL('./src', import.meta.url)),
+        },
+    },
+    server: {
+        port: DEV_PORT,
+        strictPort: true,
+        proxy: {
+            '/api': { target: LOCAL_BACKEND, changeOrigin: false },
+            '/uploads': { target: LOCAL_BACKEND, changeOrigin: false },
+            '/health': { target: LOCAL_BACKEND, changeOrigin: false },
+        },
+    },
+})

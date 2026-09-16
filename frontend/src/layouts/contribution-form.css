@@ -1,0 +1,344 @@
+.contribution-form {
+    position: relative;
+    height: 100%;
+    min-height: 748px;
+}
+.contribution-form h1 {
+    position: absolute;
+    left: 16px;
+    top: 26px;
+    margin: 0;
+    color: black;
+    font: 400 32px/20px var(--ui-font-heading);
+    letter-spacing: 0.1px;
+}
+.desktop-panel .contribution-form h1 {
+    left: 16px;
+}
+.contribution-close {
+    position: absolute;
+    left: 280px;
+    top: 24px;
+    width: 24px;
+    height: 24px;
+}
+.contribution-label {
+    position: absolute;
+    left: 16px;
+    height: 20px;
+    color: var(--ui-brand-deep);
+    font: 500 20px/20px var(--ui-font-nav);
+    letter-spacing: 0.1px;
+}
+.title-label {
+    top: 80px;
+}
+.category-label {
+    top: 160px;
+}
+.description-label {
+    top: 226px;
+}
+.upload-label {
+    top: 598px;
+}
+.contribution-input {
+    box-sizing: border-box;
+    border: 3px solid rgba(221, 165, 196, 0.31);
+    border-radius: 71px;
+    background: rgba(255, 255, 255, 0.38);
+    box-shadow: 1px 9px 35.5px rgba(236, 167, 206, 0.31);
+    padding: 0 16px;
+    height: 44px;
+    color: black;
+    font: 400 17px/20px var(--ui-font-body);
+}
+.desktop-panel .contribution-input:focus {
+    border-color: var(--ui-brand-blush);
+    outline: none;
+}
+.contribution-title,
+.contribution-description {
+    position: absolute;
+    left: 16px;
+    width: 280px;
+}
+.contribution-title {
+    top: 108px;
+}
+.contribution-description {
+    top: 254px;
+    height: 176px;
+    border-radius: 24px;
+    padding: 12px 16px;
+    resize: none;
+}
+.contribution-categories {
+    position: absolute;
+    left: 16px;
+    top: 188px;
+    display: flex;
+    gap: 16px;
+}
+.contribution-categories .design-button {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+}
+.contribution-categories [aria-checked='true'] {
+    outline: 2px solid var(--ui-brand);
+    outline-offset: 3px;
+}
+.contribution-time {
+    position: absolute;
+    left: 16px;
+}
+.contribution-time .contribution-label {
+    left: 0;
+    top: 0;
+}
+.opening-time {
+    top: 438px;
+}
+.closing-time {
+    top: 518px;
+}
+.time-inputs {
+    display: flex;
+    margin-top: 28px;
+}
+.time-part {
+    display: flex;
+}
+.time-part input {
+    width: 132px;
+}
+.time-colon {
+    width: 12px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: black;
+    font: 500 20px/20px var(--ui-font-nav);
+    letter-spacing: 0.1px;
+}
+.contribution-form .contribution-action {
+    position: absolute;
+    width: 144px;
+    height: 44px;
+    border: 1px solid var(--ui-brand);
+    border-radius: 71px;
+    color: var(--ui-brand);
+    font: 500 20px/20px var(--ui-font-logo);
+    letter-spacing: 0.1px;
+}
+.contribution-form .contribution-action span,
+.contribution-form .contribution-action img {
+    position: absolute;
+}
+.contribution-form .contribution-upload {
+    left: 17px;
+    top: 628px;
+    background: var(--ui-brand-blush);
+}
+.contribution-form .contribution-upload span {
+    left: 24px;
+    top: 12px;
+}
+.contribution-form .contribution-upload img {
+    left: 96px;
+    top: 10px;
+}
+.contribution-form .contribution-submit {
+    left: 170px;
+    bottom: 16px;
+    background: #d0bcff;
+}
+.contribution-form .contribution-submit span {
+    left: 22px;
+    top: 11px;
+}
+.contribution-form .contribution-submit img {
+    left: 101px;
+    top: 9px;
+}
+.mobile-sheet.mobile-contribution {
+    height: calc(100dvh - 54px - env(safe-area-inset-bottom, 0px));
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+}
+.contribution-form-mobile {
+    min-height: 758px;
+    margin-top: -24px;
+}
+.contribution-form-mobile h1 {
+    left: 17px;
+    top: 29px;
+    font: 500 28px/20px var(--ui-font-logo);
+}
+.contribution-form-mobile .contribution-close {
+    left: auto;
+    right: 21px;
+    top: 25px;
+}
+.contribution-form-mobile .contribution-label {
+    font-size: 16px;
+}
+.contribution-form-mobile .title-label {
+    top: 68px;
+    left: 17px;
+    color: var(--ui-brand);
+}
+.contribution-form-mobile .category-label {
+    top: 146px;
+    left: 16px;
+}
+.contribution-form-mobile .description-label {
+    top: 214px;
+    left: 17px;
+}
+.contribution-form-mobile .contribution-input {
+    background: white;
+    border: 0;
+    box-shadow: none;
+}
+.contribution-form-mobile .contribution-title {
+    top: 92px;
+    height: 43px;
+    left: 8px;
+    width: calc(100% - 16px);
+    padding: 0 12px;
+    border-radius: 22px;
+    font: 510 16px/19px var(--ui-font-body);
+    letter-spacing: -0.5px;
+}
+.contribution-title::placeholder {
+    color: #88898b;
+    opacity: 1;
+}
+.contribution-form-mobile .contribution-categories {
+    top: 173px;
+    left: 17px;
+}
+.contribution-form-mobile .contribution-description {
+    top: 240px;
+    left: 11px;
+    width: calc(100% - 27px);
+    height: 200px;
+}
+.contribution-form-mobile .opening-time {
+    top: 446px;
+    left: 18px;
+}
+.contribution-form-mobile .closing-time {
+    top: 527px;
+    left: 17px;
+}
+.contribution-form-mobile .opening-time .contribution-label {
+    left: 2px;
+}
+.contribution-form-mobile .closing-time .contribution-label {
+    left: 3px;
+}
+.contribution-form-mobile .time-inputs {
+    margin-top: 26px;
+}
+.contribution-form-mobile .time-colon {
+    width: 20px;
+}
+.contribution-form-mobile .upload-label {
+    top: 608px;
+    left: 20px;
+}
+.contribution-form-mobile .contribution-upload {
+    top: 638px;
+    left: 18px;
+}
+.contribution-form-mobile .contribution-submit {
+    left: auto;
+    right: 10px;
+    top: 702px;
+    bottom: auto;
+}
+
+.contribution-form h1:focus {
+    outline: none;
+}
+.contribution-categories .badge-nursing {
+    background: #fea90c;
+}
+.contribution-categories .badge-medical {
+    background: #1fbc00;
+}
+.contribution-form-live {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: max(748px, 100%);
+    padding: 686px 16px 16px;
+}
+.contribution-form-live .contribution-submit {
+    position: static;
+    align-self: flex-end;
+    flex: none;
+    margin-top: auto;
+    margin-right: -10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+}
+.contribution-form-live .contribution-submit span,
+.contribution-form-live .contribution-submit img {
+    position: static;
+}
+.contribution-form-live .contribution-submit img {
+    width: 24px;
+    height: 24px;
+}
+.contribution-feedback {
+    font: 400 14px/20px var(--ui-font-body);
+    color: var(--ui-brand-deep);
+    overflow-wrap: anywhere;
+}
+.contribution-feedback p {
+    margin: 0 0 11px;
+}
+.contribution-feedback p:empty {
+    display: none;
+}
+.contribution-feedback .design-button {
+    font: inherit;
+    text-decoration: underline;
+}
+.contribution-custom-category {
+    align-self: center;
+    font: 500 16px/20px var(--ui-font-nav);
+    color: var(--ui-brand);
+}
+.contribution-form-mobile.contribution-form-live {
+    min-height: 758px;
+    padding: 702px 11px 12px;
+}
+.contribution-form-mobile.contribution-form-live .contribution-submit {
+    margin-right: 0;
+}
+.contribution-form-live :is(input, textarea):disabled {
+    opacity: 1;
+}
+.mobile-sheet.mobile-contribution {
+    max-height: calc(
+        var(--contribution-viewport-height, 100dvh) - 54px - env(safe-area-inset-bottom, 0px)
+    );
+    bottom: calc(var(--contribution-keyboard-offset, 0px) + 8px + env(safe-area-inset-bottom, 0px));
+}
+.mobile-contribution .sheet-scroll {
+    scroll-padding: 16px;
+}
+@media (max-height: 480px) {
+    .mobile-sheet.mobile-contribution {
+        max-height: calc(
+            var(--contribution-viewport-height, 100dvh) - 16px - env(safe-area-inset-bottom, 0px)
+        );
+    }
+}

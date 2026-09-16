@@ -1,0 +1,345 @@
+[
+    {
+        "file": "nav-search.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "9:453",
+        "sha256": "a4043db299d9ceb138c2e374dca4840d7d3ff7f4252651ed455139c571b71f73",
+        "bytes": 810
+    },
+    {
+        "file": "microphone.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "9:445",
+        "sha256": "f86adf87aa1739bb756ad515ac956dff22270b4e504fa7d51a1f9f71bd826b0f",
+        "bytes": 3065
+    },
+    {
+        "file": "account-more.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:2383",
+        "sha256": "1c2545769b5659a21e554b7f40022f5e1af7d1a26c5e57c69fffa3ee0835ecbe",
+        "bytes": 1862
+    },
+    {
+        "file": "nav-bookmarks.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:2383",
+        "sha256": "397758a541cf79b1a2a9b6986a83a417c03b228726cdb1250cbf7920b6d578c0",
+        "bytes": 357
+    },
+    {
+        "file": "nav-contribute.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:2383",
+        "sha256": "b6bcdbf92e4c2d2ae987ea644efc24c06c9347550aba667300c691f44fc9f89b",
+        "bytes": 621
+    },
+    {
+        "file": "nav-languages.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:2383",
+        "sha256": "bb5a9e3ca4b554eacb2598611681227cae8d8ddd5ca301a438343e1e7564ea21",
+        "bytes": 1239
+    },
+    {
+        "file": "nav-settings.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:2383",
+        "sha256": "eaa111f5e06137165526fc32b9e3110f2d570666db9434884ae69b4f7457b28d",
+        "bytes": 2332
+    },
+    {
+        "file": "map.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:2383",
+        "sha256": "e905fe5c79b908aff4e71dd002e2c2221cc43fab8821034ac83f1ca3bdf9867a",
+        "bytes": 946
+    },
+    {
+        "file": "direction.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:2383",
+        "sha256": "f7a53aadfe66c17ca6fd13cc8cd4c5583c3baaed7b138d47e70a93937da0b344",
+        "bytes": 335
+    },
+    {
+        "file": "plus.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:2383",
+        "sha256": "2bc68f838d699cd92bc4b9029a8a7317ec7879ff1639af1add5faa9c1c899060",
+        "bytes": 298
+    },
+    {
+        "file": "minus-button.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:2383",
+        "sha256": "43cf5951f82394cdc9e926512357db9e8a360da7627f1712a73cdc2c0e7eb66e",
+        "bytes": 521
+    },
+    {
+        "file": "close.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "9:445",
+        "sha256": "1e7a390f7db5617bad4442a8c12692462c995dd41d92d2a423c1d81b38d37089",
+        "bytes": 368
+    },
+    {
+        "file": "search.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "9:445",
+        "sha256": "884f770e2fc454f58870915adb0174417747a1737ece873ff6c3124e6fd4ee87",
+        "bytes": 804
+    },
+    {
+        "file": "toilet.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "9:445",
+        "sha256": "51ceb87db6b570c5612b6748a780f530dff8774996c81c2a8d97a4433cdb568a",
+        "bytes": 888
+    },
+    {
+        "file": "nursing.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "9:445",
+        "sha256": "a8b387552bf5af5be0a10ffbbecefa3246ea7c17a73fe17ed3725f853766a77f",
+        "bytes": 652
+    },
+    {
+        "file": "medical.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "9:445",
+        "sha256": "903f789c4feb4399ed15c50ad668c3593200fc3e7cb3f971b86e8834d0292568",
+        "bytes": 423
+    },
+    {
+        "file": "check.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "10:740",
+        "sha256": "dcae4c6dae6d43daf56432d34536f45a8bbb3f409a7e72e23f164a2572b822a8",
+        "bytes": 328
+    },
+    {
+        "file": "chevron.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "45:428",
+        "sha256": "68cd06302601987cab1afb5893cd4a2c98f4e93ef55d6e1823b0e4f5b8f099be",
+        "bytes": 703
+    },
+    {
+        "file": "info.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "10:861",
+        "sha256": "e1ce6efe3cf5e68ba99081d22cc8ae2bc71a5d1f13184bcfb1535fb38439df72",
+        "bytes": 478
+    },
+    {
+        "file": "bookmark-filled.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "54:1816",
+        "sha256": "2e94ceaee0e6fb9c60fe31f41c92728acb0c6673460f5aa8fbf54b5f8d130a66",
+        "bytes": 427
+    },
+    {
+        "file": "edit.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "54:1816",
+        "sha256": "12f998153881553c79e6d2c383556de49ae1ba65027620188db846c7b8af9100",
+        "bytes": 817
+    },
+    {
+        "file": "share.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "54:1816",
+        "sha256": "c540b03fdceb801119f4538f048a10dea1ca6ab423986dbd009a55c1ca5cc0db",
+        "bytes": 1415
+    },
+    {
+        "file": "forward.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "54:1816",
+        "sha256": "43df6699514bf349c5146cc35570eee4c7323f298c79433a76e2ea248f00a76d",
+        "bytes": 502
+    },
+    {
+        "file": "mobile-map.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:1763",
+        "sha256": "e905fe5c79b908aff4e71dd002e2c2221cc43fab8821034ac83f1ca3bdf9867a",
+        "bytes": 946
+    },
+    {
+        "file": "mobile-direction.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:1763",
+        "sha256": "f7a53aadfe66c17ca6fd13cc8cd4c5583c3baaed7b138d47e70a93937da0b344",
+        "bytes": 335
+    },
+    {
+        "file": "radar.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:1763",
+        "sha256": "fb83d8b0b5b7bac6b8945a70ece8058d4e76e47e1f1af0753b280504cad74ff9",
+        "bytes": 1546
+    },
+    {
+        "file": "mobile-contribute.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:1763",
+        "sha256": "8329e7f5ca0880aeea663382029e96a5cc46a273362d55f7a981dda58d17212e",
+        "bytes": 817
+    },
+    {
+        "file": "mobile-edit.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "54:1669",
+        "sha256": "5f05c8ece7777237ea459d2fdd636063313a3b0713d7734dac20b78d28c27935",
+        "bytes": 817
+    },
+    {
+        "file": "mobile-bookmark.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "54:1669",
+        "sha256": "f9a5fac5474f27b0a4cd0138388c7e3ad784b940e116b3de073f8e48e576adfa",
+        "bytes": 533
+    },
+    {
+        "file": "mobile-share.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "54:1669",
+        "sha256": "c540b03fdceb801119f4538f048a10dea1ca6ab423986dbd009a55c1ca5cc0db",
+        "bytes": 1415
+    },
+    {
+        "file": "mobile-microphone.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:1832",
+        "sha256": "790d403178cb57e672dd4c198edacc8222d820f3c1e4659e9e2026726f5b1b52",
+        "bytes": 3051
+    },
+    {
+        "file": "mobile-chevron-dark.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "45:422",
+        "sha256": "e8c79a856a52cf24b437138f1e78017c7bd4dd5fbe7125e348b2d8c78acf8cab",
+        "bytes": 714
+    },
+    {
+        "file": "mobile-chevron-blue.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "I18:2277;5533:11545",
+        "sha256": "f934857a80a5d5c65eccca4fd9ee7a0433988ca2df81d5abb2b73667455bc3f9",
+        "bytes": 714
+    },
+    {
+        "file": "fixtures/desktop-map.png",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:2383",
+        "sha256": "f7595c75bdc5e806416df3c159d49dc1dc09ff9fb3ce89942326d1aaf44ab17e",
+        "bytes": 2732823
+    },
+    {
+        "file": "fixtures/desktop-pin.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:2383",
+        "sha256": "cce16776f231a3c22b2396b12498ddbd159f469c131af0751b63d35526e11cc0",
+        "bytes": 1032
+    },
+    {
+        "file": "fixtures/desktop-place.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "54:1816",
+        "sha256": "0b3bf4e62dc70be74b241c6f0ed9ff79afe51f770f3299f391565c41a9fbef35",
+        "bytes": 3150
+    },
+    {
+        "file": "fixtures/desktop-photo.png",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "54:1816",
+        "sha256": "13d21ce8fcaee26970c672c0ea696feff7400938a41e72d9ed02cb4f106f4923",
+        "bytes": 8011
+    },
+    {
+        "file": "fixtures/mobile-map.png",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:1763",
+        "sha256": "91ed23b62fb6864858cf6833026cdcf0859799eb83814e2b89b9cd69cf1d14a8",
+        "bytes": 626229
+    },
+    {
+        "file": "fixtures/mobile-pin.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:1763",
+        "sha256": "d544c07e9d163ea9475a0b6afff6381f50b549300ad88c22712df5ebddea807a",
+        "bytes": 752
+    },
+    {
+        "file": "fixtures/mobile-place.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "54:1669",
+        "sha256": "125c376b460c9502c464877443d2d96a664e36b18393dc0d6b4cd50047ff07d1",
+        "bytes": 3150
+    },
+    {
+        "file": "fixtures/mobile-photo.jpg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "54:1669",
+        "sha256": "13d21ce8fcaee26970c672c0ea696feff7400938a41e72d9ed02cb4f106f4923",
+        "bytes": 8011
+    },
+    {
+        "file": "upload.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "74:4725",
+        "sha256": "282569fecdb812540736328e9ab3125c33ffa79db25616bd1b12a17bfce76442",
+        "bytes": 461
+    },
+    {
+        "file": "send.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "74:4741",
+        "sha256": "0d76ac697009b06516a014af09aa832fd1edade29e3a4f86d61e536715da41c1",
+        "bytes": 313
+    },
+    {
+        "file": "map-place.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "54:1816",
+        "sha256": "0b3bf4e62dc70be74b241c6f0ed9ff79afe51f770f3299f391565c41a9fbef35",
+        "bytes": 3150
+    },
+    {
+        "file": "map-position.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:2383",
+        "sha256": "cce16776f231a3c22b2396b12498ddbd159f469c131af0751b63d35526e11cc0",
+        "bytes": 1032
+    },
+    {
+        "file": "auth-google.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "126:402",
+        "sha256": "89efac4c8f5c93a62aa2e67550c20e2938ee54d2368cd5357cc106cb645dcf18",
+        "bytes": 1417
+    },
+    {
+        "file": "auth-apple.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "126:396",
+        "sha256": "21b7110c04ae7576a2eab68b3e7db4176160067bf76c1c42a044a26cb3265a25",
+        "bytes": 1759
+    },
+    {
+        "file": "auth-login.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "126:501",
+        "sha256": "5c5cc217bf16ec28017b2ab388efe71efe8bcb56ee0a0fe9c1d9ed9217c49848",
+        "bytes": 369
+    },
+    {
+        "file": "auth-close.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "126:799",
+        "sha256": "1e7a390f7db5617bad4442a8c12692462c995dd41d92d2a423c1d81b38d37089",
+        "bytes": 368
+    }
+]

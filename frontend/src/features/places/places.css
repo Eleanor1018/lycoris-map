@@ -1,0 +1,261 @@
+.place-results {
+    position: absolute;
+    top: 138px;
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+.place-results .results-heading {
+    flex: none;
+    margin: 0 0 14px 8px;
+    color: var(--ui-brand);
+    font: 500 20px/20px var(--ui-font-nav);
+    letter-spacing: 0.1px;
+}
+.nearby-reference {
+    margin: -6px 0 8px 8px;
+    font: 400 12px/16px var(--ui-font-body);
+    color: var(--ui-brand-deep);
+}
+.place-read-message {
+    padding: 16px;
+    border-radius: 24px;
+    background: white;
+    color: var(--ui-brand-deep);
+    font: 400 15px/20px var(--ui-font-body);
+}
+.place-read-message:empty {
+    display: none;
+}
+.place-read-message .read-retry {
+    display: block;
+    margin-top: 8px;
+    color: var(--ui-brand);
+    text-decoration: underline;
+}
+.place-result-scroll {
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    scrollbar-width: thin;
+    overscroll-behavior: contain;
+}
+.place-results .place-result-row {
+    margin-bottom: 16px;
+    align-items: center;
+    flex: none;
+}
+.place-result-row .place-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+    width: 100%;
+}
+.place-result-row .card-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.place-result-row .place-meta {
+    min-width: 0;
+    gap: 12px;
+    overflow: hidden;
+}
+.place-result-row .place-meta > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.badge-custom {
+    background: var(--ui-selected);
+}
+.mobile-sheet .has-place-results {
+    height: 320px;
+}
+.mobile-sheet[data-snap='collapsed'] .has-place-results {
+    height: 158px;
+}
+.mobile-sheet[data-snap='full'] .mobile-search-content.has-place-results {
+    padding: 0;
+    height: calc(100dvh - 54px - env(safe-area-inset-bottom, 0px));
+}
+.mobile-place-results {
+    top: 131px;
+    left: var(--mobile-content-inset);
+    right: var(--mobile-content-inset);
+}
+.mobile-place-results .results-heading {
+    font-size: 16px;
+    margin: 0 0 9px;
+}
+.mobile-place-results .nearby-reference {
+    margin-left: 0;
+}
+.mobile-place-results .place-read-message {
+    padding: 11px;
+}
+.mobile-place-results .place-result-scroll {
+    flex: 0 1 auto;
+    padding: 11px;
+    border-radius: 24px;
+    background: white;
+}
+.mobile-place-results .place-result-row {
+    margin-bottom: 24px;
+}
+.mobile-place-results [role='listitem']:last-child .place-result-row {
+    margin-bottom: 0;
+}
+.desktop-panel .live-place-detail {
+    position: relative;
+    margin: 84px 16px 16px;
+}
+.desktop-panel .live-place-detail h2 {
+    position: static;
+    width: calc(100% - 30px);
+    height: auto;
+    min-height: 40px;
+    overflow-wrap: anywhere;
+}
+.live-place-detail .details-bookmark {
+    left: auto;
+    right: 5px;
+    top: 0;
+}
+.desktop-panel .live-place-detail .place-meta {
+    position: static;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+.desktop-panel .live-place-detail .place-photo {
+    position: static;
+    display: block;
+    width: calc(100% - 8px);
+}
+.desktop-panel .live-place-detail .place-description {
+    position: static;
+    width: calc(100% - 5px);
+    height: auto;
+    min-height: 60px;
+    display: block;
+    overflow-wrap: anywhere;
+}
+.place-actions {
+    display: flex;
+    gap: 6px;
+}
+.live-place-detail .place-actions {
+    margin: 10px -6px 0;
+}
+.place-actions .share-button,
+.place-actions .navigate-button {
+    position: relative;
+    top: auto;
+    left: auto;
+    display: block;
+    flex: none;
+    text-decoration: none;
+}
+.live-place-detail h2:focus,
+.live-mobile-detail h1:focus {
+    outline: none;
+}
+.mobile-detail .live-mobile-detail {
+    padding: 29px var(--mobile-content-inset) 21px;
+}
+.mobile-detail .live-mobile-detail h1 {
+    position: static;
+    height: auto;
+    min-height: 40px;
+    padding-right: 24px;
+    overflow-wrap: anywhere;
+}
+.mobile-detail .live-mobile-detail .place-meta {
+    position: static;
+    margin-top: 5px;
+    flex-wrap: wrap;
+}
+.mobile-detail .live-mobile-detail .mobile-description {
+    position: static;
+    width: 100%;
+    height: auto;
+    min-height: 40px;
+    overflow-wrap: anywhere;
+}
+.mobile-detail .live-mobile-detail .mobile-photo {
+    display: block;
+    position: static;
+    margin-top: 9px;
+    width: 100%;
+    height: 198px;
+}
+.live-mobile-detail .place-actions {
+    margin: 27px 0 0;
+    gap: 10px;
+}
+.live-mobile-detail .place-actions .share-button,
+.live-mobile-detail .place-actions .navigate-button {
+    flex: 1;
+    min-width: 0;
+    max-width: 144px;
+}
+.live-mobile-detail .place-actions .navigate-button span {
+    left: 15px;
+}
+.live-mobile-detail .place-actions .mobile-bookmark {
+    position: relative;
+    top: 6px;
+    right: auto;
+    margin-left: auto;
+    flex: none;
+}
+.place-action-status {
+    color: var(--ui-brand-deep);
+    font: 400 15px/20px var(--ui-font-body);
+    margin: 12px 0 0;
+}
+.map-location-status,
+.map-read-status {
+    position: absolute;
+    z-index: 10;
+    top: 16px;
+    left: 576px;
+    right: 80px;
+    margin: 0;
+    padding: 12px 16px;
+    border-radius: 22px;
+    background: var(--ui-nav-surface);
+    color: var(--ui-brand-deep);
+    font: 400 15px/20px var(--ui-font-body);
+}
+.map-read-status button {
+    text-decoration: underline;
+}
+.map-shell[data-mobile='true'] .map-location-status,
+.map-shell[data-mobile='true'] .map-read-status {
+    left: 16px;
+    right: 64px;
+    top: 8px;
+}
+
+@media (max-width: 350px) {
+    .live-mobile-detail .place-actions .share-button,
+    .live-mobile-detail .place-actions .navigate-button {
+        font-size: 18px;
+    }
+    .live-mobile-detail .place-actions .share-button span {
+        left: 20px;
+    }
+    .live-mobile-detail .place-actions .navigate-button span {
+        left: 12px;
+    }
+    .live-mobile-detail .place-actions .share-button img,
+    .live-mobile-detail .place-actions .navigate-button img {
+        left: auto;
+        right: 8px;
+        width: 20px;
+    }
+}

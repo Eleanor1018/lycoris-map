@@ -1,0 +1,37 @@
+/* Lycoris design tokens extracted from the Figma spec (docs/frontend-v2). */
+
+@theme {
+    /* Layout: desktop 1440x1024 reference. */
+    --spacing: 4px;
+    --ui-nav-width: 240px;
+    --ui-panel-width: 320px;
+    --ui-nav-height: 48px;
+    --ui-gap: 16px;
+
+    /* Surfaces (translucent panels over the map). */
+    --ui-nav-surface: rgba(250, 242, 254, 0.9);
+    --ui-panel-surface: rgba(246, 235, 255, 0.9);
+    --ui-selected: rgba(208, 188, 255, 0.5);
+
+    /* Brand. */
+    --ui-brand: #5a3850;
+    --ui-brand-deep: #461f3a;
+    --ui-brand-blush: #efb8c8;
+    --ui-on-brand: #ffffff;
+
+    /* Controls. */
+    --ui-control-height: 44px;
+    --ui-control-radius: 22px;
+    --ui-search-height: 44px;
+    --ui-card-height: 66px;
+    --ui-card-radius: 24px;
+    --ui-badge-size: 30px;
+
+    /* Fonts: open fonts are self-hosted; SF stays a system-only request.
+     * Figma desktop headings use Noto Sans Regular 400. */
+    --ui-font-logo: 'Fredoka', 'Noto Sans', sans-serif;
+    --ui-font-nav: 'Roboto', 'Noto Sans', sans-serif;
+    --ui-font-heading: 'Noto Sans', 'Noto Sans SC', sans-serif;
+    --ui-font-body:
+        -apple-system, BlinkMacSystemFont, 'Roboto', 'Noto Sans', 'Noto Sans SC', sans-serif;
+}

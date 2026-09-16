@@ -51,7 +51,8 @@ APK 包含运行所需的 JavaScript 和文档资源，**不需要启动 Metro**
 
 开发者快速了解项目：[Rust 后端说明](./backend/README.md)。
 
-- frontend： React(Typescript)
+- frontend：Web v2 新工程，React 19 + TypeScript 7 + Vite 8 + Tailwind 4（S1 工程基础，页面未完成）
+- frontend-old：旧 Web 归档，React + MUI + Leaflet，保留用于行为对照与回退，不再新增功能
 - backend：Rust + Axum + SQLx（默认后端；无 ORM）
 - backend-old：已弃用的 Java / Spring Boot 实现，保留供现有线上与回退参考
 - mobile：旧 React Native 应用，仅本地保留；原生 App 重构待实施
@@ -63,13 +64,13 @@ APK 包含运行所需的 JavaScript 和文档资源，**不需要启动 Metro**
 
 ## 克隆与初始化
 
-本仓库已采用单仓库（Monorepo）结构，`backend` / `frontend` 在同一仓库中，`backend-old` 为旧 Java 实现；`mobile/` 仅保留本地并由 Git 忽略。
+本仓库已采用单仓库（Monorepo）结构，`backend` / `frontend` 在同一仓库中，`backend-old` 为旧 Java 实现，`frontend-old` 为归档旧 Web；`mobile/` 仅保留本地并由 Git 忽略。
 
 ### 1. 准备环境并获取代码
 
 | 组件 | 本仓库的要求 |
 | --- | --- |
-| JavaScript | Node.js 22（至少 22.12.0）或 Node.js 20（至少 20.19.4），以及随 Node 安装的 npm，满足当前网页开发要求。 |
+| JavaScript | Node.js 24.19.0（`frontend/.nvmrc` 已固定）与 pnpm 11.19.0（`packageManager` 已固定）。 |
 | 后端 | rustup；进入 `backend/` 后按 `rust-toolchain.toml` 使用 Rust 1.98.1。Windows 原生编译需 Visual Studio C++ Build Tools。后端不再要求 JDK/Maven。 |
 | 数据库 | 本地 Compose 固定 PostgreSQL 18.6 + PostGIS 3.6.4；附近查询使用 PostGIS 候选筛选与距离计算。 |
 | 缓存与会话 | 本地 Compose 固定 Redis 8.10.1；登录会话需要 Redis。 |
@@ -137,30 +138,54 @@ Python 开发脚本与根 `docs/` 文档仅保留本地，不随 Git 分发。�
 
 ### 3. 网页：安装依赖并启动
 
+> **当前状态：Web v2 处于 S1 工程基础阶段。** 新工程只有工程外壳与后端连通状态屏，完整 Figma 页面在后续阶段实现，尚未达到可用产品状态。需要对照旧行为时参阅 [frontend-old](./frontend-old)（归档，不再新增功能，其 MUI/Cypress/旧构建命令仅适用于旧工程）。
+
 在新的终端，从仓库根目录执行：
 
 ```bash
 cd frontend
-npm ci
-cp .env.example .env.local
+pnpm install
+pnpm dev
 ```
 
-编辑 `frontend/.env.local`，本地开发保持 `VITE_API_BASE_URL=` 为空。没有对应底图 key 时，把 `VITE_THUNDERFOREST_API_KEY`、`VITE_TIANDITU_API_KEY` 等模板值清空，使用 OSM。
-
-```bash
-npm run dev
-```
-
-按终端显示的地址打开网页，默认是 `http://localhost:5173`。Vite 将 `/api` 和 `/uploads` 代理到 `http://127.0.0.1:8080`；自定义代理目标时，在启动 Vite 的**进程环境**中设置 `VITE_BACKEND_URL`。若本机存在配置的 HTTPS 证书与私钥，Vite 会自动使用 HTTPS，以终端输出为准。
+开发服务器固定为 `http://127.0.0.1:5173`（`strictPort`，避免自动换端口导致后端 Cookie/写入来源白名单失配）。Vite 将 `/api`、`/uploads` 与仅用于本机诊断的 `/health` 同源代理到本地 Rust 后端 `http://127.0.0.1:8080`，代理目标为本机固定值，不读取环境变量、不配置服务器地址或密钥，也不改写 `Origin`。
 
 构建和检查：
 
 ```bash
+pnpm build
+pnpm typecheck
+pnpm format:check
+pnpm test:unit
+```
+
+静态产物在 `frontend/dist/`。本工程不包含 ESLint 或 lint 脚本，类型边界由 TypeScript 7 strict 检查负责。
+
+### S1 开发验证入口（不是产品页面，S1 构建不可部署）
+
+S1 只交付工程基础与验证工具；正式地图与账号流程分别在 S2、S4 实现。以下路径**包含在当前 S1 构建产物中**（并非仅开发服务器存在、也未在生产构建中被排除），但约定只在本机使用、不对外发布，不构成可上线功能：
+
+| 路径 | 用途 |
+| --- | --- |
+| `/` | 状态屏：后端 `/health/live`、`/health/ready` 连通性与重试 |
+| `/__dev/map-spike` | 地图生命周期验证：200 个固定**合成**上海点位、常驻 Leaflet 实例、语言/面板/字段更新/增删按钮与更新耗时 |
+| `/__dev/qa` | 本机浏览器诊断：375×812 固定 CSS 视口 iframe 预览 + 开发会话表单（真实 `/api/login`、`/api/me`、头像 Blob、`/api/logout`；不注册、不改密码、不硬编码凭据） |
+
+上述诊断不写部署脚本；S1 构建与静态产物**不作为可部署产物**，上线与切流属后续任务。
+
+### 3.1 旧 Web（frontend-old，归档对照）
+
+`frontend-old` 是重构前的 Web，使用 React 19.2 + TypeScript 5.9 + Vite 7 + MUI + Leaflet，并带有 Cypress 用例。它只用于回退与行为对照，依赖安装与构建命令均属于旧工程：
+
+```bash
+cd frontend-old
+npm ci
+npm run dev
 npm run build
 npm run lint
 ```
 
-静态产物在 `frontend/dist/`。部署静态网页时配置 `VITE_API_BASE_URL` 为目标 API；开发服务器的代理不会随静态产物发布。
+旧工程的历史说明（MUI 组件、Cypress 端到端用例、旧的 `.env.local` 与底图 key 配置）仅适用于 `frontend-old`，不影响新 `frontend`。
 
 ### 4. App：准备原生重构
 
