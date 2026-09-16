@@ -6,9 +6,13 @@ import SwiftUI
 struct NativeMapView: UIViewRepresentable {
   let topInset: CGFloat
   let bottomInset: CGFloat
+  var selectedPlace: PlacePresentation? = nil
+
+  func makeCoordinator() -> Coordinator { Coordinator() }
 
   func makeUIView(context: Context) -> MKMapView {
     let map = MKMapView(frame: .zero)
+    map.delegate = context.coordinator
     map.preferredConfiguration = MKStandardMapConfiguration(elevationStyle: .flat)
     map.showsCompass = false
     map.isPitchEnabled = false
@@ -25,6 +29,33 @@ struct NativeMapView: UIViewRepresentable {
   func updateUIView(_ map: MKMapView, context: Context) {
     let insets = UIEdgeInsets(top: topInset, left: 10, bottom: bottomInset, right: 10)
     Self.updateMargins(insets, on: map)
+    if context.coordinator.placeID != selectedPlace?.id {
+      map.removeAnnotations(map.annotations)
+      context.coordinator.placeID = selectedPlace?.id
+      if let place = selectedPlace {
+        let pin = MKPointAnnotation()
+        pin.coordinate = CLLocationCoordinate2D(
+          latitude: place.latitude, longitude: place.longitude)
+        pin.title = place.title
+        map.addAnnotation(pin)
+      }
+    }
+  }
+
+  final class Coordinator: NSObject, MKMapViewDelegate {
+    var placeID: String?
+
+    func mapView(_ mapView: MKMapView, viewFor annotation: any MKAnnotation) -> MKAnnotationView? {
+      guard annotation is MKPointAnnotation else { return nil }
+      let view =
+        mapView.dequeueReusableAnnotationView(withIdentifier: "place")
+        ?? MKAnnotationView(annotation: annotation, reuseIdentifier: "place")
+      view.annotation = annotation
+      view.image = UIImage(named: "PlacePin")
+      view.centerOffset = CGPoint(x: 0, y: -21.5)
+      view.accessibilityLabel = annotation.title ?? nil
+      return view
+    }
   }
 
   static func updateMargins(_ insets: UIEdgeInsets, on map: MKMapView) {

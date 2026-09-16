@@ -1,42 +1,395 @@
 // !$*UTF8*$!
-{ archiveVersion = 1; classes = {}; objectVersion = 77; objects = {
-19FE77B134B2ACBE6E942E45 /* UITestSources */ = { isa = PBXFileSystemSynchronizedRootGroup; path = LycorisUITests; sourceTree = "<group>"; };
-33C337BCD18D1B1C1B2EBA2C /* UITestProduct */ = { isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LycorisUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-A6635B5FEDD6FB619279BD2B /* UITestsSources */ = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-EF6C3BB638B546EC989A7215 /* UITestsFrameworks */ = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-925F524464A6DEADEA3CB62A /* UITestsResources */ = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-8D5093D2C263EEDEAE2010BE /* UITests */ = { isa = PBXNativeTarget; buildConfigurationList = DAFE6B4AE7F615235D51AC8B; buildPhases = (A6635B5FEDD6FB619279BD2B, EF6C3BB638B546EC989A7215, 925F524464A6DEADEA3CB62A); buildRules = (); dependencies = (8BC62B80562684797FDF3D7A); fileSystemSynchronizedGroups = (19FE77B134B2ACBE6E942E45); name = LycorisUITests; productName = LycorisUITests; productReference = 33C337BCD18D1B1C1B2EBA2C; productType = "com.apple.product-type.bundle.ui-testing"; };
-651D637619756FF1A8400F67 /* UITestDebug */ = { isa = XCBuildConfiguration; buildSettings = { PRODUCT_NAME = "$(TARGET_NAME)"; PRODUCT_BUNDLE_IDENTIFIER = com.lycoris.maps.uitests; GENERATE_INFOPLIST_FILE = YES; TARGETED_DEVICE_FAMILY = 1; TEST_TARGET_NAME = Lycoris; CODE_SIGN_STYLE = Automatic; }; name = Debug; };
-93D1ABD72F8ECFF4A5798A0D /* UITestRelease */ = { isa = XCBuildConfiguration; buildSettings = { PRODUCT_NAME = "$(TARGET_NAME)"; PRODUCT_BUNDLE_IDENTIFIER = com.lycoris.maps.uitests; GENERATE_INFOPLIST_FILE = YES; TARGETED_DEVICE_FAMILY = 1; TEST_TARGET_NAME = Lycoris; CODE_SIGN_STYLE = Automatic; }; name = Release; };
-DAFE6B4AE7F615235D51AC8B /* UITestConfigs */ = { isa = XCConfigurationList; buildConfigurations = (651D637619756FF1A8400F67, 93D1ABD72F8ECFF4A5798A0D); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-F6F4DA8D93E88A08220E03B7 /* Project */ = { isa = PBXProject; attributes = { BuildIndependentTargetsInParallel = YES; LastUpgradeCheck = 2660; TargetAttributes = { FC4A695F02A8A53A129DCB9A = { CreatedOnToolsVersion = 26.6; }; 39FDEC1194D94212B871A28B = { CreatedOnToolsVersion = 26.6; TestTargetID = FC4A695F02A8A53A129DCB9A; }; }; }; buildConfigurationList = 5D7731714D3E69D68AA8D7ED; compatibilityVersion = "Xcode 16.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base, "zh-Hans"); mainGroup = E96857C58F716104CAEAD648; preferredProjectObjectVersion = 77; productRefGroup = FE0A091FDBFB3E9C31B7A1BD; projectDirPath = ""; projectRoot = ""; targets = (FC4A695F02A8A53A129DCB9A, 39FDEC1194D94212B871A28B, 8D5093D2C263EEDEAE2010BE); };
-E96857C58F716104CAEAD648 /* Root */ = { isa = PBXGroup; children = (19FE77B134B2ACBE6E942E45, 2EB56BE3C2D93CDAB0C52E67, 87AA925F24AC656A8AAB80A9, 8851142DA56FD885CE668A16, FE0A091FDBFB3E9C31B7A1BD); sourceTree = "<group>"; };
-2EB56BE3C2D93CDAB0C52E67 /* Sources */ = { isa = PBXFileSystemSynchronizedRootGroup; path = Lycoris; sourceTree = "<group>"; };
-87AA925F24AC656A8AAB80A9 /* TestSources */ = { isa = PBXFileSystemSynchronizedRootGroup; path = LycorisTests; sourceTree = "<group>"; };
-8851142DA56FD885CE668A16 /* Config */ = { isa = PBXGroup; children = (20FE01F4FDC69033CBD3D0CC, 295E1CE0161A73DBAF3BD01A, 7194A3F7997A23E0DEEA0320); path = Config; sourceTree = "<group>"; };
-20FE01F4FDC69033CBD3D0CC /* DebugXC */ = { isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
-295E1CE0161A73DBAF3BD01A /* ReleaseXC */ = { isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
-7194A3F7997A23E0DEEA0320 /* BaseXC */ = { isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
-FE0A091FDBFB3E9C31B7A1BD /* Products */ = { isa = PBXGroup; children = (33C337BCD18D1B1C1B2EBA2C, C2B6AF95E5FB6AF04547C8EA, 77EB3AD38D803EC3C3DF9309); name = Products; sourceTree = "<group>"; };
-C2B6AF95E5FB6AF04547C8EA /* AppProduct */ = { isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Lycoris.app; sourceTree = BUILT_PRODUCTS_DIR; };
-77EB3AD38D803EC3C3DF9309 /* TestProduct */ = { isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LycorisTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-858D0932EEACC1122B4B1EF1 /* TestProxy */ = { isa = PBXContainerItemProxy; containerPortal = F6F4DA8D93E88A08220E03B7; proxyType = 1; remoteGlobalIDString = FC4A695F02A8A53A129DCB9A; remoteInfo = Lycoris; };
-8BC62B80562684797FDF3D7A /* TestDependency */ = { isa = PBXTargetDependency; target = FC4A695F02A8A53A129DCB9A; targetProxy = 858D0932EEACC1122B4B1EF1; };
-6805EC6AFDAFDBE18E2FF355 /* AppSources */ = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-0F91A57B11B30F1A7980649D /* AppFrameworks */ = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-2AC7AB26953A78AD46B49603 /* AppResources */ = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-FC4A695F02A8A53A129DCB9A /* App */ = { isa = PBXNativeTarget; buildConfigurationList = B5E4F9F7C53A9A6AF99DBCE3; buildPhases = (6805EC6AFDAFDBE18E2FF355, 0F91A57B11B30F1A7980649D, 2AC7AB26953A78AD46B49603); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (2EB56BE3C2D93CDAB0C52E67); name = Lycoris; packageProductDependencies = (); productName = Lycoris; productReference = C2B6AF95E5FB6AF04547C8EA; productType = "com.apple.product-type.application"; };
-B101481D07CFC33C8ABA7747 /* TestsSources */ = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-576EF13F7DEFCC568D47D137 /* TestsFrameworks */ = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-8239CAE016E1D20AB5E65A12 /* TestsResources */ = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-39FDEC1194D94212B871A28B /* Tests */ = { isa = PBXNativeTarget; buildConfigurationList = FF22B4F29851F2D7C0C485AF; buildPhases = (B101481D07CFC33C8ABA7747, 576EF13F7DEFCC568D47D137, 8239CAE016E1D20AB5E65A12); buildRules = (); dependencies = (8BC62B80562684797FDF3D7A); fileSystemSynchronizedGroups = (87AA925F24AC656A8AAB80A9); name = LycorisTests; packageProductDependencies = (); productName = LycorisTests; productReference = 77EB3AD38D803EC3C3DF9309; productType = "com.apple.product-type.bundle.unit-test"; };
-BFD315016DE16320F7E2120C /* ProjectDebug */ = { isa = XCBuildConfiguration;  buildSettings = { CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 26.0; SWIFT_VERSION = 6.0; SWIFT_STRICT_CONCURRENCY = complete; ENABLE_USER_SCRIPT_SANDBOXING = YES; DEBUG_INFORMATION_FORMAT = dwarf; ENABLE_TESTABILITY = YES; ONLY_ACTIVE_ARCH = YES; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; }; name = Debug; };
-1D8C0C6B1D22EA8C7669B263 /* ProjectRelease */ = { isa = XCBuildConfiguration;  buildSettings = { CLANG_ENABLE_MODULES = YES; CLANG_ENABLE_OBJC_ARC = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 26.0; SWIFT_VERSION = 6.0; SWIFT_STRICT_CONCURRENCY = complete; ENABLE_USER_SCRIPT_SANDBOXING = YES; DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym"; VALIDATE_PRODUCT = YES; }; name = Release; };
-5D7731714D3E69D68AA8D7ED /* ProjectConfigs */ = { isa = XCConfigurationList; buildConfigurations = (BFD315016DE16320F7E2120C, 1D8C0C6B1D22EA8C7669B263); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-3A77CD648711364E9A877D62 /* AppDebug */ = { isa = XCBuildConfiguration; baseConfigurationReference = 20FE01F4FDC69033CBD3D0CC; buildSettings = { ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor; }; name = Debug; };
-066776A1C212750E8BE506A2 /* AppRelease */ = { isa = XCBuildConfiguration; baseConfigurationReference = 295E1CE0161A73DBAF3BD01A; buildSettings = { ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor; }; name = Release; };
-B5E4F9F7C53A9A6AF99DBCE3 /* AppConfigs */ = { isa = XCConfigurationList; buildConfigurations = (3A77CD648711364E9A877D62, 066776A1C212750E8BE506A2); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-34BE6D4215B8B1C254345416 /* TestsDebug */ = { isa = XCBuildConfiguration;  buildSettings = { PRODUCT_NAME = "$(TARGET_NAME)"; PRODUCT_BUNDLE_IDENTIFIER = com.lycoris.maps.tests; GENERATE_INFOPLIST_FILE = YES; TARGETED_DEVICE_FAMILY = 1; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Lycoris.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Lycoris"; BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; }; name = Debug; };
-FADCA9E4220DCCB4910052B3 /* TestsRelease */ = { isa = XCBuildConfiguration;  buildSettings = { PRODUCT_NAME = "$(TARGET_NAME)"; PRODUCT_BUNDLE_IDENTIFIER = com.lycoris.maps.tests; GENERATE_INFOPLIST_FILE = YES; TARGETED_DEVICE_FAMILY = 1; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Lycoris.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Lycoris"; BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; }; name = Release; };
-FF22B4F29851F2D7C0C485AF /* TestsConfigs */ = { isa = XCConfigurationList; buildConfigurations = (34BE6D4215B8B1C254345416, FADCA9E4220DCCB4910052B3); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
-}; rootObject = F6F4DA8D93E88A08220E03B7; }
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 71;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		858D0932EEACC1122B4B1EF1 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F6F4DA8D93E88A08220E03B7 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FC4A695F02A8A53A129DCB9A;
+			remoteInfo = Lycoris;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		20FE01F4FDC69033CBD3D0CC /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
+		295E1CE0161A73DBAF3BD01A /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
+		33C337BCD18D1B1C1B2EBA2C /* LycorisUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LycorisUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		7194A3F7997A23E0DEEA0320 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
+		77EB3AD38D803EC3C3DF9309 /* LycorisTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LycorisTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C2B6AF95E5FB6AF04547C8EA /* Lycoris.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Lycoris.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		19FE77B134B2ACBE6E942E45 /* LycorisUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = LycorisUITests; sourceTree = "<group>"; };
+		2EB56BE3C2D93CDAB0C52E67 /* Lycoris */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Lycoris; sourceTree = "<group>"; };
+		87AA925F24AC656A8AAB80A9 /* LycorisTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = LycorisTests; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		0F91A57B11B30F1A7980649D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		576EF13F7DEFCC568D47D137 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EF6C3BB638B546EC989A7215 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		8851142DA56FD885CE668A16 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				20FE01F4FDC69033CBD3D0CC /* Debug.xcconfig */,
+				295E1CE0161A73DBAF3BD01A /* Release.xcconfig */,
+				7194A3F7997A23E0DEEA0320 /* Base.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+		E96857C58F716104CAEAD648 = {
+			isa = PBXGroup;
+			children = (
+				19FE77B134B2ACBE6E942E45 /* LycorisUITests */,
+				2EB56BE3C2D93CDAB0C52E67 /* Lycoris */,
+				87AA925F24AC656A8AAB80A9 /* LycorisTests */,
+				8851142DA56FD885CE668A16 /* Config */,
+				FE0A091FDBFB3E9C31B7A1BD /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		FE0A091FDBFB3E9C31B7A1BD /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				33C337BCD18D1B1C1B2EBA2C /* LycorisUITests.xctest */,
+				C2B6AF95E5FB6AF04547C8EA /* Lycoris.app */,
+				77EB3AD38D803EC3C3DF9309 /* LycorisTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		39FDEC1194D94212B871A28B /* LycorisTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FF22B4F29851F2D7C0C485AF /* Build configuration list for PBXNativeTarget "LycorisTests" */;
+			buildPhases = (
+				B101481D07CFC33C8ABA7747 /* Sources */,
+				576EF13F7DEFCC568D47D137 /* Frameworks */,
+				8239CAE016E1D20AB5E65A12 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8BC62B80562684797FDF3D7A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				87AA925F24AC656A8AAB80A9 /* LycorisTests */,
+			);
+			name = LycorisTests;
+			packageProductDependencies = (
+			);
+			productName = LycorisTests;
+			productReference = 77EB3AD38D803EC3C3DF9309 /* LycorisTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		8D5093D2C263EEDEAE2010BE /* LycorisUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DAFE6B4AE7F615235D51AC8B /* Build configuration list for PBXNativeTarget "LycorisUITests" */;
+			buildPhases = (
+				A6635B5FEDD6FB619279BD2B /* Sources */,
+				EF6C3BB638B546EC989A7215 /* Frameworks */,
+				925F524464A6DEADEA3CB62A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8BC62B80562684797FDF3D7A /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				19FE77B134B2ACBE6E942E45 /* LycorisUITests */,
+			);
+			name = LycorisUITests;
+			productName = LycorisUITests;
+			productReference = 33C337BCD18D1B1C1B2EBA2C /* LycorisUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		FC4A695F02A8A53A129DCB9A /* Lycoris */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B5E4F9F7C53A9A6AF99DBCE3 /* Build configuration list for PBXNativeTarget "Lycoris" */;
+			buildPhases = (
+				6805EC6AFDAFDBE18E2FF355 /* Sources */,
+				0F91A57B11B30F1A7980649D /* Frameworks */,
+				2AC7AB26953A78AD46B49603 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2EB56BE3C2D93CDAB0C52E67 /* Lycoris */,
+			);
+			name = Lycoris;
+			packageProductDependencies = (
+			);
+			productName = Lycoris;
+			productReference = C2B6AF95E5FB6AF04547C8EA /* Lycoris.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		F6F4DA8D93E88A08220E03B7 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2660;
+				TargetAttributes = {
+					39FDEC1194D94212B871A28B = {
+						CreatedOnToolsVersion = 26.6;
+						TestTargetID = FC4A695F02A8A53A129DCB9A;
+					};
+					FC4A695F02A8A53A129DCB9A = {
+						CreatedOnToolsVersion = 26.6;
+					};
+				};
+			};
+			buildConfigurationList = 5D7731714D3E69D68AA8D7ED /* Build configuration list for PBXProject "Lycoris" */;
+			compatibilityVersion = "Xcode 16.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+				"zh-Hans",
+			);
+			mainGroup = E96857C58F716104CAEAD648;
+			productRefGroup = FE0A091FDBFB3E9C31B7A1BD /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				FC4A695F02A8A53A129DCB9A /* Lycoris */,
+				39FDEC1194D94212B871A28B /* LycorisTests */,
+				8D5093D2C263EEDEAE2010BE /* LycorisUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		2AC7AB26953A78AD46B49603 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		8239CAE016E1D20AB5E65A12 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		925F524464A6DEADEA3CB62A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		6805EC6AFDAFDBE18E2FF355 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A6635B5FEDD6FB619279BD2B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B101481D07CFC33C8ABA7747 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		8BC62B80562684797FDF3D7A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FC4A695F02A8A53A129DCB9A /* Lycoris */;
+			targetProxy = 858D0932EEACC1122B4B1EF1 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		066776A1C212750E8BE506A2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 295E1CE0161A73DBAF3BD01A /* Release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+			};
+			name = Release;
+		};
+		1D8C0C6B1D22EA8C7669B263 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				SDKROOT = iphoneos;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		34BE6D4215B8B1C254345416 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lycoris.maps.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Lycoris.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Lycoris";
+			};
+			name = Debug;
+		};
+		3A77CD648711364E9A877D62 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 20FE01F4FDC69033CBD3D0CC /* Debug.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+			};
+			name = Debug;
+		};
+		651D637619756FF1A8400F67 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lycoris.maps.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Lycoris;
+			};
+			name = Debug;
+		};
+		93D1ABD72F8ECFF4A5798A0D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lycoris.maps.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Lycoris;
+			};
+			name = Release;
+		};
+		BFD315016DE16320F7E2120C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		FADCA9E4220DCCB4910052B3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.lycoris.maps.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Lycoris.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Lycoris";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		5D7731714D3E69D68AA8D7ED /* Build configuration list for PBXProject "Lycoris" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BFD315016DE16320F7E2120C /* Debug */,
+				1D8C0C6B1D22EA8C7669B263 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B5E4F9F7C53A9A6AF99DBCE3 /* Build configuration list for PBXNativeTarget "Lycoris" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3A77CD648711364E9A877D62 /* Debug */,
+				066776A1C212750E8BE506A2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DAFE6B4AE7F615235D51AC8B /* Build configuration list for PBXNativeTarget "LycorisUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				651D637619756FF1A8400F67 /* Debug */,
+				93D1ABD72F8ECFF4A5798A0D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		FF22B4F29851F2D7C0C485AF /* Build configuration list for PBXNativeTarget "LycorisTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				34BE6D4215B8B1C254345416 /* Debug */,
+				FADCA9E4220DCCB4910052B3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = F6F4DA8D93E88A08220E03B7 /* Project object */;
+}

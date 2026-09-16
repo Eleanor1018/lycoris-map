@@ -2,6 +2,55 @@ import XCTest
 
 @MainActor
 final class MapInteractionTests: XCTestCase {
+  func testBookmarkPreviewOpensAndDismissesDetails() throws {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-lycoris-preview", "expanded",
+    ]
+    app.launch()
+    let heading = app.buttons["map.bookmarks.heading"]
+    XCTAssertTrue(heading.waitForExistence(timeout: 10))
+    attach(app, name: "07-expanded-bookmarks")
+    app.buttons["place.row.figma-preview-1"].tap()
+    let title = app.staticTexts["place.title"]
+    XCTAssertTrue(title.waitForExistence(timeout: 3))
+    XCTAssertTrue(app.buttons["Share"].isHittable)
+    XCTAssertTrue(app.buttons["Navigate"].isHittable)
+    XCTAssertTrue(app.buttons["Bookmark place"].isHittable)
+    attach(app, name: "08-place-details")
+
+    app.buttons["Navigate"].tap()
+    XCTAssertTrue(app.alerts["Not available yet"].waitForExistence(timeout: 3))
+    app.alerts.buttons["OK"].tap()
+    let handle = app.buttons["map.panel.handle"]
+    handle.tap()
+    let expanded = XCTNSPredicateExpectation(
+      predicate: NSPredicate { object, _ in
+        guard let element = object as? XCUIElement else { return false }
+        return element.value as? String == "Expanded" && element.frame.minY < 100
+      }, object: handle)
+    XCTAssertEqual(XCTWaiter.wait(for: [expanded], timeout: 3), .completed)
+    attach(app, name: "08a-details-expanded")
+    XCTAssertTrue(title.exists)
+    handle.tap()
+    let collapsed = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "value == %@", "Collapsed"), object: handle)
+    XCTAssertEqual(XCTWaiter.wait(for: [collapsed], timeout: 3), .completed)
+    XCTAssertFalse(title.exists)
+    XCTAssertTrue(app.textFields["map.search"].exists)
+    app.buttons["map.nearby"].tap()
+    handle.tap()
+    XCTAssertTrue(heading.exists)
+
+    app.terminate()
+    app.launchArguments = ["-AppleLanguages", "(en)", "-lycoris-preview", "anonymousExpanded"]
+    app.launch()
+    XCTAssertTrue(app.buttons["Settings"].waitForExistence(timeout: 10))
+    XCTAssertFalse(app.buttons["map.bookmarks.heading"].exists)
+    XCTAssertFalse(app.buttons["place.row.figma-preview-1"].exists)
+    attach(app, name: "09-anonymous-expanded")
+  }
+
   func testPanelDragKeyboardAndMapInteraction() throws {
     let app = XCUIApplication()
     app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]

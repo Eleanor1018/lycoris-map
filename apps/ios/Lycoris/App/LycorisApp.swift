@@ -4,7 +4,11 @@ import SwiftUI
 struct LycorisApp: App {
   var body: some Scene {
     WindowGroup {
-      MapScreen()
+      #if DEBUG
+        MapScreen(preview: .launchSelection)
+      #else
+        MapScreen()
+      #endif
     }
   }
 }

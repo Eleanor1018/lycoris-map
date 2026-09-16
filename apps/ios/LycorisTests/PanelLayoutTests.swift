@@ -58,4 +58,16 @@ struct PanelLayoutTests {
     #expect(layout.nearest(to: 28) == .expanded)
     #expect(layout.nearest(to: 80) == .expanded)
   }
+
+  @Test func detailRestingHeightKeepsTheSameCollapsedDestination() {
+    var detail = layout()
+    detail.detailHeight = 440
+    #expect(detail.nearbyTop == 434)
+    #expect(detail.collapsedTop == layout().collapsedTop)
+    #expect(detail.nearest(to: 435) == .nearby)
+    #expect(detail.nearest(to: 840) == .collapsed)
+    detail.detailHeight = 2_000
+    #expect(detail.nearbyTop == detail.expandedTop)
+    #expect(detail.nearest(to: detail.nearbyTop) == .expanded)
+  }
 }
