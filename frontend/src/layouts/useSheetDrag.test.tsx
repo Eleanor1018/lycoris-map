@@ -188,7 +188,7 @@ it('cancels interrupted and multi-touch drags without changing the snap', () => 
     expect(visualHeight()).toBe('')
     expect(sheet.dataset.snap).toBe('collapsed')
 })
-it('settles an expanded panel before closing, and never closes on cancel', () => {
+it('closes an expanded panel in the release event, and never closes on cancel', () => {
     vi.useFakeTimers()
     const { title } = setup('full', true)
     touch(title, 'start', 100)
@@ -198,8 +198,10 @@ it('settles an expanded panel before closing, and never closes on cancel', () =>
     touch(title, 'start', 100)
     touch(title, 'move', 250)
     touch(title, 'end', 250)
-    expect(close).not.toHaveBeenCalled()
-    act(() => vi.advanceTimersByTime(280))
+    expect(close).toHaveBeenCalledOnce()
+    expect(visualHeight()).toBe('')
+    touch(title, 'end', 250)
+    act(() => vi.advanceTimersByTime(500))
     expect(close).toHaveBeenCalledOnce()
 })
 it('projects a short upward flick to the next snap', () => {
@@ -253,17 +255,18 @@ it('lets a nested nearby list scroll down without dismissing the panel', () => {
     expect(close).not.toHaveBeenCalled()
     expect(visualHeight()).toBe('')
 })
-it('cancels a pending dismissal when navigating to another panel', () => {
+it('never defers a close into a newly opened panel', () => {
     vi.useFakeTimers()
-    const view = render(<Harness initial="full" expanded route="detail" />)
+    const view = render(<Harness initial="full" expanded route="nearby" />)
     const title = screen.getByRole('heading')
     touch(title, 'start', 100)
-    touch(title, 'move', 300)
-    touch(title, 'end', 300)
-    expect(visualHeight()).toBe('0px')
+    touch(title, 'move', 800)
+    touch(title, 'end', 800)
+    expect(close).toHaveBeenCalledOnce()
+    expect(visualHeight()).toBe('')
     view.rerender(<Harness initial="full" expanded route="bookmarks" />)
-    act(() => vi.advanceTimersByTime(300))
-    expect(close).not.toHaveBeenCalled()
+    act(() => vi.advanceTimersByTime(500))
+    expect(close).toHaveBeenCalledOnce()
     expect(visualHeight()).toBe('')
 })
 it('finishes mouse dragging even when the pointer leaves the sheet', () => {

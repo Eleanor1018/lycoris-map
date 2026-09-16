@@ -425,3 +425,93 @@ it('closes phone Nearby back to its original menu height without remounting the 
     expect(screen.getByRole('button', { name: 'Find nearby' })).toHaveFocus()
     expect(container.querySelector('.leaflet-container')).toBe(map)
 })
+
+function pullSecondarySheetDown() {
+    const handle = document.getElementById('sheet-handle')!
+    const section = handle.closest('section')!
+    vi.spyOn(section, 'getBoundingClientRect').mockReturnValue({
+        x: 0,
+        y: 46,
+        top: 46,
+        left: 0,
+        right: 375,
+        bottom: 667,
+        width: 375,
+        height: 621,
+        toJSON: () => ({}),
+    })
+    vi.spyOn(section.parentElement!, 'getBoundingClientRect').mockReturnValue({
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 375,
+        bottom: 667,
+        width: 375,
+        height: 667,
+        toJSON: () => ({}),
+    })
+    for (const [type, y] of [
+        ['start', 55],
+        ['move', 660],
+        ['end', 660],
+    ] as const) {
+        const point = { identifier: 1, clientX: 180, clientY: y }
+        fireEvent(
+            handle,
+            Object.assign(new Event(`touch${type}`, { bubbles: true, cancelable: true }), {
+                touches: type === 'end' ? [] : [point],
+                changedTouches: [point],
+            }),
+        )
+    }
+}
+
+it.each([
+    ['radar', 'collapsed', 'Find nearby'],
+    ['card', 'half', 'Accessible Toilets'],
+    ['card', 'full', 'Accessible Toilets'],
+])(
+    'returns Nearby opened through the %s to the %s menu exactly like X',
+    async (_entry, snap, opener) => {
+        const { container } = app(`/?lang=en&snap=${snap}#retained`, true)
+        const map = container.querySelector('.leaflet-container')
+        fireEvent.click(screen.getByRole('button', { name: opener }))
+        await screen.findByRole('list', { name: 'Accessible Toilets in 1km' })
+        fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
+        await waitFor(() =>
+            expect(screen.queryByRole('heading', { name: 'Nearby' })).not.toBeInTheDocument(),
+        )
+        const expectedRoute = screen.getByTestId('route').textContent
+        fireEvent.click(screen.getByRole('button', { name: opener }))
+        await screen.findByRole('list', { name: 'Accessible Toilets in 1km' })
+        pullSecondarySheetDown()
+        await waitFor(() =>
+            expect(screen.queryByRole('heading', { name: 'Nearby' })).not.toBeInTheDocument(),
+        )
+        expect(screen.getByTestId('route').textContent).toBe(expectedRoute)
+        expect(document.getElementById('map-shell')).toHaveAttribute('data-snap', snap)
+        expect(screen.getByRole('textbox', { name: 'Search Positions' })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: opener })).toHaveFocus()
+        expect(container.querySelector('.leaflet-container')).toBe(map)
+        expect(
+            document.getElementById('map-shell')!.style.getPropertyValue('--sheet-visual-height'),
+        ).toBe('')
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    },
+)
+
+it('closes a directly opened Nearby by dragging, without leaving the app', async () => {
+    const { container } = app('/?lang=en&panel=nearby&nearbyCategory=baby_room#retained', true)
+    await screen.findByRole('list', { name: 'Nursing Rooms in 1km' })
+    const map = container.querySelector('.leaflet-container')
+    pullSecondarySheetDown()
+    await waitFor(() =>
+        expect(screen.queryByRole('heading', { name: 'Nearby' })).not.toBeInTheDocument(),
+    )
+    expect(document.getElementById('map-shell')).toHaveAttribute('data-panel', 'initial')
+    expect(document.getElementById('map-shell')).toHaveAttribute('data-snap', 'collapsed')
+    expect(screen.getByRole('textbox', { name: 'Search Positions' })).toBeInTheDocument()
+    expect(screen.getByTestId('route')).toHaveTextContent('#retained')
+    expect(container.querySelector('.leaflet-container')).toBe(map)
+})

@@ -35,13 +35,10 @@ export function useSheetDrag({
 }) {
     const gesture = useRef<Gesture | null>(null)
     const frame = useRef(0)
-    const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
     const suppressClickUntil = useRef(0)
     const clearMotion = useEffectEvent(() => {
         cancelAnimationFrame(frame.current)
         frame.current = 0
-        if (dismissTimer.current !== null) clearTimeout(dismissTimer.current)
-        dismissTimer.current = null
     })
     const rest = useEffectEvent(() => {
         const element = sheet.current
@@ -96,9 +93,7 @@ export function useSheetDrag({
             0,
             (viewport?.bottom || window.innerHeight) - bottom - box.top,
         )
-        const interrupted = dismissTimer.current !== null
         clearMotion()
-        if (interrupted) paint(visibleHeight, true)
         // Nearby/search lists may scroll inside .sheet-scroll. Check the entire
         // target ancestry so a scrolled nested list never dismisses the sheet.
         let scrolled = false
@@ -183,16 +178,11 @@ export function useSheetDrag({
                 current.y - y < -Math.min(80, height * 0.25) ||
                 (velocity < -0.6 && current.y - y < -24)
             if (dismiss) {
-                paint(0, false)
-                const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-                dismissTimer.current = setTimeout(
-                    () => {
-                        dismissTimer.current = null
-                        close()
-                        rest()
-                    },
-                    reduced ? 0 : 280,
-                )
+                // Use the same route action as the close button in this event.
+                // The primary sheet settles from the released finger position;
+                // no delayed callback can close a later panel or stale route.
+                close()
+                rest()
             } else rest()
         } else {
             const choices: [Snap, number][] = [
