@@ -2,11 +2,11 @@
 
 Native SwiftUI application, Apple Maps / MapKit, iPhone, iOS 26+. Open `Lycoris.xcodeproj` in Xcode and select the shared **Lycoris** scheme.
 
-## Current scope: I5
+## Current scope: I6
 
-The Figma map shell now reads public places from the Rust backend: viewport markers, debounced search, three Nearby categories, marker selection and real details. Core Location is requested from the location/Nearby controls; denied or unavailable location falls back to the explicitly labelled map center. Place sharing opens the native share sheet with a public Apple Maps destination link, and Navigate opens walking directions in Apple Maps. No user origin is embedded in shared links.
+The Figma map shell now reads public places from the Rust backend: viewport markers, debounced search, three Nearby categories, marker selection and real details. Core Location is requested from the location/Nearby controls; denied or unavailable location falls back to the explicitly labelled map center. Place sharing opens the native share sheet with a Lycoris place identifier link, and Navigate opens walking directions in Apple Maps. Shared links contain no coordinates, user origin or credentials.
 
-I4 connects account-password login and registration, cookie session restoration, logout, profile fields, native photo selection and avatar upload, password changes, Bookmarks and My Places. Login and registration use fully native SwiftUI navigation and grouped forms, following the user’s updated preference. Profile and library screens also use native Form/List. I5 adds native contribution and editing forms, map location selection, durable drafts and resumable photo proposals. Settings destinations and voice input remain I6 work. No server deployment is performed.
+I4 connects account-password login and registration, cookie session restoration, logout, profile fields, native photo selection and avatar upload, password changes, Bookmarks and My Places. Login and registration use fully native SwiftUI navigation and grouped forms, following the user’s updated preference. Profile and library screens also use native Form/List. I5 adds native contribution and editing forms, map location selection, durable drafts and resumable photo proposals. I6 adds persistent language/radius settings, native source/about screens, on-device voice search, place links and accessibility refinements. No server deployment is performed.
 
 The default app revalidates its persisted account cookie; without a valid session it is anonymous, with no sample bookmarks or selected place. Xcode canvas previews and explicit Debug launch arguments inject design fixtures without creating a login session. Release ignores the preview arguments.
 
@@ -56,6 +56,8 @@ The `$()` escape preserves the double slash in an xcconfig URL. The phone and Ma
 - `App`: app entry.
 - `Features/Map`: persistent Map view, panel state, request lifecycle, search, Nearby and tool groups.
 - `Core/API`: environment configuration, public DTOs, transport and HTTP diagnostics.
+- `Core/Preferences`, `Core/Navigation`: validated preferences and strict place-link parsing.
+- `Features/Settings`, `Features/Search`: native settings and device-only voice input.
 - `Core/Location`: WGS84 values, viewport splitting and on-demand Core Location.
 - `Features/Places`: shared rows, real details, public images and native share sheet.
 - `Features/Account`: session and private data lifecycle, native auth/profile/password/library screens, and image encoding.
@@ -79,7 +81,7 @@ For a manual simulator review, use `-lycoris-test-center` followed by `31.2304,1
 
 Search debounces for 300 ms and viewport reads for 250 ms. Cancellation plus generation checks prevent late responses from replacing a newer state. Nearby keeps its captured origin while the map pans. A fresh location fix may update that origin only while its original action is still active. A 404 removes the old pin and reloads the other public results; image errors retain the textual detail. Search results and annotations are not silently truncated.
 
-The new public Lycoris domain is still unconfigured. Until it is supplied, Share uses the public Apple Maps destination; it does not invent a Lycoris URL or enable Universal Links. Real-world historical-coordinate alignment, physical-device permissions and route correctness remain device acceptance work.
+The new public Lycoris domain is still unconfigured. I6 uses the registered `lycoris://maps?markerId=<Int64>` scheme for installed-app sharing, with fresh access checks when opening. It has no uninstalled-app fallback or Universal Links yet. Real-world historical-coordinate alignment, physical-device permissions and route correctness remain device acceptance work.
 
 ## I4 account behavior
 
@@ -104,3 +106,13 @@ New places freeze their UUID and payload before sending and recover safely after
 Photos use the existing Rust start/status/256KiB chunk/complete endpoints. Each retry reconciles the server receipt first, including after a lost completion or missing local photo. Network failures back off up to 60 seconds and resume while active, on connectivity restoration or when the app returns. Expiry/file rejection requires selecting the photo again; quotas and nontransient errors pause. There is no guaranteed background execution or transfer after force quit; the next launch resumes persisted work.
 
 All contribution requests share the account mutation gate, verify `/api/me`, and check owner, configured service origin and live login epoch. Logout/account replacement cancels and purges the old draft and photo. Late responses cannot recreate the previous user's UI or dispatch under a new cookie. Startup waits for verified identity before loading a saved contribution. See `docs/i5-acceptance.md` for validation evidence.
+
+## I6 settings and system behavior
+
+The four Figma settings rows open native Form sheets. English / Simplified Chinese take effect immediately in the interface and API requests and persist across launches. Model-derived strings use the selected localization bundle too. Nearby defaults to 1000m, offers 1000/2500m presets and accepts a custom integer from 1 to 50,000m. Changing preferences invalidates older requests while preserving the current map camera and the captured Nearby center. Existing contribution drafts retain their content language.
+
+The microphone opens native voice search. Recording requires both speech and microphone permission and an available on-device recognizer. Audio is not sent to a speech server; only confirmed search text reaches the normal search endpoint. Unsupported devices offer the keyboard. Dismissal, backgrounding, interruptions and input loss stop recording and invalidate pending callbacks; a session ends after at most 55 seconds. Returning from Settings never silently restarts the microphone: Retry explicitly checks permissions again.
+
+Place links accept only the registered scheme/host and a positive Int64 ID. Unknown sources, duplicate parameters, credentials, fragments and malformed IDs are rejected. Optional `lang=en|zh` is accepted for compatibility, but the recipient's chosen language takes precedence. Public reads are cookie-free; a public 404 may fall back to a verified, owner/epoch-scoped account read. Private details/photos remain in AccountStore. Dismissed or superseded link sheets cannot open late results. An already-open sheet or location selection must be closed before opening a link.
+
+VoiceOver headers, detail focus, refreshed annotation labels, 44pt touch targets, accessibility-size layouts, opaque panels under Reduce Transparency, and the existing Reduce Motion behavior support system preferences. Foreground checks refresh location authorization and remove revoked location references. See `docs/i6-acceptance.md` for tests and remaining real-device checks.
