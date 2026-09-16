@@ -190,6 +190,7 @@ final class AccountFlowTests: XCTestCase {
     app.buttons["My Places"].tap()
     let row = app.buttons["place.row.\(id)"]
     XCTAssertTrue(row.waitForExistence(timeout: 8))
+    XCTAssertFalse(app.staticTexts["Password changed."].exists)
     XCTAssertTrue(app.staticTexts["Private"].exists)
     XCTAssertTrue(app.staticTexts["Pending review"].exists)
     attach(app, "i4-my-private-places")

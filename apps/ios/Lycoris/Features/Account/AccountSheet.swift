@@ -255,6 +255,7 @@ private struct AccountPlacesView: View {
       }
     }
     .navigationTitle(created ? "My Places" : "Bookmarks").navigationBarTitleDisplayMode(.inline)
+    .onAppear { store.message = nil }
     .refreshable { await store.loadLibrary() }
   }
 
