@@ -95,8 +95,12 @@ it('opens a result and dismisses the desktop second column while retaining the r
     expect(screen.queryByRole('heading', { name: 'Search Results' })).not.toBeInTheDocument()
     expect(container.querySelector('.leaflet-container')).toBe(map)
 })
-it('preserves the phone input node, focus and IME composition while expanding from collapsed', async () => {
-    app('/?lang=en', true)
+it.each([
+    ['/?lang=en', 'half'],
+    ['/?lang=en&snap=collapsed', 'collapsed'],
+])('preserves phone input and IME composition when expanding %s from %s', async (url, snap) => {
+    app(url, true)
+    expect(document.getElementById('map-shell')).toHaveAttribute('data-snap', snap)
     const input = screen.getByRole('textbox', { name: 'Search Positions' })
     act(() => input.focus())
     fireEvent.compositionStart(input)
@@ -408,14 +412,14 @@ it.each([
     expect(screen.getByTestId('route')).toHaveTextContent('?lang=en&snap=full')
     fireEvent.click(within(popup).getByRole('button', { name: 'Close panel' }))
     await waitFor(() =>
-        expect(screen.queryByRole('heading', { name: title })).not.toBeInTheDocument(),
+        expect(screen.queryByRole('dialog', { name: title })).not.toBeInTheDocument(),
     )
     expect(screen.getByRole('button', { name: option })).toHaveFocus()
     expect(document.getElementById('map-shell')).toHaveAttribute('data-snap', 'full')
     expect(container.querySelector('.leaflet-container')).toBe(map)
 })
-it('closes phone Nearby back to its original menu height without remounting the map', async () => {
-    const { container } = app('/?lang=en&snap=half', true)
+it('closes phone Nearby back to the default half menu without remounting the map', async () => {
+    const { container } = app('/?lang=en', true)
     const map = container.querySelector('.leaflet-container')
     fireEvent.click(screen.getByRole('button', { name: 'Find nearby' }))
     await screen.findByRole('heading', { name: 'Nearby' })

@@ -40,3 +40,16 @@ entry points retain their existing behavior.
 
 The in-app browser is usable for local checks. This does not establish that the
 previously unavailable native Chrome input or Cloudflare upload path works.
+
+## Follow-up: title removal and default phone sheet
+
+Removed visible titles from the setting popovers, retaining their accessible
+names and close buttons. The phone now starts at the existing 320px half snap,
+matching the supplied screenshot's search field and three Nearby cards. Explicit
+collapsed/full URLs, search results and secondary panels retain their behavior.
+
+All 59 affected settings, navigation, MapPage and sheet-drag tests passed;
+strict TypeScript, build, formatting and diff checks passed. Computer Use
+verified the initial phone view at 375×667 without a snap query, dragging it to
+full, and the title-free popovers on phone and desktop. The viewport override
+was reset. These changes remain local and are not deployed.

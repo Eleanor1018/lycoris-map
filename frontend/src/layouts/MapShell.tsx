@@ -97,11 +97,13 @@ export function MapShell({
         contributionOpen ||
         (mobile && (panel === 'bookmarks' || panel === 'nearby' || isSettingsPanel(panel)))
             ? 'full'
-            : snapValue === 'half' || snapValue === 'full'
+            : snapValue === 'collapsed' || snapValue === 'half' || snapValue === 'full'
               ? snapValue
               : browse && location.pathname === '/search' && params.get('q')?.trim() && !snapValue
                 ? 'full'
-                : 'collapsed'
+                : mobile
+                  ? 'half'
+                  : 'collapsed'
     const [detailHeight, setDetailHeight] = useState(433)
     const sheetHeight =
         panel === 'details'

@@ -98,8 +98,7 @@ export function SettingsRows({ mobile = false }: { mobile?: boolean }) {
                         event.stopPropagation()
                     }}
                 >
-                    <div className="settings-popover-header">
-                        <h2>{ui.message(settingsTitles[panel])}</h2>
+                    <div className="settings-popover-actions">
                         <Popover.Close asChild>
                             <IconButton
                                 className="settings-popover-close"

@@ -125,17 +125,11 @@
     transform-origin: var(--radix-popover-content-transform-origin);
     animation: settings-popover-in 120ms ease-out;
 }
-.settings-popover-header {
+.settings-popover-actions {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding-left: 11px;
+    justify-content: flex-end;
     min-height: 36px;
-}
-.settings-popover-header h2 {
-    margin: 0;
-    font: 500 15px/20px var(--ui-font-body);
 }
 .settings-popover .settings-popover-close {
     width: 36px;
