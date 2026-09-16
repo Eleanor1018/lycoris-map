@@ -88,3 +88,18 @@ Physical-device Safari was not tested in this run.
 Cloudflare reported success after uploading all 21 production files. Live HTML
 references `index-BmFrJzOL.js` and `index-DwCxC-gV.css`. This release only changes
 the frontend; the later backend cutover is documented above.
+
+## Nearby spacing and photo loading — 2026-09-16
+
+Commit `967c9a4` lets Nearby descriptions shrink to their actual text height,
+retaining the three-line clamp and 10px gap above the action buttons. Nearby
+and detail photos share a rounded loading placeholder with a subtle shimmer
+and a 220ms reveal. Existing image dimensions and lazy loading are preserved;
+failed images are removed, cached images appear immediately, and a changed URL
+starts a fresh load state. Reduced-motion preferences disable the animation.
+
+All 245 unit tests and the strict TypeScript production build passed. Chrome
+verified desktop and mobile layouts using live public reads through a local
+read-only preview, with an artificial eight-second image delay. Cloudflare
+reported success after uploading all 21 artifact files. The custom-domain HTML
+now references `index-DOmxOlNZ.js` and `index-Cwmq9PS3.css`.
