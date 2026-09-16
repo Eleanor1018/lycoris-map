@@ -89,6 +89,23 @@ function messageFromBody(status: number, body: unknown): { code?: number; messag
     return { message: `HTTP ${status}` }
 }
 
+/** Distinguish the backend's role denial from second-factor and unknown 403s. */
+function accessDenied(status: number, body: unknown, path: string): boolean {
+    return (
+        status === 403 &&
+        !!body &&
+        typeof body === 'object' &&
+        'status' in body &&
+        body.status === 403 &&
+        'error' in body &&
+        body.error === 'Forbidden' &&
+        'path' in body &&
+        body.path === path &&
+        'timestamp' in body &&
+        typeof body.timestamp === 'string'
+    )
+}
+
 /**
  * Options for [`requestBlob`] only.
  *
@@ -154,7 +171,11 @@ export async function request(path: string, options: RequestOptions = {}): Promi
 
     if (!response.ok) {
         const { code, message } = messageFromBody(response.status, parsed)
-        throw new ApiError(response.status, message, { code, requestId })
+        throw new ApiError(response.status, message, {
+            code,
+            requestId,
+            accessDenied: accessDenied(response.status, parsed, path),
+        })
     }
 
     return parsed
@@ -194,7 +215,11 @@ export async function requestBlob(path: string, options: BlobRequestOptions = {}
 
     if (!response.ok) {
         const { code, message } = messageFromBody(response.status, parsed)
-        throw new ApiError(response.status, message, { code, requestId })
+        throw new ApiError(response.status, message, {
+            code,
+            requestId,
+            accessDenied: accessDenied(response.status, parsed, path),
+        })
     }
 
     return parsed as Blob

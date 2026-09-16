@@ -11,11 +11,17 @@ export class ApiError extends Error {
     readonly code: number | undefined
     readonly requestId: string | undefined
     readonly body: string | undefined
+    readonly accessDenied: boolean
 
     constructor(
         status: number,
         message: string,
-        options: { code?: number | undefined; requestId?: string | undefined; body?: string } = {},
+        options: {
+            code?: number | undefined
+            requestId?: string | undefined
+            body?: string
+            accessDenied?: boolean
+        } = {},
     ) {
         super(message)
         this.name = 'ApiError'
@@ -23,6 +29,7 @@ export class ApiError extends Error {
         this.code = options.code
         this.requestId = options.requestId
         this.body = options.body
+        this.accessDenied = options.accessDenied === true
     }
 
     /** Network/timeout failure: no HTTP response was received. */
