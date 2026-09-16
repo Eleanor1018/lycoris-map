@@ -19,13 +19,13 @@ Apple Maps is the approved iOS map provider. The settings reference's OSM label 
 | --- | --- | --- |
 | Search / Nearby results | Existing point rows and approved Web behavior | I3 reuses the rounded iOS place rows, title3/subheadline styles and minimal loading/empty/retry text; category cards and radar share one destination |
 | Login / register / profile | Auth references 126:382 and 126:513 | I4 uses the user-approved native sheet and Form/List mapping; no iOS-complete account frames exist |
-| Contribution / editing | Existing contribution form and backend semantics | Native form/picking sequence before I5; pen is the entry; no public/private control |
+| Contribution / editing | Contribution frame 74:4744 and backend semantics | I5 follows the user's latest fully native preference: map selection, native Form, DatePicker and PhotosPicker; pen is the entry; no public/private control |
 | Settings subpages | iOS settings rows, existing preferences | Native selection presentation before I6 |
 | Microphone | Symbol exists, no defined behavior | Decide native speech behavior or an honest unavailable state before completing search |
 | Apple / Google login, verification, recovery, account deletion | Backend does not implement these flows | Separate scoped backend work if included; logout is not account deletion |
 | iPad | No dedicated native design supplied | Separate adaptation decision |
 
-Explicit Debug fixtures remain isolated from live networking and real actions. Default and Release launches revalidate their session and never inject sample bookmarks. I3 connects category results, search, map pins, Core Location, sharing and navigation. I4 account and bookmark actions are connected. Contribution/editing await I5, and settings and voice decisions await I6; those remaining controls show a native unavailable alert.
+Explicit Debug fixtures remain isolated from live networking and real actions. Default and Release launches revalidate their session and never inject sample bookmarks. I3 connects category results, search, map pins, Core Location, sharing and navigation. I4 account and bookmark actions and I5 contribution/editing are connected. Settings and voice decisions await I6; those remaining controls show a native unavailable alert.
 
 I3 rechecked `65:1989` and the previously approved Nearby behavior reference `140:147` with Figma MCP. No complete iOS result screen exists in the supplied page, so the approved existing point-row style is reused within the same panel. A compact results heading/close control and status text support that flow. Actual missing photos/descriptions are omitted; the decorative Figma image never substitutes for absent API content. Real distance metadata explicitly names the reference point.
 
@@ -44,3 +44,11 @@ Apple/Google authentication has no backend flow, so it is explanatory footer tex
 The map keeps the iOS reference's 38pt avatar and existing three-row bookmark style. Actual user initials or the current account avatar replace the anonymous AA placeholder. The outline bookmark asset is retained; its selected state uses the native bookmark.fill symbol because the supplied iOS frame defines only the outline. Long text and accessibility fonts can grow and scroll.
 
 Implementation references: [Apple Form](https://developer.apple.com/documentation/swiftui/form), [TextField](https://developer.apple.com/documentation/swiftui/textfield), [submitLabel](https://developer.apple.com/documentation/swiftui/view/submitlabel(_:)).
+
+## I5 contribution presentation (2026-09-16)
+
+Figma MCP rechecked `74:4744`: title, three category options, description, opening/closing time, optional photo and submit. The user's newer instruction that all UI/UX should be native carries forward the I4 decision: preserve these fields and entry points, use system fonts, grouped Form sections, DatePicker, PhotosPicker and navigation toolbar actions instead of the Web purple field styling. Existing category assets and the pen entry stay in the map shell.
+
+The pen starts selection on the same MapKit instance; the center target maps to the geographic coordinate beneath the physical screen center, without extra coordinate conversion. Cancel returns to the existing draft when changing its location. A contribution sheet can be closed and reopened without losing fields or selected bytes. The detail edit action opens the same native form with the source content language and fixed coordinates.
+
+Loading, retry, uncertain-edit confirmation and awaiting-review feedback are native text/progress/dialogs in the form. No public/private control, new main navigation, fake immediate approval or background-transfer promise is added. The toolbar stays reachable while the form scrolls, and title Return/keyboard Done dismiss input.

@@ -2,11 +2,11 @@
 
 Native SwiftUI application, Apple Maps / MapKit, iPhone, iOS 26+. Open `Lycoris.xcodeproj` in Xcode and select the shared **Lycoris** scheme.
 
-## Current scope: I4
+## Current scope: I5
 
 The Figma map shell now reads public places from the Rust backend: viewport markers, debounced search, three Nearby categories, marker selection and real details. Core Location is requested from the location/Nearby controls; denied or unavailable location falls back to the explicitly labelled map center. Place sharing opens the native share sheet with a public Apple Maps destination link, and Navigate opens walking directions in Apple Maps. No user origin is embedded in shared links.
 
-I4 connects account-password login and registration, cookie session restoration, logout, profile fields, native photo selection and avatar upload, password changes, Bookmarks and My Places. Login and registration use fully native SwiftUI navigation and grouped forms, following the user’s updated preference. Profile and library screens also use native Form/List. Editing, contribution, settings destinations and voice input remain I5–I6 work. No server deployment is performed.
+I4 connects account-password login and registration, cookie session restoration, logout, profile fields, native photo selection and avatar upload, password changes, Bookmarks and My Places. Login and registration use fully native SwiftUI navigation and grouped forms, following the user’s updated preference. Profile and library screens also use native Form/List. I5 adds native contribution and editing forms, map location selection, durable drafts and resumable photo proposals. Settings destinations and voice input remain I6 work. No server deployment is performed.
 
 The default app revalidates its persisted account cookie; without a valid session it is anonymous, with no sample bookmarks or selected place. Xcode canvas previews and explicit Debug launch arguments inject design fixtures without creating a login session. Release ignores the preview arguments.
 
@@ -58,7 +58,8 @@ The `$()` escape preserves the double slash in an xcconfig URL. The phone and Ma
 - `Core/API`: environment configuration, public DTOs, transport and HTTP diagnostics.
 - `Core/Location`: WGS84 values, viewport splitting and on-demand Core Location.
 - `Features/Places`: shared rows, real details, public images and native share sheet.
-- `Features/Account`: session and private data lifecycle, Figma auth forms, native profile/password/library screens, and avatar encoding.
+- `Features/Account`: session and private data lifecycle, native auth/profile/password/library screens, and image encoding.
+- `Features/Contributions`: native form, protected draft journal, marker writes and resumable photo protocol.
 - `Resources`: asset catalog and English / Simplified Chinese strings.
 - `LycorisTests`: configuration, HTTP/DTO boundaries, request races, coordinates, panel geometry and camera preservation.
 - `LycorisUITests`: keyboard/drag, design previews, public browsing and isolated synthetic account acceptance flows.
@@ -91,3 +92,15 @@ The account sheet supports nickname, pronouns and signature, a native PhotosPick
 `AccountFlowTests` writes only to the identified loopback synthetic stack using dedicated random accounts persisted inside the test runner's container. It never uses a real account or previous S1/S4 credentials. The fixture's own profile, password session version, avatar, favorites and private place may change. For its native photo picker test, seed the selected simulator with the synthetic avatar via `xcrun simctl addmedia <device-id> <synthetic-avatar.png>`. The password test deliberately reuses the fixture password while verifying invalidation of another session. No passwords or cookies belong in repository artifacts.
 
 Keychain references: [Apple access class](https://developer.apple.com/documentation/security/ksecattraccessibleafterfirstunlockthisdeviceonly), [signing/entitlement diagnostics](https://developer.apple.com/documentation/security/errsecmissingentitlement). Local ad-hoc simulator signing supplies the app identity; physical-device and App Store signing remain separate release work.
+
+## I5 contribution behavior
+
+The pen opens login if needed, then location selection on the existing MapKit instance. Move the map under the center target and confirm. A native NavigationStack/Form contains the Figma contribution fields: title, three categories, description, optional opening/closing times and one optional photo. Native DatePicker and PhotosPicker provide input. There is no public/private control. An existing place opens an editor from its detail action; its coordinates and visibility are preserved.
+
+Closing the form keeps its single local draft. Tap the pen to return to saved work. Draft JSON and the final orientation-correct, 2048px JPEG are written atomically in Application Support with iOS file protection and excluded from backups. The upload hashes those saved bytes; resumed requests never re-encode the photo. File/receipt validation rejects missing, corrupt or mismatched checkpoints. Explicit discard clears local work; it cannot retract an already submitted proposal.
+
+New places freeze their UUID and payload before sending and recover safely after lost responses. Text edits have no server idempotency key: an unknown result is persisted and never automatically resent. Explicit resend requires a native confirmation explaining possible duplication. Photo-only edits skip PATCH. Successful text/image submissions remain awaiting review; live details are never optimistically replaced.
+
+Photos use the existing Rust start/status/256KiB chunk/complete endpoints. Each retry reconciles the server receipt first, including after a lost completion or missing local photo. Network failures back off up to 60 seconds and resume while active, on connectivity restoration or when the app returns. Expiry/file rejection requires selecting the photo again; quotas and nontransient errors pause. There is no guaranteed background execution or transfer after force quit; the next launch resumes persisted work.
+
+All contribution requests share the account mutation gate, verify `/api/me`, and check owner, configured service origin and live login epoch. Logout/account replacement cancels and purges the old draft and photo. Late responses cannot recreate the previous user's UI or dispatch under a new cookie. Startup waits for verified identity before loading a saved contribution. See `docs/i5-acceptance.md` for validation evidence.
