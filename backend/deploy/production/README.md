@@ -8,7 +8,7 @@ The app runs as UID 10001 with a read-only root and persistent uploads.
 Run Compose as root from this directory. Keep all actual configuration under
 `/opt/lycoris/private` (0700), data under `/opt/lycoris/data`, and private backups
 under `/opt/lycoris/backups`. Never commit any of those directories. Credentials
-are generated once by `prepare.py EXISTING_ADMIN_ENV`; it refuses replacement.
+are generated once by `prepare.sh EXISTING_ADMIN_ENV`; it refuses replacement.
 The admin BCrypt hash and reset default are imported from the previous service.
 The Rust admin second-factor check is enabled. New domain cookies are Secure,
 HttpOnly, host-only; old Java sessions are not imported into the new Redis.
