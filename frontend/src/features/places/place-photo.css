@@ -1,0 +1,50 @@
+.place-photo-frame {
+    overflow: hidden;
+    background: var(--ui-selected);
+}
+.place-photo-content {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border-radius: inherit;
+}
+.place-photo-content img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity 220ms ease-out;
+}
+.place-photo-frame[data-state='loading'] .place-photo-content::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        100deg,
+        transparent 20%,
+        var(--ui-nav-surface) 50%,
+        transparent 80%
+    );
+    animation: place-photo-shimmer 1.6s ease-in-out infinite;
+}
+.place-photo-frame[data-state='loaded'] img {
+    opacity: 1;
+}
+@keyframes place-photo-shimmer {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(100%);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .place-photo-frame[data-state='loading'] .place-photo-content::before {
+        animation: none;
+    }
+    .place-photo-content img {
+        transition: none;
+    }
+}

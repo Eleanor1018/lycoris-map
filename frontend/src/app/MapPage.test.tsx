@@ -192,7 +192,7 @@ it('copies only a public place link, uses a destination-only navigation URL and 
     const writeText = vi.fn(async () => {})
     vi.stubGlobal('navigator', { clipboard: { writeText } })
     await screen.findByRole('heading', { name: 'Synthetic place 1' })
-    const photo = document.querySelector<HTMLImageElement>('.place-photo')!
+    const photo = document.querySelector<HTMLImageElement>('.place-photo img')!
     expect(photo).toHaveAttribute('src', '/uploads/markers/synthetic.webp')
     fireEvent.error(photo)
     expect(document.querySelector('.place-photo')).toBeNull()
@@ -307,7 +307,7 @@ it('shares the selected Nearby item, uses its destination and hides a failed ima
     fireEvent.click(within(item).getByRole('button', { name: 'Share' }))
     expect(await within(item).findByText('Link copied.')).toBeInTheDocument()
     expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/maps?markerId=2&lang=en`)
-    const photo = item.querySelector('.place-photo')!
+    const photo = item.querySelector('.place-photo img')!
     expect(photo).toHaveAttribute('src', '/uploads/markers/synthetic.webp')
     fireEvent.error(photo)
     expect(item.querySelector('.place-photo')).toBeNull()
