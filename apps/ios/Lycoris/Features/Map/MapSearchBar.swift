@@ -5,6 +5,9 @@ struct MapSearchBar: View {
   var focused: FocusState<Bool>.Binding
   let height: CGFloat
   var onSubmit: () -> Void = {}
+  var user: AccountUser? = nil
+  var avatar: Data? = nil
+  var onAccount: () -> Void = {}
   var onUnavailableAction: () -> Void
   @ScaledMetric(relativeTo: .headline) private var avatarFont: CGFloat = 18
 
@@ -32,22 +35,12 @@ struct MapSearchBar: View {
       .frame(height: height)
       .background(.quaternary, in: RoundedRectangle(cornerRadius: 22))
 
-      Button(action: onUnavailableAction) {
-        Text("AA")
-          .font(.system(size: avatarFont, weight: .bold)).foregroundStyle(.white)
-          .lineLimit(1).minimumScaleFactor(0.5)
-          .frame(width: 38, height: 38)
-          .background(
-            LinearGradient(
-              colors: [Color("AvatarTop"), Color("AvatarBottom")], startPoint: .top,
-              endPoint: .bottom
-            ),
-            in: Circle()
-          )
+      Button(action: onAccount) {
+        AccountAvatar(user: user, data: avatar)
       }
       .buttonStyle(.plain)
       .accessibilityLabel("Account")
-      .accessibilityIdentifier("map.avatar.placeholder")
+      .accessibilityIdentifier("map.account")
     }
   }
 }

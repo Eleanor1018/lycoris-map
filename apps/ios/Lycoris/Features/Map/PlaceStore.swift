@@ -35,6 +35,13 @@ final class PlaceStore {
   private var detailGeneration = UUID()
   private var locationGeneration = UUID()
 
+  func focusAccountPlace(_ place: PlacePresentation) {
+    locationGeneration = UUID()
+    pendingNearby = nil
+    closeDetail()
+    if let point = place.point { focus = MapFocus(point: point) }
+  }
+
   init(
     api: any MarkerServing = MarkerAPI(), isPreview: Bool = false,
     initialPlace: PlacePresentation? = nil, language: String? = nil
@@ -196,22 +203,24 @@ final class PlaceStore {
         let failure = self.failureReason(error)
         self.detailState = .failed(failure)
         if failure == .unavailable {
-          // Cancel older list responses before removing a now-hidden marker.
-          self.viewportTask?.cancel()
-          self.browseTask?.cancel()
-          self.viewportGeneration = UUID()
-          self.browseGeneration = UUID()
-          self.viewportMarkers.removeAll { $0.id == id }
-          self.results.removeAll { $0.id == id }
-          self.viewportState = .idle
-          self.resultsState = .loaded
-          // A same-region callback is deduplicated by MapKit. Restart these reads
-          // explicitly so a 404 cannot strand the remaining public results.
-          if let viewport = self.viewport { self.viewportChanged(viewport, debounce: false) }
-          if self.browse != nil { self.retryResults() }
+          self.removeUnavailable(id)
         }
       }
     }
+  }
+
+  func removeUnavailable(_ id: Int64) {
+    // Cancel pre-404 reads before removing an inaccessible place from public caches.
+    viewportTask?.cancel()
+    browseTask?.cancel()
+    viewportGeneration = UUID()
+    browseGeneration = UUID()
+    viewportMarkers.removeAll { $0.id == id }
+    results.removeAll { $0.id == id }
+    viewportState = .idle
+    resultsState = .loaded
+    if let viewport { viewportChanged(viewport, debounce: false) }
+    if browse != nil { retryResults() }
   }
 
   func closeDetail() {

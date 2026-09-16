@@ -5,6 +5,10 @@ struct MapPanelContent: View {
   let cardHeight: CGFloat
   let showsSettings: Bool
   let bookmarks: [PlacePresentation]
+  var showsBookmarks = false
+  var bookmarksLoading = false
+  var bookmarksMessage: String? = nil
+  var onBookmarks: () -> Void = {}
   var onCategory: (PlaceCategory) -> Void = { _ in }
   let onSelect: (PlacePresentation) -> Void
   let onUnavailableAction: () -> Void
@@ -24,16 +28,25 @@ struct MapPanelContent: View {
         }
       }
       if showsSettings {
-        if !bookmarks.isEmpty {
-          sectionHeading("Bookmarks")
+        if showsBookmarks || !bookmarks.isEmpty {
+          sectionHeading("Bookmarks", action: onBookmarks)
             .accessibilityIdentifier("map.bookmarks.heading")
           VStack(spacing: 0) {
-            ForEach(bookmarks) { place in
+            ForEach(bookmarks.prefix(3)) { place in
               PlaceRow(place: place) { onSelect(place) }
             }
           }
           .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 24))
           .padding(.horizontal, 3)
+          if bookmarks.isEmpty {
+            if bookmarksLoading {
+              ProgressView().padding(8)
+            } else {
+              Text(bookmarksMessage ?? String(localized: "No bookmarks yet."))
+                .font(.subheadline).foregroundStyle(.secondary)
+                .padding(.horizontal, 6).padding(.vertical, 8)
+            }
+          }
         }
         sectionHeading("Settings")
         VStack(spacing: 6) {
@@ -50,8 +63,9 @@ struct MapPanelContent: View {
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 
-  private func sectionHeading(_ title: LocalizedStringKey) -> some View {
-    Button(action: onUnavailableAction) {
+  private func sectionHeading(_ title: LocalizedStringKey, action: (() -> Void)? = nil) -> some View
+  {
+    Button(action: action ?? onUnavailableAction) {
       HStack {
         Text(title).font(.title3.weight(.semibold))
         Spacer()

@@ -1,8 +1,11 @@
 import SwiftUI
 
-/// Image requests are public and cookie-free, just like I3 marker reads.
+/// Public photos load without cookies; private photos arrive from the account-scoped store.
 struct PlacePhoto: View {
   let place: PlacePresentation
+  var authenticated = false
+  var data: Data? = nil
+  var photoFailed = false
   @State private var loadedImage: UIImage?
   @State private var failed = false
 
@@ -10,13 +13,13 @@ struct PlacePhoto: View {
     Group {
       if let asset = place.photoAsset {
         Image(asset).resizable().aspectRatio(353.0 / 198, contentMode: .fit)
-      } else if let loadedImage {
+      } else if let loadedImage = authenticated ? data.flatMap(UIImage.init(data:)) : loadedImage {
         Rectangle().fill(.clear).aspectRatio(353.0 / 198, contentMode: .fit)
           .overlay { Image(uiImage: loadedImage).resizable().scaledToFill() }.clipped()
       } else if place.imageURL != nil {
         Rectangle().fill(.quaternary).aspectRatio(353.0 / 198, contentMode: .fit)
           .overlay {
-            if failed {
+            if failed || photoFailed || (authenticated && data != nil) {
               Text("Photo unavailable").font(.subheadline).foregroundStyle(.secondary)
             } else {
               ProgressView()
@@ -26,16 +29,21 @@ struct PlacePhoto: View {
     }
     .clipShape(RoundedRectangle(cornerRadius: 16))
     .accessibilityLabel("Place photo")
-    .task(id: place.imageURL) {
+    .task(id: PhotoRequest(url: place.imageURL, authenticated: authenticated)) {
       loadedImage = nil
       failed = false
-      guard let url = place.imageURL else { return }
+      guard !authenticated, let url = place.imageURL else { return }
       do {
         loadedImage = try await PlaceImageLoader.load(url)
       } catch {
         if !Task.isCancelled { failed = true }
       }
     }
+  }
+
+  private struct PhotoRequest: Hashable {
+    let url: URL?
+    let authenticated: Bool
   }
 }
 

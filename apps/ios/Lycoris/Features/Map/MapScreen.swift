@@ -5,10 +5,26 @@ struct MapScreen: View {
   @State private var detent: MapPanelDetent
   @State private var store: PlaceStore
   @State private var location = LocationProvider()
-  @State private var sharedPlace: PlacePresentation?
+  @State private var account = AccountStore()
+  @State private var modal: MapModal?
+  @State private var pendingBookmark: Int64?
+  @State private var bookmarkIntent = UUID()
+  @State private var showsAccountError = false
+  @Environment(\.scenePhase) private var scenePhase
   @State private var showsLocationError = false
   @State private var showsNavigationError = false
-  private var selectedPlace: PlacePresentation? { store.selectedPlace }
+  private var selectedPlace: PlacePresentation? {
+    account.selectedMarker.map { store.presentation($0) } ?? store.selectedPlace
+  }
+  private var mapPlaces: [PlacePresentation] {
+    if account.detailState == .failed(.unavailable), let removed = account.selectedMarker {
+      return store.mapPlaces.filter { $0.id != String(removed.id) }
+    }
+    guard let selected = account.selectedMarker.map({ store.presentation($0) }) else {
+      return store.mapPlaces
+    }
+    return store.mapPlaces.filter { $0.id != selected.id } + [selected]
+  }
   @State private var showsUnavailableAction = false
   private let bookmarks: [PlacePresentation]
   @GestureState private var dragTranslation: CGFloat = 0
@@ -55,7 +71,7 @@ struct MapScreen: View {
       ZStack(alignment: .topLeading) {
         NativeMapView(
           topInset: layout.topInset, bottomInset: mapBottomInset,
-          places: store.mapPlaces, focus: store.focus,
+          places: mapPlaces, focus: store.focus,
           showsUserLocation: !store.isPreview && location.hasRequestedLocation
             && location.isAuthorized, animated: !reduceMotion,
           onViewport: { store.viewportChanged($0) }, onSelect: selectPlace
@@ -109,9 +125,38 @@ struct MapScreen: View {
     .alert("Could not open Apple Maps", isPresented: $showsNavigationError) {
       Button("OK", role: .cancel) {}
     }
-    .sheet(item: $sharedPlace) { PlaceShareSheet(place: $0) }
+    .sheet(
+      item: $modal,
+      onDismiss: {
+        pendingBookmark = nil
+        bookmarkIntent = UUID()
+      }
+    ) { item in
+      switch item {
+      case .share(let place): PlaceShareSheet(place: place)
+      case .account(let destination):
+        AccountSheet(
+          store: account, destination: destination, onAuthenticated: resumeBookmark,
+          onSelect: selectAccountPlace)
+      }
+    }
+    .alert("Account", isPresented: $showsAccountError) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text(account.message ?? "")
+    }
+    .task { if !store.isPreview { await account.restore() } }
+    .onChange(of: scenePhase) { _, phase in
+      if phase == .active && !store.isPreview { Task { await account.restore() } }
+    }
+    .onChange(of: account.detailState) { _, state in
+      if state == .failed(.unavailable), let id = account.selectedMarker?.id {
+        store.removeUnavailable(id)
+      }
+    }
     .onChange(of: query) { _, text in
       if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        account.closeDetail()
         store.search(text)
       } else if case .search = store.browse {
         store.closeResults()
@@ -143,20 +188,37 @@ struct MapScreen: View {
       if let selectedPlace {
         PlaceDetailView(
           place: selectedPlace, bottomInset: layout.bottomInset,
-          state: store.detailState, onRetry: store.retryDetail,
+          state: account.selectedMarker == nil ? store.detailState : account.detailState,
+          onRetry: {
+            if let marker = account.selectedMarker {
+              account.select(marker)
+            } else {
+              store.retryDetail()
+            }
+          },
           onShare: {
             if store.isPreview {
               showsUnavailableAction = true
             } else {
-              sharedPlace = selectedPlace
+              modal = .share(selectedPlace)
             }
           },
           onNavigate: { navigate(selectedPlace) },
+          isBookmarked: Int64(selectedPlace.id).map(account.isBookmarked) ?? false,
+          bookmarkBusy: account.isBusy || account.libraryLoading || account.isChecking,
+          onBookmark: { bookmark(selectedPlace) },
+          authenticatedPhoto: account.selectedMarker != nil,
+          photo: account.selectedPhoto, photoFailed: account.photoFailed,
           onUnavailableAction: { showsUnavailableAction = true })
       } else {
         MapSearchBar(
           query: $query, focused: $isSearchFocused, height: max(38, searchHeight),
           onSubmit: { store.search(query, debounce: false) },
+          user: account.user, avatar: account.avatar,
+          onAccount: {
+            isSearchFocused = false
+            if store.isPreview { showsUnavailableAction = true } else { modal = .account(.profile) }
+          },
           onUnavailableAction: { showsUnavailableAction = true }
         )
         .padding(.horizontal, 14)
@@ -175,7 +237,17 @@ struct MapScreen: View {
               }
               MapPanelContent(
                 cardHeight: cardHeight, showsSettings: detent == .expanded,
-                bookmarks: bookmarks, onCategory: showNearby, onSelect: selectPlace,
+                bookmarks: store.isPreview ? bookmarks : account.bookmarks.map(store.presentation),
+                showsBookmarks: account.user != nil,
+                bookmarksLoading: account.libraryLoading, bookmarksMessage: account.libraryMessage,
+                onBookmarks: {
+                  if store.isPreview {
+                    showsUnavailableAction = true
+                  } else {
+                    modal = .account(.bookmarks)
+                  }
+                },
+                onCategory: showNearby, onSelect: selectPlace,
                 onUnavailableAction: { showsUnavailableAction = true })
             }
           }
@@ -242,6 +314,12 @@ struct MapScreen: View {
   }
 
   private func selectPlace(_ place: PlacePresentation) {
+    if let marker = (account.bookmarks + account.created).first(where: { String($0.id) == place.id }
+    ) {
+      selectAccountPlace(marker)
+      return
+    }
+    account.closeDetail()
     isSearchFocused = false
     withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.86)) {
       store.select(place)
@@ -250,6 +328,7 @@ struct MapScreen: View {
   }
 
   private func showNearby(_ category: PlaceCategory) {
+    account.closeDetail()
     query = ""
     let token = store.nearby(category)
     movePanel(to: .nearby)
@@ -293,8 +372,66 @@ struct MapScreen: View {
   private func movePanel(to newDetent: MapPanelDetent) {
     if newDetent != .expanded { isSearchFocused = false }
     withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.86)) {
-      if newDetent == .collapsed { store.closeDetail() }
+      if newDetent == .collapsed {
+        store.closeDetail()
+        account.closeDetail()
+      }
       detent = newDetent
+    }
+  }
+
+  private func selectAccountPlace(_ marker: Marker) {
+    isSearchFocused = false
+    account.select(marker)
+    store.focusAccountPlace(store.presentation(marker))
+    movePanel(to: .nearby)
+  }
+
+  private func bookmark(_ place: PlacePresentation) {
+    guard !store.isPreview else {
+      showsUnavailableAction = true
+      return
+    }
+    guard let id = Int64(place.id) else { return }
+    guard account.user != nil else {
+      bookmarkIntent = UUID()
+      pendingBookmark = id
+      modal = .account(.profile)
+      return
+    }
+    Task {
+      await account.toggleBookmark(id)
+      showsAccountError = account.message != nil
+    }
+  }
+
+  private func resumeBookmark() {
+    guard let id = pendingBookmark, let owner = account.user?.publicId else { return }
+    let token = account.epoch
+    let intent = bookmarkIntent
+    pendingBookmark = nil
+    Task {
+      await account.loadLibrary()
+      guard owner == account.user?.publicId, token == account.epoch, intent == bookmarkIntent else {
+        return
+      }
+      if !account.isBookmarked(id) { await account.toggleBookmark(id) }
+      guard owner == account.user?.publicId, token == account.epoch, intent == bookmarkIntent else {
+        return
+      }
+      modal = nil
+      showsAccountError = account.message != nil
+    }
+  }
+}
+
+private enum MapModal: Identifiable {
+  case account(AccountDestination)
+  case share(PlacePresentation)
+  var id: String {
+    switch self {
+    case .account: "account"
+    case .share(let place): "share-\(place.id)"
     }
   }
 }

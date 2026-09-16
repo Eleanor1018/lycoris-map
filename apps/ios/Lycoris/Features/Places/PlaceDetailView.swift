@@ -8,6 +8,12 @@ struct PlaceDetailView: View {
   var onRetry: () -> Void = {}
   var onShare: () -> Void = {}
   var onNavigate: () -> Void = {}
+  var isBookmarked = false
+  var bookmarkBusy = false
+  var onBookmark: (() -> Void)? = nil
+  var authenticatedPhoto = false
+  var photo: Data? = nil
+  var photoFailed = false
   let onUnavailableAction: () -> Void
   @ScaledMetric(relativeTo: .body) private var buttonHeight: CGFloat = 48
 
@@ -47,7 +53,10 @@ struct PlaceDetailView: View {
 
           }
           if place.hasPhoto {
-            PlacePhoto(place: place).padding(.horizontal, 15).padding(.top, 5)
+            PlacePhoto(
+              place: place, authenticated: authenticatedPhoto, data: photo, photoFailed: photoFailed
+            )
+            .padding(.horizontal, 15).padding(.top, 5)
           }
 
           let actionLayout =
@@ -58,11 +67,20 @@ struct PlaceDetailView: View {
               .buttonStyle(.glass)
             actionLabel("Navigate", image: "PlaceNavigate", size: 24, action: onNavigate)
               .buttonStyle(.glassProminent)
-            Button(action: onUnavailableAction) {
-              Image("PlaceBookmark").resizable().frame(width: 28, height: 28)
-                .frame(minWidth: 28, minHeight: buttonHeight)
+            Button(action: onBookmark ?? onUnavailableAction) {
+              Group {
+                if isBookmarked {
+                  Image(systemName: "bookmark.fill").resizable().scaledToFit()
+                } else {
+                  Image("PlaceBookmark").resizable()
+                }
+              }.frame(width: 28, height: 28)
+                .frame(minWidth: 44, minHeight: buttonHeight)
             }
-            .buttonStyle(.plain).accessibilityLabel("Bookmark place")
+            .buttonStyle(.plain).accessibilityLabel(
+              isBookmarked ? "Remove bookmark" : "Bookmark place"
+            )
+            .accessibilityIdentifier("place.bookmark").disabled(bookmarkBusy)
           }
           .padding(.leading, 16).padding(.trailing, 22).padding(.top, 8)
           .padding(.bottom, max(bottomInset, 29))
