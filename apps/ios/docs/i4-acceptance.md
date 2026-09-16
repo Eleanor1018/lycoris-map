@@ -1,5 +1,7 @@
 # I4 — 原生账号与收藏
 
+> 2026-09-16 后续调整：用户改为要求登录／注册全部使用 Apple 原生 UI／UX，已替换本文初次验收时的 Figma 紫色登录样式。当前设计以 [design-mapping.md](design-mapping.md#i4-account-presentation-updated-2026-09-16) 为准；下文原有测试记录保留为 I4 历史验收。
+
 2026-09-16，分支 `feat/ios-native`。温晓亲自实现；辅助代理仅只读核对 Rust 契约、设计映射和竞态边界。没有部署服务器或合并主分支。
 
 ## 功能与设计
@@ -60,3 +62,18 @@ Keychain 测试需要 Xcode 的本机 ad-hoc 签名：`CODE_SIGNING_ALLOWED=YES 
 Apple／Google登录、验证码、找回密码及账号注销缺少后端流程，本阶段没有假实现；退出登录不等于注销。Release 服务地址仍为空。服务端Cookie有30天有效期，本阶段没有延长它。
 
 截图保存在本机 `/Users/nora/Documents/Codex/2026-09-14/wen/outputs/ios-i4/`。日志位于 `/tmp/lycoris-ios-i4-*.log`；未将Cookie或真实凭据写入仓库。早期测试中的Photos无hit point与面板动画时序已修正为真实可操作定位；真实Cookie持久化缺陷已通过Keychain修复，测试没有用额外等待掩盖问题。
+
+## 原生登录调整验收（2026-09-16）
+
+按用户最新要求，登录与注册改为完整原生 SwiftUI Form 和 NavigationStack。系统字体、背景、分组行、导航／关闭按钮、键盘焦点及密码自动填充承接交互；移除账号 sheet 的自定义圆角。Apple／Google 登录改为尚未启用的文字说明，验证码保留原生非交互占位。
+
+Computer Use 在用户当前 Xcode 运行的 iPhone 17 Pro 上验证了中文登录、注册、系统返回和键盘“完成”，并停留在登录页供体验。原生 UI 测试的五条账号流程均已通过：键盘登录／资料／收藏／重启／退出、辅助大字号、注册 Next／无效 Go／系统返回、登录后续做收藏与换号隔离，以及头像／改密／本人私有点位。测试中拒绝保存合成账号密码，等待系统密码提示关闭后页面可操作，没有关闭 App 的原生密码功能。
+
+验证日志：
+
+- `/tmp/lycoris-ios-native-auth-final2.log`：键盘登录和注册导航，2项通过。
+- `/tmp/lycoris-ios-native-auth-test3.log`：大字号与收藏续做两项通过；该轮其余两项测试的系统弹窗等待／键盘假设已在上面的定向复测修正并通过。
+- `/tmp/lycoris-ios-native-auth-profile2.log`：头像、改密、私有点位，1项通过。
+- `/tmp/lycoris-ios-native-auth-build.log`、`/tmp/lycoris-ios-native-auth-release.log`：Debug、Release构建通过。Swift格式严格检查和diff检查通过。
+
+截图：`/Users/nora/Documents/Codex/2026-09-14/wen/outputs/ios-native-auth/`。本次没有改后端、账号会话或地图数据逻辑。开始前已有的两个本地化目录改动，以及 Xcode 后续自动提取状态，保留在工作区，不纳入本次提交。

@@ -24,7 +24,6 @@ struct AccountSheet: View {
       }
     }
     .presentationDragIndicator(.visible)
-    .presentationCornerRadius(25)
     .interactiveDismissDisabled(store.isBusy)
     .onChange(of: store.user?.publicId) { _, _ in path = [] }
   }

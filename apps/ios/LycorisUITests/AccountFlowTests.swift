@@ -20,9 +20,11 @@ final class AccountFlowTests: XCTestCase {
     logoutIfNeeded(app)
     XCTAssertTrue(app.textFields["auth.username"].waitForExistence(timeout: 8))
     attach(app, "i4-login")
-    app.buttons["Continue with Apple"].tap()
-    XCTAssertTrue(app.alerts["Not available yet"].waitForExistence(timeout: 3))
-    app.alerts.buttons["OK"].tap()
+    XCTAssertFalse(app.buttons["Continue with Apple"].exists)
+    XCTAssertTrue(
+      app.staticTexts[
+        "Apple and Google login are not enabled yet. Please use your account password."
+      ].exists)
 
     let session = URLSession(configuration: .ephemeral)
     let (_, status) = try await request(
@@ -39,8 +41,16 @@ final class AccountFlowTests: XCTestCase {
       fill(app.textFields["auth.username"], fixture.username)
       fill(app.secureTextFields["auth.password"], fixture.password)
     }
-    app.buttons["auth.submit"].tap()
+    app.secureTextFields["auth.password"].typeText("\n")
     XCTAssertTrue(app.buttons["profile.save"].waitForExistence(timeout: 12), app.debugDescription)
+    declinePasswordSave(app)
+    let profileReady = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "hittable == true"), object: app.textFields["profile.nickname"]
+    )
+    guard await XCTWaiter.fulfillment(of: [profileReady], timeout: 5) == .completed else {
+      XCTFail("The profile should be reachable after dismissing the system password prompt")
+      return
+    }
     fill(app.textFields["profile.nickname"], "I4 Native Fixture")
     fill(app.textFields["profile.pronouns"], "they/them")
     app.buttons["profile.save"].tap()
@@ -106,19 +116,45 @@ final class AccountFlowTests: XCTestCase {
     logoutIfNeeded(app)
     XCTAssertTrue(app.buttons["auth.switch"].waitForExistence(timeout: 8))
     app.buttons["auth.switch"].tap()
+    let providerNote = app.staticTexts[
+      "Apple and Google login are not enabled yet. Please use your account password."
+    ]
     for _ in 0..<8 {
-      if app.buttons["Continue with Google"].isHittable { break }
+      if providerNote.isHittable { break }
       app.swipeUp()
     }
-    XCTAssertTrue(app.buttons["Continue with Google"].waitForExistence(timeout: 4))
-    app.buttons["Continue with Google"].tap()
-    XCTAssertTrue(app.alerts["Not available yet"].waitForExistence(timeout: 4))
-    app.alerts.buttons["OK"].tap()
-    attach(app, "i4-register-large-type")
-    for _ in 0..<8 {
-      if app.buttons["account.close"].isHittable { break }
-      app.swipeDown()
-    }
+    XCTAssertTrue(providerNote.isHittable)
+    XCTAssertFalse(app.buttons["Continue with Google"].exists)
+    attach(app, "native-auth-register-large-type")
+    XCTAssertTrue(app.buttons["account.close"].isHittable)
+    app.buttons["account.close"].tap()
+  }
+
+  func testNativeRegistrationKeyboardAndBackNavigation() async throws {
+    try await requireSyntheticStack()
+    let app = launch()
+    openAccount(app)
+    logoutIfNeeded(app)
+    app.buttons["auth.switch"].tap()
+    let email = app.textFields["auth.email"]
+    XCTAssertTrue(email.waitForExistence(timeout: 5))
+    email.tap()
+    email.typeText("keyboard@example.invalid\n")
+    app.typeText("keyboard_fixture\n")
+    XCTAssertEqual(app.textFields["auth.username"].value as? String, "keyboard_fixture")
+    app.typeText("1")
+    let password = app.secureTextFields["auth.password"]
+    XCTAssertNotEqual(password.value as? String, password.placeholderValue)
+    password.typeText("\n")
+    XCTAssertTrue(email.exists)
+    XCTAssertFalse(app.buttons["auth.submit"].isEnabled)
+    attach(app, "native-auth-register")
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    XCTAssertTrue(app.textFields["auth.username"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.textFields["auth.email"].exists)
+    let loginPassword = app.secureTextFields["auth.password"]
+    XCTAssertEqual(loginPassword.value as? String, loginPassword.placeholderValue)
+    attach(app, "native-auth-login")
     app.buttons["account.close"].tap()
   }
 
@@ -149,6 +185,14 @@ final class AccountFlowTests: XCTestCase {
     fill(app.secureTextFields["auth.password"], fixture.password)
     app.buttons["auth.submit"].tap()
     XCTAssertTrue(app.buttons["profile.avatar"].waitForExistence(timeout: 10))
+    declinePasswordSave(app)
+    let avatarReady = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "hittable == true AND enabled == true"),
+      object: app.buttons["profile.avatar"])
+    guard await XCTWaiter.fulfillment(of: [avatarReady], timeout: 5) == .completed else {
+      XCTFail("The avatar picker should be reachable after the system password prompt closes")
+      return
+    }
     app.buttons["profile.avatar"].tap()
     let photo = app.images.matching(
       NSPredicate(
@@ -241,6 +285,7 @@ final class AccountFlowTests: XCTestCase {
     fill(app.textFields["auth.username"], fixture.username)
     fill(app.secureTextFields["auth.password"], fixture.password)
     app.buttons["auth.submit"].tap()
+    declinePasswordSave(app)
     waitLabel(bookmark, "Remove bookmark")
     XCTAssertFalse(app.buttons["account.close"].exists)
     attach(app, "i4-login-resumes-save")
@@ -258,6 +303,20 @@ final class AccountFlowTests: XCTestCase {
     logoutIfNeeded(app)
     app.buttons["account.close"].tap()
     _ = try await session.data(for: remove)
+  }
+
+  private func declinePasswordSave(_ app: XCUIApplication) {
+    // This native Passwords sheet is not exposed as an XCTest alert on iOS 26.5.
+    // Decline only the synthetic test account prompt; never save test credentials.
+    for host in [app, XCUIApplication(bundleIdentifier: "com.apple.springboard")] {
+      let later = host.buttons.matching(
+        NSPredicate(format: "label IN %@", ["Not Now", "以后", "以后再说"])
+      ).firstMatch
+      if later.waitForExistence(timeout: 2) {
+        later.tap()
+        return
+      }
+    }
   }
 
   private func launch(largeText: Bool = false) -> XCUIApplication {
