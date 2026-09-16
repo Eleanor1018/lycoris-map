@@ -32,28 +32,21 @@ backend origin is server-side and is not embedded in the browser bundle.
 - `pnpm build` passed, including strict TypeScript checks. The existing main
   bundle size warning remains. All three proxy tests passed.
 
-## Backend pending
+## Backend connected — 2026-09-16
 
-The designated server `43.155.130.105` (`lhins-oszy3oc8`, Seoul) was inspected
-read-only through Tencent Cloud's terminal. It is an empty Ubuntu server:
-no Rust service, database, Docker, Nginx or Caddy was running. No server software
-or data has been changed by this deployment. The choice between a new empty
-database and importing designated production data is awaiting the owner.
+The Rust backend now runs in Docker on `43.155.130.105` (`lhins-oszy3oc8`, Seoul).
+The designated old production database and all 264 uploaded files were backed
+up, migrated and verified. Caddy serves `api.lycoris-map.com` with a valid
+certificate behind Cloudflare Full (strict). The existing Pages proxy required
+no frontend rebuild. `/health/ready` now returns HTTP 200 with PostgreSQL and
+Redis both healthy, and public point/search/nearby/detail/image requests pass.
+Chrome displayed real nearby points and their photographs. Secure host-only
+session cookies and the new domain's write origin are configured.
 
-Consequently, login, point loading, contributions and uploads are not yet
-available. The live `/health/ready` check returns HTTP 530 because the upstream
-hostname is not configured. This is **frontend publication**, not completion
-of backend deployment or end-to-end acceptance.
-
-To finish the backend, establish the approved production database and uploads,
-deploy the Rust service, create `api.lycoris-map.com` for this server, and install
-a valid HTTPS certificate. Keep PostgreSQL, Redis and the Rust listener private;
-proxy through the web server. Set `WRITE_ALLOWED_ORIGINS` to include
-`https://lycoris-map.com`, `SESSION_COOKIE_SECURE=true`, and leave the session
-Cookie domain empty so the same-origin Pages proxy works. Do not reuse the
-local synthetic runtime or the release rehearsal Compose defaults in production.
-Complete read-only API/health checks and user-approved account verification
-after the service is ready.
+See the [backend deployment record](../../../backend/deploy/production/README.md)
+for backup locations, data counts, migration versions and rollback constraints.
+The old writer is stopped; its database and media remain intact. Real-account
+login and authenticated writes still need owner acceptance on the live site.
 
 ## Mobile sheet P0 hotfix — 2026-09-16
 
@@ -94,4 +87,4 @@ Physical-device Safari was not tested in this run.
 
 Cloudflare reported success after uploading all 21 production files. Live HTML
 references `index-BmFrJzOL.js` and `index-DwCxC-gV.css`. This release only changes
-the frontend; backend availability remains as documented above.
+the frontend; the later backend cutover is documented above.
