@@ -111,7 +111,8 @@
             "value": "账号"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Map source": {
       "localizations": {
@@ -175,7 +176,8 @@
             "value": "无障碍卫生间"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Nursing Rooms": {
       "localizations": {
@@ -191,7 +193,8 @@
             "value": "母婴室"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Medical Institutions": {
       "localizations": {
@@ -207,7 +210,8 @@
             "value": "医疗机构"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Settings": {
       "localizations": {
@@ -239,7 +243,8 @@
             "value": "选择语言"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Searching Range": {
       "localizations": {
@@ -255,7 +260,8 @@
             "value": "搜索范围"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Map Source": {
       "localizations": {
@@ -271,7 +277,8 @@
             "value": "地图来源"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "About Lycoris Maps": {
       "localizations": {
@@ -287,7 +294,8 @@
             "value": "关于 Lycoris Maps"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Bookmarks": {
       "localizations": {
@@ -463,7 +471,8 @@
             "value": "点位"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "The map service is not configured yet.": {
       "localizations": {
@@ -479,7 +488,8 @@
             "value": "地图服务尚未配置。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "This place is no longer available.": {
       "localizations": {
@@ -495,7 +505,8 @@
             "value": "这个点位已不可用。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Could not load places. Please try again.": {
       "localizations": {
@@ -511,7 +522,8 @@
             "value": "无法加载点位，请重试。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Straight-line distance from your location": {
       "localizations": {
@@ -527,7 +539,8 @@
             "value": "距你当前位置的直线距离"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Straight-line distance from map center": {
       "localizations": {
@@ -543,7 +556,8 @@
             "value": "距地图中心的直线距离"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Hours not provided": {
       "localizations": {
@@ -559,7 +573,8 @@
             "value": "开放时间未提供"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Open 24 hours": {
       "localizations": {
@@ -575,7 +590,8 @@
             "value": "全天开放"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Search results": {
       "localizations": {
@@ -1039,7 +1055,8 @@
             "value": "无法连接服务，请重试。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Please log in again.": {
       "localizations": {
@@ -1055,7 +1072,8 @@
             "value": "请重新登录。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "This item is no longer available.": {
       "localizations": {
@@ -1071,7 +1089,8 @@
             "value": "此内容已不可用。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Your account changed. Reload it before trying again.": {
       "localizations": {
@@ -1087,7 +1106,8 @@
             "value": "账号信息已变更，请重新加载后再试。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Choose a smaller photo.": {
       "localizations": {
@@ -1103,7 +1123,8 @@
             "value": "请选择较小的照片。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Too many attempts. Please try again later.": {
       "localizations": {
@@ -1119,7 +1140,8 @@
             "value": "尝试次数过多，请稍后再试。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Check your details and try again.": {
       "localizations": {
@@ -1135,7 +1157,8 @@
             "value": "请检查填写的信息后重试。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "The account service is not configured yet.": {
       "localizations": {
@@ -1151,7 +1174,8 @@
             "value": "账号服务尚未配置。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "The service is unavailable. Please try again.": {
       "localizations": {
@@ -1167,7 +1191,8 @@
             "value": "服务暂不可用，请重试。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "The username or password is incorrect.": {
       "localizations": {
@@ -1183,7 +1208,8 @@
             "value": "用户名或密码不正确。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Registration could not be confirmed. Your account may have been created; try logging in.": {
       "localizations": {
@@ -1231,7 +1257,8 @@
             "value": "尚无法确认是否已退出，请重试。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Password changed. Please log in again.": {
       "localizations": {
@@ -1247,7 +1274,8 @@
             "value": "密码已修改，请重新登录。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Password changed.": {
       "localizations": {
@@ -1263,7 +1291,8 @@
             "value": "密码已修改。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Check your current password and the new password.": {
       "localizations": {
@@ -1279,7 +1308,8 @@
             "value": "请检查当前密码和新密码。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "The password change could not be confirmed. Check your connection, then try logging in before retrying.": {
       "localizations": {
@@ -1471,7 +1501,8 @@
             "value": "无法读取照片，请选择其他照片。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Current password": {
       "localizations": {
@@ -1583,7 +1614,8 @@
             "value": "暂无收藏。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Public": {
       "localizations": {
@@ -1631,7 +1663,8 @@
             "value": "已通过"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Pending review": {
       "localizations": {
@@ -1647,7 +1680,8 @@
             "value": "待审核"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Rejected": {
       "localizations": {
@@ -1663,7 +1697,8 @@
             "value": "未通过"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Unknown review status": {
       "localizations": {
@@ -1679,7 +1714,8 @@
             "value": "审核状态未知"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Remove bookmark": {
       "localizations": {
@@ -1743,7 +1779,8 @@
             "value": "无法安全保存会话，请重试。"
           }
         }
-      }
+      },
+      "extractionState": "manual"
     },
     "Add opening hours": {
       "extractionState": "manual",
@@ -2203,6 +2240,259 @@
           "stringUnit": {
             "state": "translated",
             "value": "上传照片（可选）"
+          }
+        }
+      }
+    },
+    "Apple Maps": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple 地图"
+          }
+        }
+      }
+    },
+    "Distance in meters": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "距离（米）"
+          }
+        }
+      }
+    },
+    "Apply": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用"
+          }
+        }
+      }
+    },
+    "Enter a distance from 1 to 50,000 meters.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请输入 1 至 50,000 米之间的距离。"
+          }
+        }
+      }
+    },
+    "The map and walking directions use Apple Maps. Attribution appears on the map.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地图与步行导航使用 Apple 地图，来源署名显示在地图上。"
+          }
+        }
+      }
+    },
+    "A simple map for finding accessible toilets, nursing rooms, and medical institutions.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一款简洁的地图，帮你找到无障碍卫生间、母婴室和医疗机构。"
+          }
+        }
+      }
+    },
+    "Shared Lycoris links open places in the installed app. Place availability depends on your access.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lycoris 分享链接在已安装的 App 中打开点位，是否可见取决于你的访问权限。"
+          }
+        }
+      }
+    },
+    "Place unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点位不可用"
+          }
+        }
+      }
+    },
+    "Audio stays on this device. Only the confirmed search text is sent to Lycoris.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音频仅在此设备上处理，确认后的搜索文字才会发送给 Lycoris。"
+          }
+        }
+      }
+    },
+    "Stop recording": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停止录音"
+          }
+        }
+      }
+    },
+    "Start recording": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开始录音"
+          }
+        }
+      }
+    },
+    "Use keyboard": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用键盘"
+          }
+        }
+      }
+    },
+    "Open Settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开设置"
+          }
+        }
+      }
+    },
+    "Ready to listen": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "准备聆听"
+          }
+        }
+      }
+    },
+    "Waiting for permission…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待授权…"
+          }
+        }
+      }
+    },
+    "Listening…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在聆听…"
+          }
+        }
+      }
+    },
+    "Ready to search": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可以开始搜索"
+          }
+        }
+      }
+    },
+    "On-device speech recognition is unavailable. Please use the keyboard.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此设备暂不支持离线语音识别，请使用键盘输入。"
+          }
+        }
+      }
+    },
+    "Allow microphone and speech recognition access in Settings, or use the keyboard.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请在系统设置中允许麦克风和语音识别权限，或使用键盘输入。"
+          }
+        }
+      }
+    },
+    "Could not recognize speech. Try again or use the keyboard.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未能识别语音，请重试或使用键盘输入。"
+          }
+        }
+      }
+    },
+    "Could not get your location. You can try again or browse around the map center.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂时无法获取位置。你可以重试，或浏览地图中心附近。"
+          }
+        }
+      }
+    },
+    "Could not open place link": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法打开点位链接"
+          }
+        }
+      }
+    },
+    "Check the link and close any open sheet before trying again.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请检查链接，并关闭当前弹出的页面后重试。"
           }
         }
       }

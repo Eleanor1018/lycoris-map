@@ -27,6 +27,8 @@ final class PlaceStore {
   private(set) var focus: MapFocus?
   private(set) var lastRequestID: String?
   private(set) var language: String
+  private(set) var radius = 1000
+  private var selectedMarker: Marker?
   private var viewportTask: Task<Void, Never>?
   private var browseTask: Task<Void, Never>?
   private var detailTask: Task<Void, Never>?
@@ -34,6 +36,34 @@ final class PlaceStore {
   private var browseGeneration = UUID()
   private var detailGeneration = UUID()
   private var locationGeneration = UUID()
+
+  func updatePreferences(language: String, radius: Int) {
+    let changedLanguage = self.language != language
+    let changedRadius = self.radius != radius
+    guard changedLanguage || changedRadius else { return }
+    self.language = language
+    self.radius = radius
+    if changedLanguage {
+      if let selectedMarker { selectedPlace = presentation(selectedMarker) }
+      if let viewport { viewportChanged(viewport, debounce: false) }
+      retryDetail()
+    }
+    if browse != nil { retryResults() }
+  }
+
+  func revokeLocation() {
+    userLocation = nil
+    locationGeneration = UUID()
+    if case .nearby(let category, _, true) = browse {
+      if let center = viewport?.center {
+        browse = .nearby(category: category, center: center, located: false)
+        loadResults(.nearby(center, category, radius: radius))
+      } else {
+        closeResults()
+      }
+    }
+    if let selectedMarker { selectedPlace = presentation(selectedMarker) }
+  }
 
   func focusAccountPlace(_ place: PlacePresentation) {
     locationGeneration = UUID()
@@ -50,7 +80,7 @@ final class PlaceStore {
     self.isPreview = isPreview
     self.selectedPlace = initialPlace
     self.language =
-      language ?? (Locale.current.language.languageCode?.identifier == "zh" ? "zh" : "en")
+      language ?? AppLanguage.current().rawValue
   }
 
   var mapPlaces: [PlacePresentation] {
@@ -86,7 +116,7 @@ final class PlaceStore {
     if let category = pendingNearby {
       pendingNearby = nil
       browse = .nearby(category: category, center: viewport.center, located: false)
-      loadResults(.nearby(viewport.center, category))
+      loadResults(.nearby(viewport.center, category, radius: radius))
     }
     viewportTask?.cancel()
     let generation = UUID()
@@ -140,7 +170,7 @@ final class PlaceStore {
     guard let center = viewport?.center else { return token }
     pendingNearby = nil
     browse = .nearby(category: category, center: center, located: false)
-    loadResults(.nearby(center, category))
+    loadResults(.nearby(center, category, radius: radius))
     return token
   }
 
@@ -158,7 +188,7 @@ final class PlaceStore {
     userLocation = point
     browse = .nearby(category: category, center: point, located: true)
     focus = MapFocus(point: point)
-    loadResults(.nearby(point, category))
+    loadResults(.nearby(point, category, radius: radius))
   }
 
   func beginLocationRequest() -> UUID {
@@ -177,6 +207,7 @@ final class PlaceStore {
   func select(_ place: PlacePresentation) {
     locationGeneration = UUID()
     pendingNearby = nil
+    selectedMarker = nil
     selectedPlace = place
     detailTask?.cancel()
     detailState = .idle
@@ -196,6 +227,7 @@ final class PlaceStore {
         let marker = try await api.detail(id: id, language: language)
         try Task.checkCancellation()
         guard let self, generation == self.detailGeneration else { return }
+        self.selectedMarker = marker
         self.selectedPlace = self.presentation(marker)
         self.detailState = .loaded
       } catch {
@@ -227,6 +259,7 @@ final class PlaceStore {
     detailGeneration = UUID()
     detailTask?.cancel()
     selectedPlace = nil
+    selectedMarker = nil
     detailState = .idle
   }
 
@@ -243,7 +276,8 @@ final class PlaceStore {
   func retryResults() {
     switch browse {
     case .search(let term): loadResults(.search(term))
-    case .nearby(let category, let center, _): loadResults(.nearby(center, category))
+    case .nearby(let category, let center, _):
+      loadResults(.nearby(center, category, radius: radius))
     case nil: if let viewport { viewportChanged(viewport, debounce: false) }
     }
   }

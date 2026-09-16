@@ -60,8 +60,10 @@ struct AccountAvatar: View {
           colors: [Color("AvatarTop"), Color("AvatarBottom")], startPoint: .top, endPoint: .bottom))
       if let data, let image = UIImage(data: data) {
         Image(uiImage: image).resizable().scaledToFill()
+      } else if user == nil {
+        Image(systemName: "person.fill").font(.system(size: size * 0.48)).foregroundStyle(.white)
       } else {
-        Text(user?.initials ?? "AA").font(.system(size: size * 18 / 38, weight: .bold))
+        Text(user?.initials ?? "").font(.system(size: size * 18 / 38, weight: .bold))
           .foregroundStyle(.white).lineLimit(1).minimumScaleFactor(0.5)
           .padding(3)
       }
@@ -78,6 +80,8 @@ private struct ProfileView: View {
   @State private var photo: PhotosPickerItem?
   @State private var readingPhoto = false
   @State private var saved = false
+  @FocusState private var field: ProfileField?
+  private enum ProfileField { case nickname, pronouns, signature }
 
   var body: some View {
     let avatarData = store.avatar
@@ -96,10 +100,13 @@ private struct ProfileView: View {
       }
       Section {
         TextField("Nickname", text: $nickname).accessibilityIdentifier("profile.nickname")
+          .focused($field, equals: .nickname).submitLabel(.next).onSubmit { field = .pronouns }
         TextField("Pronouns", text: $pronouns).accessibilityIdentifier("profile.pronouns")
+          .focused($field, equals: .pronouns).submitLabel(.next).onSubmit { field = .signature }
         TextField("Signature", text: $signature, axis: .vertical).lineLimit(2...5)
-          .accessibilityIdentifier("profile.signature")
+          .accessibilityIdentifier("profile.signature").focused($field, equals: .signature)
         Button("Save") {
+          field = nil
           Task {
             saved = await store.updateProfile(
               nickname: nickname, pronouns: pronouns, signature: signature)
@@ -129,6 +136,13 @@ private struct ProfileView: View {
       }
     }
     .navigationTitle("Account").navigationBarTitleDisplayMode(.inline)
+    .scrollDismissesKeyboard(.interactively)
+    .toolbar {
+      ToolbarItemGroup(placement: .keyboard) {
+        Spacer()
+        Button("Done") { field = nil }
+      }
+    }
     .refreshable {
       await store.restore()
       if let current = store.user {
@@ -159,7 +173,7 @@ private struct ProfileView: View {
           else { return }
           _ = await store.updateAvatar(data)
         } catch {
-          store.message = String(localized: "Could not read that photo. Please choose another.")
+          store.message = String(appLocalized: "Could not read that photo. Please choose another.")
         }
       }
     }
@@ -174,15 +188,20 @@ private struct PasswordView: View {
   @State private var old = ""
   @State private var new = ""
   @State private var confirmation = ""
+  @FocusState private var field: PasswordField?
+  private enum PasswordField { case old, new, confirmation }
   var body: some View {
     Form {
       Section {
         SecureField("Current password", text: $old).textContentType(.password)
           .accessibilityIdentifier("password.old")
+          .focused($field, equals: .old).submitLabel(.next).onSubmit { field = .new }
         SecureField("New password", text: $new).textContentType(.newPassword)
           .accessibilityIdentifier("password.new")
+          .focused($field, equals: .new).submitLabel(.next).onSubmit { field = .confirmation }
         SecureField("Confirm password", text: $confirmation).textContentType(.newPassword)
           .accessibilityIdentifier("password.confirm")
+          .focused($field, equals: .confirmation).submitLabel(.done).onSubmit { field = nil }
       } footer: {
         Text("Use at least 4 characters and no more than 72 UTF-8 bytes.")
       }
@@ -191,6 +210,7 @@ private struct PasswordView: View {
           Text("The new passwords do not match.")
         }
         Button("Change password") {
+          field = nil
           Task {
             _ = await store.changePassword(old: old, new: new)
             old = ""
@@ -207,6 +227,13 @@ private struct PasswordView: View {
     }
     .autocorrectionDisabled().textInputAutocapitalization(.never)
     .navigationTitle("Change password").navigationBarTitleDisplayMode(.inline)
+    .disabled(store.isBusy)
+    .scrollDismissesKeyboard(.interactively)
+    .onDisappear {
+      old = ""
+      new = ""
+      confirmation = ""
+    }
   }
 }
 
@@ -260,10 +287,10 @@ private struct AccountPlacesView: View {
 
   private func reviewLabel(_ value: String?) -> String {
     switch value {
-    case "APPROVED": String(localized: "Approved")
-    case "PENDING": String(localized: "Pending review")
-    case "REJECTED": String(localized: "Rejected")
-    default: String(localized: "Unknown review status")
+    case "APPROVED": String(appLocalized: "Approved")
+    case "PENDING": String(appLocalized: "Pending review")
+    case "REJECTED": String(appLocalized: "Rejected")
+    default: String(appLocalized: "Unknown review status")
     }
   }
 }

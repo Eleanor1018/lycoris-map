@@ -74,7 +74,7 @@ final class MapInteractionTests: XCTestCase {
     app.terminate()
     app.launchArguments = ["-AppleLanguages", "(en)", "-lycoris-preview", "anonymousExpanded"]
     app.launch()
-    XCTAssertTrue(app.buttons["Settings"].waitForExistence(timeout: 10))
+    XCTAssertTrue(app.staticTexts["Settings"].waitForExistence(timeout: 10))
     XCTAssertFalse(app.buttons["map.bookmarks.heading"].exists)
     XCTAssertFalse(app.buttons["place.row.figma-preview-1"].exists)
     attach(app, name: "09-anonymous-expanded")

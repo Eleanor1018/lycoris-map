@@ -16,6 +16,7 @@ struct PlaceDetailView: View {
   var photo: Data? = nil
   var photoFailed = false
   let onUnavailableAction: () -> Void
+  @AccessibilityFocusState private var titleFocused: Bool
   @ScaledMetric(relativeTo: .body) private var buttonHeight: CGFloat = 48
 
   var body: some View {
@@ -26,9 +27,10 @@ struct PlaceDetailView: View {
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("place.title")
+            .accessibilityAddTraits(.isHeader).accessibilityFocused($titleFocused)
           Button(action: onEdit) {
             Image("PlaceEdit").resizable().frame(width: 20, height: 20)
-              .frame(width: 28, height: 28)
+              .frame(width: 44, height: 44)
               .contentShape(Rectangle())
           }
           .buttonStyle(.plain).accessibilityLabel("Edit place")
@@ -38,7 +40,11 @@ struct PlaceDetailView: View {
 
         PlaceLoadStatus(state: state, retry: onRetry).padding(.horizontal, 18)
         if !hasFailed {
-          HStack(spacing: 16) {
+          let metadataLayout =
+            dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout(spacing: 16))
+          metadataLayout {
             if !place.distance.isEmpty { Text(place.distance) }
             Text(place.openingHours)
           }
@@ -92,6 +98,7 @@ struct PlaceDetailView: View {
     }
     .scrollIndicators(.hidden)
     .accessibilityIdentifier("place.details")
+    .task(id: place.id) { titleFocused = true }
   }
 
   private var hasFailed: Bool {

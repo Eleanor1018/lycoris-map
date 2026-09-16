@@ -45,12 +45,13 @@ struct PlaceDataTests {
 
   @Test func hoursAndImagesDoNotInventContent() {
     #expect(
-      PlacePresentation.hours(start: nil, end: nil) == String(localized: "Hours not provided"))
+      PlacePresentation.hours(start: nil, end: nil) == String(appLocalized: "Hours not provided"))
     #expect(
       PlacePresentation.hours(start: "25:00", end: "09:00")
-        == String(localized: "Hours not provided"))
+        == String(appLocalized: "Hours not provided"))
     #expect(
-      PlacePresentation.hours(start: "00:00", end: "00:00") == String(localized: "Open 24 hours"))
+      PlacePresentation.hours(start: "00:00", end: "00:00") == String(appLocalized: "Open 24 hours")
+    )
     #expect(PlacePresentation.hours(start: "21:00", end: "06:00") == "21:00–06:00")
     let base = URL(string: "https://api.example.test")!
     #expect(
@@ -107,7 +108,8 @@ struct PlaceDataTests {
     let components = URLComponents(url: place.shareURL!, resolvingAgainstBaseURL: false)!
     let params = Dictionary(
       uniqueKeysWithValues: components.queryItems!.map { ($0.name, $0.value!) })
-    #expect(params == ["ll": "31.2304,121.4737", "q": "Place 1"])
+    #expect(params == ["markerId": "1"])
+    #expect(components.scheme == "lycoris" && components.host == "maps")
     #expect(place.photoAsset == nil)
   }
 }

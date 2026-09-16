@@ -2,6 +2,13 @@ import MapKit
 import SwiftUI
 
 struct MapScreen: View {
+  @State private var preferences = AppPreferences()
+  @State private var locationDenied = false
+  @State private var linkError = false
+  @State private var focusKeyboardAfterDismiss = false
+  @Environment(\.openURL) private var openURL
+  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @State private var detent: MapPanelDetent
   @State private var store: PlaceStore
   @State private var location = LocationProvider()
@@ -62,8 +69,9 @@ struct MapScreen: View {
             + geometry.safeAreaInsets.bottom),
         topInset: geometry.safeAreaInsets.top,
         bottomInset: geometry.safeAreaInsets.bottom,
-        headerHeight: max(38, searchHeight) + 28,
-        nearbyContentHeight: titleHeight + 8 + cardHeight * 2 + 12,
+        headerHeight: max(44, searchHeight) + 58,
+        nearbyContentHeight: titleHeight + 8 + cardHeight
+          * (dynamicTypeSize.isAccessibilitySize ? 3 : 2) + 24,
         detailHeight: selectedPlace == nil
           ? nil
           : 208 + (selectedPlace?.hasPhoto == true ? (geometry.size.width - 50) * 198 / 353 : 0)
@@ -87,13 +95,14 @@ struct MapScreen: View {
           onScreenCenter: { screenCenter = $0 }
         )
         .accessibilityIdentifier("map.canvas")
+        .accessibilityHidden(detent == .expanded && !selectingLocation)
 
         MapTools(
           spacing: selectedPlace == nil ? 23 : 10,
           locate: locate,
           showNearby: { showNearby(.toilet) },
           contribute: { beginContribution(.create) },
-          onUnavailableAction: { showsUnavailableAction = true }
+          onUnavailableAction: { modal = .settings(.source) }
         )
         .position(x: layout.viewport.width - 40, y: panelTop - (selectedPlace == nil ? 131.5 : 116))
         .opacity(toolsVisible ? 1 : 0)
@@ -105,7 +114,13 @@ struct MapScreen: View {
             width: layout.viewport.width - layout.horizontalInset(at: panelTop) * 2,
             height: panelHeight
           )
-          .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26))
+          .background {
+            if reduceTransparency {
+              RoundedRectangle(cornerRadius: 26).fill(Color(.secondarySystemBackground))
+            } else {
+              RoundedRectangle(cornerRadius: 26).fill(.ultraThinMaterial)
+            }
+          }
           .background {
             RoundedRectangle(cornerRadius: 26)
               .fill(Color("PanelTint").opacity(0.4 * layout.collapsedProgress(at: panelTop)))
@@ -144,6 +159,9 @@ struct MapScreen: View {
               Button("Use this location") { confirmLocation() }
                 .buttonStyle(.borderedProminent).disabled(screenCenter == nil)
                 .accessibilityIdentifier("contribution.confirm-location")
+                .accessibilityValue(
+                  screenCenter.map { String(format: "%.5f, %.5f", $0.latitude, $0.longitude) } ?? ""
+                )
             }
             .padding().frame(maxWidth: .infinity).background(
               .regularMaterial, in: .rect(cornerRadius: 26))
@@ -161,11 +179,17 @@ struct MapScreen: View {
       Button("OK", role: .cancel) {}
     }
     .alert("Location unavailable", isPresented: $showsLocationError) {
-      Button("OK", role: .cancel) {}
+      if locationDenied {
+        Button("Open Settings") { openURL(URL(string: UIApplication.openSettingsURLString)!) }
+      } else {
+        Button("Try again", action: locate)
+      }
+      Button("Cancel", role: .cancel) {}
     } message: {
       Text(
-        "You can browse the map without location access. To use your location, enable it in Settings and try again."
-      )
+        locationDenied
+          ? "You can browse the map without location access. To use your location, enable it in Settings and try again."
+          : "Could not get your location. You can try again or browse around the map center.")
     }
     .alert("Could not open Apple Maps", isPresented: $showsNavigationError) {
       Button("OK", role: .cancel) {}
@@ -173,6 +197,10 @@ struct MapScreen: View {
     .sheet(
       item: $modal,
       onDismiss: {
+        if focusKeyboardAfterDismiss {
+          focusKeyboardAfterDismiss = false
+          isSearchFocused = true
+        }
         pendingBookmark = nil
         bookmarkIntent = UUID()
         contributionIntent = nil
@@ -187,6 +215,30 @@ struct MapScreen: View {
     ) { item in
       switch item {
       case .share(let place): PlaceShareSheet(place: place)
+      case .settings(let destination):
+        SettingsSheet(preferences: preferences, destination: destination)
+      case .voice:
+        VoiceSearchSheet(
+          language: preferences.language,
+          onSearch: { text in
+            modal = nil
+            query = text
+            movePanel(to: .expanded)
+          },
+          onKeyboard: {
+            focusKeyboardAfterDismiss = true
+            modal = nil
+          })
+      case .link(let link):
+        PlaceLinkSheet(link: link, account: account) { marker, authenticated in
+          guard case .link(let current) = modal, current == link else { return }
+          modal = nil
+          if authenticated {
+            selectAccountPlace(marker)
+          } else {
+            selectPlace(store.presentation(marker))
+          }
+        }
       case .account(let destination):
         AccountSheet(
           store: account, destination: destination, onAuthenticated: resumeAuthenticatedAction,
@@ -212,7 +264,26 @@ struct MapScreen: View {
     } message: {
       Text(contributionError ?? "")
     }
+    .onOpenURL { url in
+      guard let link = PlaceLink(url: url), modal == nil, !selectingLocation else {
+        linkError = true
+        return
+      }
+      isSearchFocused = false
+      modal = .link(link)
+    }
+    .alert("Could not open place link", isPresented: $linkError) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text("Check the link and close any open sheet before trying again.")
+    }
+    .onChange(of: preferences.language) { _, _ in applyPreferences() }
+    .onChange(of: preferences.radius) { _, _ in applyPreferences() }
+    .onChange(of: location.isAuthorized) { _, authorized in
+      if !authorized { store.revokeLocation() }
+    }
     .task {
+      applyPreferences()
       if !store.isPreview {
         contribution.connect(account)
         await account.restore()
@@ -223,6 +294,8 @@ struct MapScreen: View {
       guard !store.isPreview else { return }
       contribution.setActive(phase == .active)
       if phase == .active {
+        location.refreshAuthorization()
+        if !location.isAuthorized { store.revokeLocation() }
         Task {
           await account.restore()
           contribution.synchronize()
@@ -236,6 +309,9 @@ struct MapScreen: View {
         selectingLocation = false
         if case .contribution = modal { modal = nil }
       }
+    }
+    .onChange(of: account.user?.publicId) { old, new in
+      if old != nil, old != new, case .link = modal { modal = nil }
     }
     .onChange(of: account.detailState) { _, state in
       if state == .failed(.unavailable), let id = account.selectedMarker?.id {
@@ -268,6 +344,12 @@ struct MapScreen: View {
     { _ in
       keyboardHeight = 0
     }
+    .environment(\.locale, preferences.language.locale)
+  }
+
+  private func applyPreferences() {
+    store.updatePreferences(language: preferences.language.rawValue, radius: preferences.radius)
+    account.updateLanguage(preferences.language.rawValue)
   }
 
   private func panel(layout: PanelLayout, height: CGFloat) -> some View {
@@ -301,14 +383,17 @@ struct MapScreen: View {
           onUnavailableAction: { showsUnavailableAction = true })
       } else {
         MapSearchBar(
-          query: $query, focused: $isSearchFocused, height: max(38, searchHeight),
+          query: $query, focused: $isSearchFocused, height: max(44, searchHeight),
           onSubmit: { store.search(query, debounce: false) },
           user: account.user, avatar: account.avatar,
           onAccount: {
             isSearchFocused = false
             if store.isPreview { showsUnavailableAction = true } else { modal = .account(.profile) }
           },
-          onUnavailableAction: { showsUnavailableAction = true }
+          onVoiceSearch: {
+            isSearchFocused = false
+            modal = .voice
+          }
         )
         .padding(.horizontal, 14)
         .padding(.bottom, detent == .collapsed ? 14 : detent == .nearby ? 7 : 11)
@@ -325,6 +410,11 @@ struct MapScreen: View {
                 PlaceLoadStatus(state: store.viewportState, retry: store.retryResults)
               }
               MapPanelContent(
+                preferences: preferences,
+                onSettings: {
+                  isSearchFocused = false
+                  modal = .settings($0)
+                },
                 cardHeight: cardHeight, showsSettings: detent == .expanded,
                 bookmarks: store.isPreview ? bookmarks : account.bookmarks.map(store.presentation),
                 showsBookmarks: account.user != nil,
@@ -363,7 +453,7 @@ struct MapScreen: View {
         .offset(
           x: -14 + 15 * layout.collapsedProgress(at: layout.top(for: detent) + dragTranslation)
         )
-        .frame(maxWidth: .infinity).frame(height: 14)
+        .frame(maxWidth: .infinity).frame(height: 44)
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
@@ -437,7 +527,9 @@ struct MapScreen: View {
       guard store.acceptsLocation(token) else { return }
       switch result {
       case .success(let point): store.locate(point, token: token)
-      case .failure: showsLocationError = true
+      case .failure(let failure):
+        locationDenied = failure == .denied
+        showsLocationError = true
       }
     }
   }
@@ -553,7 +645,7 @@ struct MapScreen: View {
           guard !Task.isCancelled, !(error is CancellationError) else { return }
           contributionError =
             (error as? AccountFailure)?.message
-            ?? String(localized: "Could not load places. Please try again.")
+            ?? String(appLocalized: "Could not load places. Please try again.")
         }
       }
     }
@@ -567,7 +659,7 @@ struct MapScreen: View {
       selectingLocation = false
       modal = .contribution
     } catch {
-      contributionError = String(localized: "Could not save the contribution on this device.")
+      contributionError = String(appLocalized: "Could not save the contribution on this device.")
     }
   }
 }
@@ -581,11 +673,17 @@ private enum MapModal: Identifiable {
   case account(AccountDestination)
   case share(PlacePresentation)
   case contribution
+  case settings(SettingsDestination)
+  case voice
+  case link(PlaceLink)
   var id: String {
     switch self {
     case .account: "account"
     case .share(let place): "share-\(place.id)"
     case .contribution: "contribution"
+    case .settings(let destination): "settings-\(destination.rawValue)"
+    case .voice: "voice"
+    case .link(let link): "link-\(link.id)"
     }
   }
 }

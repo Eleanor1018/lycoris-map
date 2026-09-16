@@ -34,8 +34,8 @@ struct PlacePresentation: Identifiable, Equatable, Sendable {
         meters < 1000 ? "\(Int(meters.rounded()))m" : String(format: "%.1fkm", meters / 1000)
       distanceReference =
         located
-        ? String(localized: "Straight-line distance from your location")
-        : String(localized: "Straight-line distance from map center")
+        ? String(appLocalized: "Straight-line distance from your location")
+        : String(appLocalized: "Straight-line distance from map center")
     } else {
       distance = ""
       distanceReference = nil
@@ -63,9 +63,9 @@ struct PlacePresentation: Identifiable, Equatable, Sendable {
       time.range(of: #"^(?:[01]\d|2[0-3]):[0-5]\d$"#, options: .regularExpression) != nil
     }
     guard let start, let end, valid(start), valid(end) else {
-      return String(localized: "Hours not provided")
+      return String(appLocalized: "Hours not provided")
     }
-    return start == end ? String(localized: "Open 24 hours") : "\(start)–\(end)"
+    return start == end ? String(appLocalized: "Open 24 hours") : "\(start)–\(end)"
   }
 
   static func imageURL(_ path: String?, baseURL: URL?) -> URL? {
@@ -76,14 +76,6 @@ struct PlacePresentation: Identifiable, Equatable, Sendable {
     return URL(string: path, relativeTo: baseURL)?.absoluteURL
   }
 
-  /// Public destination only. No location origin or guessed Lycoris domain.
-  var shareURL: URL? {
-    guard point != nil else { return nil }
-    var url = URLComponents(string: "https://maps.apple.com/")!
-    url.queryItems = [
-      URLQueryItem(name: "ll", value: "\(latitude),\(longitude)"),
-      URLQueryItem(name: "q", value: title),
-    ]
-    return url.url
-  }
+  /// Share only the identifier. The receiving app rechecks access to the place.
+  var shareURL: URL? { Int64(id).flatMap(PlaceLink.url(id:)) }
 }

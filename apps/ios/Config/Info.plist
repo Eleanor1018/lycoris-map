@@ -2,6 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>CFBundleURLTypes</key>
+    <array><dict><key>CFBundleURLName</key><string>com.lycoris.maps.place</string>
+    <key>CFBundleURLSchemes</key><array><string>lycoris</string></array></dict></array>
+    <key>NSMicrophoneUsageDescription</key><string>Use the microphone only when you start voice search.</string>
+    <key>NSSpeechRecognitionUsageDescription</key><string>Recognize your search on this device without sending audio to a server.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Use your location to find nearby places and center the map.</string>
     <key>LycorisAPIBaseURL</key><string>$(LYCORIS_API_BASE_URL)</string>

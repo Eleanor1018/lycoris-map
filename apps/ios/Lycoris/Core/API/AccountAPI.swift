@@ -9,7 +9,7 @@ struct AccountUser: Codable, Equatable, Sendable {
   var pronouns: String?
   var signature: String?
 
-  var displayName: String { nickname ?? username ?? String(localized: "Account") }
+  var displayName: String { nickname ?? username ?? String(appLocalized: "Account") }
   var initials: String {
     let words = displayName.split(whereSeparator: \.isWhitespace)
     return String(words.prefix(2).compactMap(\.first)).uppercased()
@@ -23,15 +23,15 @@ struct AccountFailure: Error, Equatable, Sendable {
 
   var message: String {
     switch status {
-    case 0: String(localized: "Could not reach the service. Please try again.")
-    case 401: String(localized: "Please log in again.")
-    case 404: String(localized: "This item is no longer available.")
-    case 409: String(localized: "Your account changed. Reload it before trying again.")
-    case 413: String(localized: "Choose a smaller photo.")
-    case 429: String(localized: "Too many attempts. Please try again later.")
-    case 400: String(localized: "Check your details and try again.")
-    case -1: String(localized: "The account service is not configured yet.")
-    default: String(localized: "The service is unavailable. Please try again.")
+    case 0: String(appLocalized: "Could not reach the service. Please try again.")
+    case 401: String(appLocalized: "Please log in again.")
+    case 404: String(appLocalized: "This item is no longer available.")
+    case 409: String(appLocalized: "Your account changed. Reload it before trying again.")
+    case 413: String(appLocalized: "Choose a smaller photo.")
+    case 429: String(appLocalized: "Too many attempts. Please try again later.")
+    case 400: String(appLocalized: "Check your details and try again.")
+    case -1: String(appLocalized: "The account service is not configured yet.")
+    default: String(appLocalized: "The service is unavailable. Please try again.")
     }
   }
 }

@@ -28,7 +28,15 @@ final class AccountStore {
   @ObservationIgnored var onPrivateDataInvalidated: (() -> Void)?
 
   var baseURL: URL? { api.baseURL }
-  var language: String { Locale.current.language.languageCode?.identifier == "zh" ? "zh" : "en" }
+  private(set) var language = AppLanguage.current().rawValue
+
+  func updateLanguage(_ value: String) {
+    guard language != value else { return }
+    language = value
+    message = nil
+    reloadLibrary()
+    if let selectedMarker { select(selectedMarker) }
+  }
 
   init(api: any AccountServing = AccountAPI()) { self.api = api }
 
@@ -84,15 +92,15 @@ final class AccountStore {
       await reconcile()
       let failure = error as? AccountFailure
       if !register && failure?.status == 401 {
-        message = String(localized: "The username or password is incorrect.")
+        message = String(appLocalized: "The username or password is incorrect.")
       } else if register && failure?.status == 503 {
         message = String(
-          localized:
+          appLocalized:
             "Registration could not be confirmed. Your account may have been created; try logging in."
         )
       } else if register && failure?.status == 400 {
         message = String(
-          localized: "Check your details. That username or email may already be in use.")
+          appLocalized: "Check your details. That username or email may already be in use.")
       } else {
         message = failureMessage(error)
       }
@@ -110,12 +118,12 @@ final class AccountStore {
       _ = try await api.send(AccountRequest(path: "api/logout", method: "POST"))
       await reconcile()
       if user != nil {
-        message = String(localized: "Logout could not be confirmed. Please try again.")
+        message = String(appLocalized: "Logout could not be confirmed. Please try again.")
       }
     } catch {
       await reconcile()
       if user != nil {
-        message = String(localized: "Logout could not be confirmed. Please try again.")
+        message = String(appLocalized: "Logout could not be confirmed. Please try again.")
       }
     }
   }
@@ -163,11 +171,11 @@ final class AccountStore {
       if verified {
         message =
           user == nil
-          ? String(localized: "Password changed. Please log in again.")
-          : String(localized: "Password changed.")
+          ? String(appLocalized: "Password changed. Please log in again.")
+          : String(appLocalized: "Password changed.")
       } else {
         message = String(
-          localized:
+          appLocalized:
             "Password changed, but the session could not be checked. Please check your connection.")
       }
       return true
@@ -176,9 +184,9 @@ final class AccountStore {
       if (error as? AccountFailure)?.status == 401 { expire() }
       message =
         (error as? AccountFailure)?.status == 400
-        ? String(localized: "Check your current password and the new password.")
+        ? String(appLocalized: "Check your current password and the new password.")
         : String(
-          localized:
+          appLocalized:
             "The password change could not be confirmed. Check your connection, then try logging in before retrying."
         )
       await reconcile()
@@ -424,7 +432,7 @@ final class AccountStore {
 
   private func failureMessage(_ error: Error) -> String {
     if error is SessionStorageFailure {
-      return String(localized: "Could not save your session securely. Please try again.")
+      return String(appLocalized: "Could not save your session securely. Please try again.")
     }
     return (error as? AccountFailure)?.message ?? AccountFailure(status: 0).message
   }

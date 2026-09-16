@@ -27,10 +27,10 @@ enum PlaceCategory: String, Codable, CaseIterable, Sendable {
 
   var title: String {
     switch self {
-    case .toilet: String(localized: "Accessible Toilets")
-    case .nursing: String(localized: "Nursing Rooms")
-    case .medical: String(localized: "Medical Institutions")
-    case .other: String(localized: "Places")
+    case .toilet: String(appLocalized: "Accessible Toilets")
+    case .nursing: String(appLocalized: "Nursing Rooms")
+    case .medical: String(appLocalized: "Medical Institutions")
+    case .other: String(appLocalized: "Places")
     }
   }
   var image: String {
@@ -60,7 +60,7 @@ struct MarkerBounds: Equatable, Sendable {
 enum MarkerQuery: Equatable, Sendable {
   case viewport(MarkerBounds)
   case search(String)
-  case nearby(GeoPoint, PlaceCategory)
+  case nearby(GeoPoint, PlaceCategory, radius: Int = 1000)
 }
 
 enum PlaceFailure: Error, Equatable {
@@ -68,10 +68,10 @@ enum PlaceFailure: Error, Equatable {
 
   var message: String {
     switch self {
-    case .unconfigured: String(localized: "The map service is not configured yet.")
-    case .unavailable: String(localized: "This place is no longer available.")
+    case .unconfigured: String(appLocalized: "The map service is not configured yet.")
+    case .unavailable: String(appLocalized: "This place is no longer available.")
     case .invalidResponse, .requestFailed:
-      String(localized: "Could not load places. Please try again.")
+      String(appLocalized: "Could not load places. Please try again.")
     }
   }
 }
@@ -141,11 +141,12 @@ struct MarkerAPI: MarkerServing {
     case .search(let term):
       path = "search"
       params["q"] = term.trimmingCharacters(in: .whitespacesAndNewlines)
-    case .nearby(let point, let category):
+    case .nearby(let point, let category, let radius):
+      guard (1...50_000).contains(radius) else { throw PlaceFailure.invalidResponse }
       path = "nearby"
       params.merge([
         "lat": String(point.latitude), "lng": String(point.longitude),
-        "radius": "1000", "category": category.rawValue,
+        "radius": String(radius), "category": category.rawValue,
       ]) { _, new in new }
     }
     return try makeRequest(path: path, query: params)

@@ -25,7 +25,13 @@ final class LocationProvider: NSObject, @MainActor CLLocationManagerDelegate {
   }
 
   /// Only called from a location button or an explicit Nearby entry.
+  func refreshAuthorization() {
+    let status = manager.authorizationStatus
+    isAuthorized = status == .authorizedWhenInUse || status == .authorizedAlways
+  }
+
   func request(_ completion: @escaping (Result<GeoPoint, Failure>) -> Void) {
+    refreshAuthorization()
     timeout?.cancel()
     hasRequestedLocation = true
     self.completion = completion

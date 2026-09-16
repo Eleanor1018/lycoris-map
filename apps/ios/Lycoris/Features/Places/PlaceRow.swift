@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct PlaceRow: View {
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   let place: PlacePresentation
   let onSelect: () -> Void
   @ScaledMetric(relativeTo: .body) private var rowHeight: CGFloat = 67
@@ -12,7 +13,11 @@ struct PlaceRow: View {
         VStack(alignment: .leading, spacing: 3) {
           Text(place.title).font(.body.weight(.semibold))
             .frame(maxWidth: .infinity, alignment: .leading)
-          HStack(spacing: 16) {
+          let metadataLayout =
+            dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout(spacing: 16))
+          metadataLayout {
             if !place.distance.isEmpty { Text(place.distance) }
             Text(place.openingHours)
           }

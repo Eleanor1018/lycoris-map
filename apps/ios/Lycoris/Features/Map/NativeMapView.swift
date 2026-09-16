@@ -58,6 +58,7 @@ struct NativeMapView: UIViewRepresentable {
       guard let point = place.point else { continue }
       if let pin = existing[place.id] {
         pin.place = place
+        map.view(for: pin)?.accessibilityLabel = place.title
         if pin.coordinate.latitude != point.latitude || pin.coordinate.longitude != point.longitude
         {
           pin.coordinate = point.coordinate

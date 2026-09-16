@@ -63,12 +63,13 @@ final class ContributionStore {
             saved.photoRejected = true
             draft = saved
             try journal.save(saved)
-            message = String(localized: "The saved photo is unavailable. Please choose it again.")
+            message = String(
+              appLocalized: "The saved photo is unavailable. Please choose it again.")
           }
         }
         resume()
       }
-    } catch { message = String(localized: "Could not read the saved contribution.") }
+    } catch { message = String(appLocalized: "Could not read the saved contribution.") }
   }
 
   func begin(at point: GeoPoint) throws {
@@ -116,7 +117,7 @@ final class ContributionStore {
       try journal.save(value)
       draft = value
       message = nil
-    } catch { message = String(localized: "Could not save the contribution on this device.") }
+    } catch { message = String(appLocalized: "Could not save the contribution on this device.") }
   }
 
   func choosePhoto(_ encoded: Data) throws {
@@ -215,7 +216,7 @@ final class ContributionStore {
     message = nil
     paused = false
     do { try journal.clear() } catch {
-      message = String(localized: "Could not clear the saved contribution.")
+      message = String(appLocalized: "Could not clear the saved contribution.")
     }
   }
 
@@ -387,12 +388,13 @@ final class ContributionStore {
       message =
         value.phase == .draft
         ? (error as? AccountFailure)?.message
-        : String(localized: "The edit could not be confirmed. It may already be awaiting review.")
+        : String(
+          appLocalized: "The edit could not be confirmed. It may already be awaiting review.")
       return false
     }
     if error as? ContributionFailure == .accountBusy {
       if value.phase == .draft {
-        message = String(localized: "Another account action is still running. Please try again.")
+        message = String(appLocalized: "Another account action is still running. Please try again.")
         return false
       }
       return true
@@ -402,7 +404,8 @@ final class ContributionStore {
     {
       value.photoRejected = true
       try? checkpoint(value)
-      message = String(localized: "Please choose the photo again. Your place submission is saved.")
+      message = String(
+        appLocalized: "Please choose the photo again. Your place submission is saved.")
       return false
     }
     let transient = (error is URLError) || status == 0 || status == 408 || (status ?? 0) >= 500
@@ -413,13 +416,13 @@ final class ContributionStore {
     let conflict = status == 409 && value.phase == .uploading && attempts < 1
     if transient || conflict {
       message = String(
-        localized: "Saved on this device. Submission will resume when the connection returns.")
+        appLocalized: "Saved on this device. Submission will resume when the connection returns.")
       return true
     }
     paused = true
     message =
       (error as? AccountFailure)?.message
-      ?? String(localized: "Could not save or verify the contribution. Please try again.")
+      ?? String(appLocalized: "Could not save or verify the contribution. Please try again.")
     return false
   }
 }

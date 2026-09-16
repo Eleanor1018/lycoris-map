@@ -8,7 +8,7 @@ struct MapSearchBar: View {
   var user: AccountUser? = nil
   var avatar: Data? = nil
   var onAccount: () -> Void = {}
-  var onUnavailableAction: () -> Void
+  var onVoiceSearch: () -> Void
   @ScaledMetric(relativeTo: .headline) private var avatarFont: CGFloat = 18
 
   var body: some View {
@@ -27,16 +27,19 @@ struct MapSearchBar: View {
             onSubmit()
           }
           .accessibilityIdentifier("map.search")
-        Button(action: onUnavailableAction) {
+        Button(action: onVoiceSearch) {
           Image(systemName: "microphone").font(.subheadline).foregroundStyle(.secondary)
-        }.buttonStyle(.plain).accessibilityLabel("Voice search")
+            .frame(width: 44, height: 44).contentShape(Rectangle())
+        }.buttonStyle(.plain).accessibilityLabel("Voice search").accessibilityIdentifier(
+          "map.voice")
       }
-      .padding(.horizontal, 12)
-      .frame(height: height)
+      .padding(.leading, 12)
+      .frame(height: max(44, height))
       .background(.quaternary, in: RoundedRectangle(cornerRadius: 22))
 
       Button(action: onAccount) {
         AccountAvatar(user: user, data: avatar)
+          .frame(width: 44, height: 44).contentShape(Rectangle())
       }
       .buttonStyle(.plain)
       .accessibilityLabel("Account")

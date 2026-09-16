@@ -10,6 +10,7 @@ struct PlaceResultsView: View {
       HStack {
         Text(store.browse.isNearby || store.pendingNearby != nil ? "Nearby" : "Search results")
           .font(.title3.weight(.semibold)).accessibilityIdentifier("places.results.title")
+          .accessibilityAddTraits(.isHeader)
         Spacer()
         Button(action: onClose) {
           Image(systemName: "xmark").font(.body.weight(.medium))
@@ -17,7 +18,9 @@ struct PlaceResultsView: View {
         }.buttonStyle(.plain).accessibilityLabel("Close results")
       }.padding(.leading, 6)
       if case .nearby(let category, _, let located) = store.browse {
-        Text(category.title + " · 1km").font(.body.weight(.semibold)).padding(.horizontal, 6)
+        Text(category.title + " · " + AppPreferences.radiusLabel(store.radius)).font(
+          .body.weight(.semibold)
+        ).padding(.horizontal, 6)
         Text(located ? "Around your location" : "Around map center")
           .font(.subheadline).foregroundStyle(.secondary).padding(.horizontal, 6)
       }

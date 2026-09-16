@@ -234,6 +234,7 @@ struct ContributionSheet: View {
   }
 
   private func showPhotoError() {
-    photoError = String(localized: "Could not prepare or save the photo. Please try another image.")
+    photoError = String(
+      appLocalized: "Could not prepare or save the photo. Please try another image.")
   }
 }
