@@ -1,12 +1,13 @@
 import { usePreferences } from '@/features/preferences/PreferencesProvider'
 import { isSettingsPanel, settingsTitles, SettingsContent } from '@/features/preferences/Settings'
 import { useUi } from '@/shared/i18n/ui'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import type { Map as LeafletMap } from 'leaflet'
 import { useNavigate } from 'react-router'
 import { MobileSheet } from './MobileSheet'
 import { useMobileLayout, useViewportHeight } from './useMobileLayout'
 import { MapSurface } from '@/features/map/MapSurface'
+import { MapSourcePicker } from '@/features/map/MapSourcePicker'
 import { FigmaIcon, type FigmaIconName } from '@/shared/ui/figma-icon'
 import { DesignButton, IconButton } from './primitives'
 import { DesktopPanel } from './DesktopPanel'
@@ -57,10 +58,34 @@ export function MapShell({
         close,
         location,
     } = usePanelRoute(Boolean(sample), mobile ? 'back' : 'dismiss', !!browse)
-    const panel = requestedPanel === 'bookmarks' && !showBookmarks ? 'initial' : requestedPanel
+    const contributionNeedsLogin =
+        !sample &&
+        !!accountFlow &&
+        (requestedPanel === 'contribute' || requestedPanel === 'contribute-form') &&
+        !session.scope
+    const panel =
+        contributionNeedsLogin || (requestedPanel === 'bookmarks' && !showBookmarks)
+            ? 'initial'
+            : requestedPanel
     const contributionOpen = panel === 'contribute-form' || (mobile && panel === 'contribute')
     const activeRoute = useRef(location.key)
     activeRoute.current = location.key
+    const loginRoute = useRef<string | null>(null)
+    useEffect(() => {
+        if (!contributionNeedsLogin) {
+            loginRoute.current = null
+            return
+        }
+        if (session.status === 'checking' || session.busy || loginRoute.current === location.key)
+            return
+        loginRoute.current = location.key
+        const key = location.key
+        // The requested route resumes naturally once the session is confirmed.
+        // Keep both the picker and composer hidden until then, including deep links.
+        accountFlow?.requireLogin(undefined, () => {
+            if (activeRoute.current === key) close()
+        })
+    }, [contributionNeedsLogin, session.status, session.busy, location.key, accountFlow, close])
     useEffect(() => {
         if (mobile && panel === 'contribute') open('contribute-form', 'nav-contribute', true)
     }, [mobile, panel, open])
@@ -73,20 +98,30 @@ export function MapShell({
         contributionOpen ||
         (mobile && (panel === 'bookmarks' || panel === 'nearby' || isSettingsPanel(panel)))
             ? 'full'
-            : snapValue === 'half' || snapValue === 'full'
+            : snapValue === 'collapsed' || snapValue === 'half' || snapValue === 'full'
               ? snapValue
               : browse && location.pathname === '/search' && params.get('q')?.trim() && !snapValue
                 ? 'full'
-                : 'collapsed'
-    const [dragHeight, setDragHeight] = useState<number | null>(null)
+                : mobile
+                  ? 'half'
+                  : 'collapsed'
+    const [detailHeight, setDetailHeight] = useState(433)
+    const [menuHeight, setMenuHeight] = useState<number | null>(null)
+    const mainMenu =
+        (panel === 'initial' || panel === 'search') &&
+        browse?.mode !== 'search' &&
+        browse?.mode !== 'cluster'
+    const fullSheetHeight = Math.min(
+        viewportHeight - 46,
+        mainMenu ? (menuHeight ?? Infinity) : Infinity,
+    )
     const sheetHeight =
-        dragHeight ??
-        (panel === 'details'
-            ? Math.min(433, viewportHeight - 46)
+        panel === 'details'
+            ? Math.min(detailHeight, viewportHeight - 46)
             : snap === 'full'
-              ? viewportHeight - 54
-              : Math.min(snap === 'half' ? 320 : 158, viewportHeight - 46))
-    const sheetTop = viewportHeight - sheetHeight - (panel !== 'details' && snap === 'full' ? 8 : 0)
+              ? fullSheetHeight
+              : Math.min(snap === 'half' ? 320 : 158, viewportHeight - 46)
+    const sheetTop = viewportHeight - sheetHeight
     const setSnap = (next: Snap) => {
         const nextParams = new URLSearchParams(location.search)
         nextParams.set(mobileFixture ? 'screen' : 'snap', next)
@@ -270,6 +305,7 @@ export function MapShell({
             data-panel={panel}
             data-mobile={mobile}
             data-snap={snap}
+            style={mobile ? ({ '--sheet-height': `${sheetHeight}px` } as CSSProperties) : undefined}
         >
             {sample ? (
                 <div
@@ -443,8 +479,10 @@ export function MapShell({
                     setSearch={updateSearch}
                     openDetails={(focusId) => open('details', focusId)}
                     close={close}
-                    dragHeight={dragHeight}
-                    setDragHeight={setDragHeight}
+                    height={sheetHeight}
+                    fullHeight={fullSheetHeight}
+                    onDetailHeight={setDetailHeight}
+                    onMenuHeight={setMenuHeight}
                     contribution={contributionOpen ? contribution : undefined}
                     browse={browse}
                     selectPlace={selectPlace}
@@ -454,7 +492,6 @@ export function MapShell({
                             ? editPlace
                             : undefined
                     }
-                    openSettings={open}
                     secondaryLabel={
                         isSettingsPanel(panel)
                             ? settingsTitles[panel]
@@ -464,7 +501,7 @@ export function MapShell({
                     }
                     secondary={
                         isSettingsPanel(panel) ? (
-                            <SettingsContent panel={panel} open={open} mobile />
+                            <SettingsContent panel={panel} mobile />
                         ) : panel === 'nearby' && browse ? (
                             <NearbyResults browse={browse} onSelect={selectPlace} mobile />
                         ) : panel === 'bookmarks' && browse && !sample ? (
@@ -482,13 +519,7 @@ export function MapShell({
                 />
             )}
             <div className="map-tools top-tools" inert={mobile && sheetTop < 142}>
-                <IconButton
-                    icon={mobile ? 'mobileMap' : 'map'}
-                    size={20}
-                    id="map-source"
-                    label="Map source"
-                    onClick={() => open('source', 'map-source')}
-                />
+                <MapSourcePicker mobile={mobile} resetKey={`${panel}:${snap}`} />
                 <IconButton
                     icon={mobile ? 'mobileDirection' : 'direction'}
                     size={20}

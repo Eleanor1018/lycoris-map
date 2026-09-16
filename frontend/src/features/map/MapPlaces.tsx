@@ -4,9 +4,11 @@ import L from 'leaflet'
 import type { Marker } from '@/shared/api/markers'
 import pin from '@/assets/figma/map-place.svg'
 import positionPin from '@/assets/figma/map-position.svg'
+import mobilePositionPin from '@/assets/figma/mobile-position.svg'
 import { clusterPlaces } from './clusters'
 import { mapView, type MapFocus, type MapPadding, type MapView } from './viewport'
 import type { LatLng } from './coords'
+import { useDeviceHeading } from './useDeviceHeading'
 import './map-places.css'
 
 const placeIcon = L.icon({ iconUrl: pin, iconSize: [27, 43], iconAnchor: [13.5, 39] })
@@ -15,10 +17,18 @@ const locationIcon = L.divIcon({
     iconSize: [24, 24],
     iconAnchor: [12, 12],
     html: (() => {
-        const image = document.createElement('img')
-        image.src = positionPin
-        image.alt = ''
-        return image
+        const content = document.createElement('span')
+        for (const [src, className] of [
+            [positionPin, 'location-desktop'],
+            [mobilePositionPin, 'location-mobile'],
+        ] as const) {
+            const image = document.createElement('img')
+            image.src = src
+            image.className = className
+            image.alt = ''
+            content.append(image)
+        }
+        return content.outerHTML
     })(),
 })
 const EMPTY: readonly Marker[] = []
@@ -49,6 +59,7 @@ export function MapPlaces({
 }: MapPlacesProps) {
     const map = useMap()
     const registry = useRef(new Map<string, L.Marker>())
+    const heading = useDeviceHeading(!!position)
     const { left, right, top, bottom } = padding
     const camera = useRef(padding)
     camera.current = padding
@@ -232,6 +243,16 @@ export function MapPlaces({
             map.off('moveend zoomend', render)
         }
     }, [map, markers, index, selected, position, sharedTarget, onSelect, onCluster])
+    useEffect(() => {
+        const dot = registry.current.get('your-location')?.getElement()
+        if (!dot) return
+        dot.classList.toggle('has-heading', heading !== null)
+        for (const image of dot.querySelectorAll('img')) {
+            // North offsets of the two unmodified Figma exports.
+            const offset = image.classList.contains('location-mobile') ? 316.25 : 163.113
+            image.style.transform = heading === null ? '' : `rotate(${heading - offset}deg)`
+        }
+    }, [map, position, heading])
     const previousSelection = useRef<string | null>(null)
     const placeKey = selected ? `${selected.id}:${selected.lat}:${selected.lng}` : null
     const selection = useRef(selected)

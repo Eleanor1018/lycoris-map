@@ -49,7 +49,7 @@ it('keeps settings usable when storage writes fail', () => {
     render(
         <MemoryRouter>
             <PreferencesProvider>
-                <SettingsContent panel="range" open={() => {}} />
+                <SettingsContent panel="range" />
                 <Value />
             </PreferencesProvider>
         </MemoryRouter>,

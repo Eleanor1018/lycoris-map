@@ -138,7 +138,7 @@ it('reports invalid links without fetching and updates nearby reference after a 
     expect(result.current.nearby?.located).toBe(false)
     act(() => result.current.location.locate())
     act(() =>
-        get.mock.calls[0]?.[0]({
+        get.mock.calls.at(-1)?.[0]({
             coords: { latitude: 32.12345678, longitude: 122 },
         } as GeolocationPosition),
     )

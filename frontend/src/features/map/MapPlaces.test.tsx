@@ -61,7 +61,9 @@ it('preserves user zoom when layout padding changes, keeping selection in the un
 it('expands a cluster into the visible area and exposes coincident points as a list', () => {
     const f = fixture(),
         cluster = vi.fn()
-    const markers = [syntheticPlace(), syntheticPlace({ id: 2, lat: 31.231 })]
+    const markers = Array.from({ length: 10 }, (_, i) =>
+        syntheticPlace({ id: i + 1, lat: 31.2304 + i * 0.00006 }),
+    )
     const view = render(
         f.tree({
             markers,
@@ -72,10 +74,15 @@ it('expands a cluster into the visible area and exposes coincident points as a l
     fireEvent.click(view.container.querySelector('.map-cluster-marker')!)
     expect(f.map().latLngToContainerPoint(markers[0]!).x).toBeGreaterThan(576)
     view.rerender(
-        f.tree({ markers: [syntheticPlace(), syntheticPlace({ id: 2 })], onCluster: cluster }),
+        f.tree({
+            markers: markers.map((p) => ({ ...p, lat: markers[0]!.lat })),
+            onCluster: cluster,
+        }),
     )
     fireEvent.click(view.container.querySelector('.map-cluster-marker')!)
-    expect(cluster.mock.calls[0]?.[0].sort()).toEqual([1, 2])
+    expect(cluster.mock.calls[0]?.[0].sort((a: number, b: number) => a - b)).toEqual(
+        markers.map((p) => p.id),
+    )
 })
 it('renders an escaped target label for old coordinate links', () => {
     const f = fixture()
@@ -92,4 +99,26 @@ it('renders an escaped target label for old coordinate links', () => {
         '<img src=x onerror=alert(1)>',
     )
     expect(view.container.querySelector('.map-shared-label img')).toBeNull()
+})
+it('reveals the original direction fan only for a compass reading without replacing map pins', () => {
+    vi.useFakeTimers()
+    const f = fixture(),
+        point = { lat: 31.2304, lng: 121.4737 }
+    const view = render(f.tree({ markers: [syntheticPlace()], position: point }))
+    const pin = view.container.querySelector('#map-place-1')
+    const dot = view.container.querySelector('#map-your-location')!
+    expect(dot).not.toHaveClass('has-heading')
+    act(() => {
+        window.dispatchEvent(
+            Object.assign(new Event('deviceorientationabsolute'), { alpha: 270, absolute: true }),
+        )
+        vi.advanceTimersByTime(20)
+    })
+    expect(dot).toHaveClass('has-heading')
+    expect(dot.querySelector('img')!.style.transform).toContain('-73.113')
+    expect(view.container.querySelector('#map-place-1')).toBe(pin)
+    act(() => vi.advanceTimersByTime(10_020))
+    expect(dot).not.toHaveClass('has-heading')
+    view.unmount()
+    vi.useRealTimers()
 })

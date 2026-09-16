@@ -1,11 +1,12 @@
 import { useUi } from '@/shared/i18n/ui'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { IconButton } from '@/shared/ui/design-primitives'
 import { distanceLabel, openingHours, publicImageUrl } from './model'
 import type { PlaceBrowse } from './usePlaceBrowse'
 import { ReadMessage } from './PlaceResults'
 import { PlaceActions } from './PlaceActions'
 import { BookmarkButton } from '@/features/bookmarks/BookmarkButton'
+import { PlacePhoto } from './PlacePhoto'
 
 export function PlaceDetails({
     browse,
@@ -18,7 +19,6 @@ export function PlaceDetails({
 }) {
     const ui = useUi()
     const { detail: place, detailState } = browse
-    const [failedImage, setFailedImage] = useState<string | null>(null)
     const heading = useRef<HTMLHeadingElement>(null)
     useEffect(() => {
         heading.current?.focus({ preventScroll: true })
@@ -72,12 +72,10 @@ export function PlaceDetails({
                             {place.description}
                         </p>
                     )}
-                    {image && image !== failedImage && (
-                        <img
+                    {image && (
+                        <PlacePhoto
                             className={mobile ? 'mobile-photo' : 'place-photo'}
                             src={image}
-                            alt=""
-                            onError={() => setFailedImage(image)}
                         />
                     )}
                     {!mobile && place.description && (

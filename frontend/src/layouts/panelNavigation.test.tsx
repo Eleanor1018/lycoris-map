@@ -25,7 +25,7 @@ it('dismisses desktop bookmark details and retains the draft when Bookmarks is r
     )
 })
 
-it('dismisses desktop Languages without returning to Settings and keeps the choice in memory', async () => {
+it('selects a language in place, then closes Settings and keeps the choice in memory', async () => {
     const before = localStorage.getItem('lycoris.language')
     render(
         <MemoryRouter initialEntries={['/__design/desktop?screen=settings']}>
@@ -34,7 +34,9 @@ it('dismisses desktop Languages without returning to Settings and keeps the choi
     )
     fireEvent.click(screen.getByRole('button', { name: 'Choose Language English' }))
     fireEvent.click(screen.getByRole('radio', { name: '简体中文' }))
-    expect(screen.getByRole('radio', { name: '简体中文' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '设置' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '选择语言 简体中文' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '关闭面板' }))
     await waitFor(() =>
         expect(screen.queryByRole('heading', { name: '语言' })).not.toBeInTheDocument(),
@@ -59,16 +61,21 @@ it('does not close a panel for IME Escape, but closes for ordinary Escape', asyn
     )
 })
 
-it('dismisses the desktop second column on Escape after opening Languages from Settings', async () => {
+it('closes only the setting popover on Escape, then the second column on another Escape', async () => {
     render(
         <MemoryRouter initialEntries={['/__design/desktop?screen=settings']}>
             <DesignPage />
         </MemoryRouter>,
     )
     fireEvent.click(screen.getByRole('button', { name: 'Choose Language English' }))
-    fireEvent.keyDown(window, { key: 'Escape' })
+    const selected = screen.getByRole('radio', { name: 'English' })
+    fireEvent.keyDown(selected, { key: 'Escape', isComposing: true })
+    expect(screen.getByRole('dialog', { name: 'Languages' })).toBeInTheDocument()
+    fireEvent.keyDown(selected, { key: 'Escape' })
     await waitFor(() =>
         expect(screen.queryByRole('heading', { name: 'Languages' })).not.toBeInTheDocument(),
     )
+    expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
     expect(screen.queryByRole('heading', { name: 'Settings' })).not.toBeInTheDocument()
 })

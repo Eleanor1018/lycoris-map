@@ -75,11 +75,12 @@ export function usePlaceBrowse(
         [],
     )
     const onLocated = useCallback(
-        (point: LatLng) => {
-            focusPoint(point)
+        (point: LatLng, automatic: boolean) => {
+            // A late initial permission grant must not replace an opened/shared place.
+            if (!automatic || (!rawMarkerId && focusSequence.current === 0)) focusPoint(point)
             setNearby((previous) => (previous ? { ...previous, point, located: true } : null))
         },
-        [focusPoint],
+        [focusPoint, rawMarkerId],
     )
     const location = useLocationFix(onLocated)
     const listPositions = useRef(

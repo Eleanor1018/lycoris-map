@@ -95,8 +95,12 @@ it('opens a result and dismisses the desktop second column while retaining the r
     expect(screen.queryByRole('heading', { name: 'Search Results' })).not.toBeInTheDocument()
     expect(container.querySelector('.leaflet-container')).toBe(map)
 })
-it('preserves the phone input node, focus and IME composition while expanding from collapsed', async () => {
-    app('/?lang=en', true)
+it.each([
+    ['/?lang=en', 'half'],
+    ['/?lang=en&snap=collapsed', 'collapsed'],
+])('preserves phone input and IME composition when expanding %s from %s', async (url, snap) => {
+    app(url, true)
+    expect(document.getElementById('map-shell')).toHaveAttribute('data-snap', snap)
     const input = screen.getByRole('textbox', { name: 'Search Positions' })
     act(() => input.focus())
     fireEvent.compositionStart(input)
@@ -151,7 +155,7 @@ it('shows legacy phone search results immediately, and restores a virtualized fa
     const offset = list.scrollTop
     fireEvent.click(last)
     await screen.findByRole('heading', { name: 'Synthetic place 300' })
-    fireEvent.click(screen.getByRole('button', { name: 'Close details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
     const restored = await screen.findByRole('button', { name: /^Synthetic place 300\s*08:00/ })
     await waitFor(() => expect(restored).toHaveFocus())
     expect(screen.getByRole('list', { name: 'Search Results' }).scrollTop).toBe(offset)
@@ -192,7 +196,7 @@ it('copies only a public place link, uses a destination-only navigation URL and 
     const writeText = vi.fn(async () => {})
     vi.stubGlobal('navigator', { clipboard: { writeText } })
     await screen.findByRole('heading', { name: 'Synthetic place 1' })
-    const photo = document.querySelector<HTMLImageElement>('.place-photo')!
+    const photo = document.querySelector<HTMLImageElement>('.place-photo img')!
     expect(photo).toHaveAttribute('src', '/uploads/markers/synthetic.webp')
     fireEvent.error(photo)
     expect(document.querySelector('.place-photo')).toBeNull()
@@ -260,7 +264,7 @@ it('restores the phone Nearby category, scroll and focused title after viewing a
     fireEvent.scroll(list, { target: { scrollTop: 400 } })
     fireEvent.click(within(list).getByRole('button', { name: 'Synthetic place 3' }))
     await screen.findByRole('heading', { name: 'Synthetic place 3' })
-    fireEvent.click(screen.getByRole('button', { name: 'Close details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
     const restored = await screen.findByRole('list', { name: 'Nursing Rooms in 1km' })
     expect(restored.scrollTop).toBe(400)
     expect(within(restored).getByRole('button', { name: 'Synthetic place 3' })).toHaveFocus()
@@ -288,7 +292,7 @@ it('windows a long Nearby list and restores a far item after mobile detail witho
     const offset = list.scrollTop
     fireEvent.click(last)
     await screen.findByRole('heading', { name: 'Synthetic place 500' })
-    fireEvent.click(screen.getByRole('button', { name: 'Close details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
     await waitFor(() =>
         expect(
             within(screen.getByRole('list', { name: 'Nursing Rooms in 1km' })).getByRole('button', {
@@ -307,7 +311,7 @@ it('shares the selected Nearby item, uses its destination and hides a failed ima
     fireEvent.click(within(item).getByRole('button', { name: 'Share' }))
     expect(await within(item).findByText('Link copied.')).toBeInTheDocument()
     expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/maps?markerId=2&lang=en`)
-    const photo = item.querySelector('.place-photo')!
+    const photo = item.querySelector('.place-photo img')!
     expect(photo).toHaveAttribute('src', '/uploads/markers/synthetic.webp')
     fireEvent.error(photo)
     expect(item.querySelector('.place-photo')).toBeNull()
@@ -352,7 +356,7 @@ it('keeps End and the return target visible when measured Nearby cards exceed th
     const offset = list.scrollTop
     fireEvent.click(last)
     await screen.findByRole('heading', { name: 'Synthetic place 500' })
-    fireEvent.click(screen.getByRole('button', { name: 'Close details' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
     const restored = await screen.findByRole('list', { name: 'Accessible Toilets in 1km' })
     await waitFor(() =>
         expect(within(restored).getByRole('button', { name: 'Synthetic place 500' })).toHaveFocus(),
@@ -366,7 +370,7 @@ it('keeps a chosen phone language after closing the panel and updates the real r
     fireEvent.click(screen.getByRole('button', { name: 'Choose Language English' }))
     fireEvent.click(screen.getByRole('radio', { name: '简体中文' }))
     expect(document.documentElement.lang).toBe('zh-CN')
-    fireEvent.click(screen.getByRole('button', { name: '关闭语言设置' }))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     await screen.findByRole('button', { name: '选择语言 简体中文' })
     expect(container.querySelector('.leaflet-container')).toBe(map)
     await waitFor(() =>
@@ -391,4 +395,213 @@ it('uses a saved range and radar category while the category cards remain explic
             ),
         ).toBe(true),
     )
+})
+
+it.each([
+    ['Choose Language English', 'Languages'],
+    ['Searching Range 1km', 'Range'],
+    ['Searching Type Toilet', 'Category'],
+    ['Map Source OSM', 'Map Source'],
+    ['About Lycoris Maps', 'About'],
+])('closes the phone %s option and restores the main menu', async (option, title) => {
+    const { container } = app('/?lang=en&snap=full', true)
+    const map = container.querySelector('.leaflet-container')
+    fireEvent.click(screen.getByRole('button', { name: option }))
+    const popup = screen.getByRole('dialog', { name: title })
+    expect(popup).toBeInTheDocument()
+    expect(screen.getByTestId('route')).toHaveTextContent('?lang=en&snap=full')
+    fireEvent.click(screen.getByRole('button', { name: option }))
+    await waitFor(() =>
+        expect(screen.queryByRole('dialog', { name: title })).not.toBeInTheDocument(),
+    )
+    expect(screen.getByRole('button', { name: option })).toHaveFocus()
+    expect(document.getElementById('map-shell')).toHaveAttribute('data-snap', 'full')
+    expect(container.querySelector('.leaflet-container')).toBe(map)
+})
+it.each([false, true])(
+    'chooses the available map source in place without changing the map or route (mobile=%s)',
+    async (mobile) => {
+        const url = '/?lang=en&snap=collapsed'
+        const { container } = app(url, mobile)
+        const map = container.querySelector('.leaflet-container')
+        const trigger = screen.getByRole('button', { name: 'Map source' })
+        fireEvent.click(trigger)
+        const popup = screen.getByRole('dialog', { name: 'Map Source' })
+        const osm = within(popup).getByRole('radio', { name: 'OSM' })
+        expect(osm).toBeChecked()
+        expect(osm).toHaveFocus()
+        for (const name of ['天地图', 'Google Maps']) {
+            const unavailable = within(popup).getByRole('radio', { name })
+            expect(unavailable).toBeDisabled()
+            expect(unavailable).toHaveAccessibleDescription('Not available yet')
+            fireEvent.click(unavailable)
+            expect(osm).toBeChecked()
+        }
+        fireEvent.click(osm)
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+        expect(trigger).toHaveFocus()
+        expect(screen.getByTestId('route')).toHaveTextContent(url)
+        expect(container.querySelector('.leaflet-container')).toBe(map)
+        expect(JSON.parse(localStorage.getItem('lycoris.map-preferences')!)).toMatchObject({
+            source: 'osm',
+        })
+        fireEvent.click(trigger)
+        fireEvent.keyDown(screen.getByRole('radio', { name: 'OSM' }), { key: 'Escape' })
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+        expect(trigger).toHaveFocus()
+        expect(screen.getByTestId('route')).toHaveTextContent(url)
+    },
+)
+it('closes phone Nearby back to the default half menu without remounting the map', async () => {
+    const { container } = app('/?lang=en', true)
+    const map = container.querySelector('.leaflet-container')
+    fireEvent.click(screen.getByRole('button', { name: 'Find nearby' }))
+    await screen.findByRole('heading', { name: 'Nearby' })
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
+    await waitFor(() =>
+        expect(screen.queryByRole('heading', { name: 'Nearby' })).not.toBeInTheDocument(),
+    )
+    expect(document.getElementById('map-shell')).toHaveAttribute('data-snap', 'half')
+    expect(screen.getByRole('button', { name: 'Find nearby' })).toHaveFocus()
+    expect(container.querySelector('.leaflet-container')).toBe(map)
+})
+
+function pullSecondarySheetDown() {
+    const handle = document.getElementById('sheet-handle')!
+    const section = handle.closest('section')!
+    vi.spyOn(section, 'getBoundingClientRect').mockReturnValue({
+        x: 0,
+        y: 46,
+        top: 46,
+        left: 0,
+        right: 375,
+        bottom: 667,
+        width: 375,
+        height: 621,
+        toJSON: () => ({}),
+    })
+    vi.spyOn(section.parentElement!, 'getBoundingClientRect').mockReturnValue({
+        x: 0,
+        y: 0,
+        top: 0,
+        left: 0,
+        right: 375,
+        bottom: 667,
+        width: 375,
+        height: 667,
+        toJSON: () => ({}),
+    })
+    for (const [type, y] of [
+        ['start', 55],
+        ['move', 660],
+        ['end', 660],
+    ] as const) {
+        const point = { identifier: 1, clientX: 180, clientY: y }
+        fireEvent(
+            handle,
+            Object.assign(new Event(`touch${type}`, { bubbles: true, cancelable: true }), {
+                touches: type === 'end' ? [] : [point],
+                changedTouches: [point],
+            }),
+        )
+    }
+}
+
+it.each([
+    ['radar', 'collapsed', 'Find nearby'],
+    ['card', 'half', 'Accessible Toilets'],
+    ['card', 'full', 'Accessible Toilets'],
+])(
+    'returns Nearby opened through the %s to the %s menu exactly like X',
+    async (_entry, snap, opener) => {
+        const { container } = app(`/?lang=en&snap=${snap}#retained`, true)
+        const map = container.querySelector('.leaflet-container')
+        fireEvent.click(screen.getByRole('button', { name: opener }))
+        await screen.findByRole('list', { name: 'Accessible Toilets in 1km' })
+        fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
+        await waitFor(() =>
+            expect(screen.queryByRole('heading', { name: 'Nearby' })).not.toBeInTheDocument(),
+        )
+        const expectedRoute = screen.getByTestId('route').textContent
+        fireEvent.click(screen.getByRole('button', { name: opener }))
+        await screen.findByRole('list', { name: 'Accessible Toilets in 1km' })
+        pullSecondarySheetDown()
+        await waitFor(() =>
+            expect(screen.queryByRole('heading', { name: 'Nearby' })).not.toBeInTheDocument(),
+        )
+        expect(screen.getByTestId('route').textContent).toBe(expectedRoute)
+        expect(document.getElementById('map-shell')).toHaveAttribute('data-snap', snap)
+        expect(screen.getByRole('textbox', { name: 'Search Positions' })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: opener })).toHaveFocus()
+        expect(container.querySelector('.leaflet-container')).toBe(map)
+        expect(
+            document.getElementById('map-shell')!.style.getPropertyValue('--sheet-visual-height'),
+        ).toBe('')
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    },
+)
+
+it('closes a directly opened Nearby by dragging, without leaving the app', async () => {
+    const { container } = app('/?lang=en&panel=nearby&nearbyCategory=baby_room#retained', true)
+    await screen.findByRole('list', { name: 'Nursing Rooms in 1km' })
+    const map = container.querySelector('.leaflet-container')
+    pullSecondarySheetDown()
+    await waitFor(() =>
+        expect(screen.queryByRole('heading', { name: 'Nearby' })).not.toBeInTheDocument(),
+    )
+    expect(document.getElementById('map-shell')).toHaveAttribute('data-panel', 'initial')
+    expect(document.getElementById('map-shell')).toHaveAttribute('data-snap', 'collapsed')
+    expect(screen.getByRole('textbox', { name: 'Search Positions' })).toBeInTheDocument()
+    expect(screen.getByTestId('route')).toHaveTextContent('#retained')
+    expect(container.querySelector('.leaflet-container')).toBe(map)
+})
+
+it('fits the open primary menu to changing content and caps it to the viewport', () => {
+    vi.stubGlobal('innerHeight', 844)
+    let contentHeight = 580
+    const bounds = HTMLElement.prototype.getBoundingClientRect
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+        this: HTMLElement,
+    ) {
+        return this.classList.contains('mobile-search-content')
+            ? new DOMRect(0, 0, 375, contentHeight)
+            : bounds.call(this)
+    })
+    const observed = new Map<Element, ResizeObserverCallback>()
+    vi.stubGlobal(
+        'ResizeObserver',
+        class {
+            callback: ResizeObserverCallback
+            constructor(callback: ResizeObserverCallback) {
+                this.callback = callback
+            }
+            observe(element: Element) {
+                observed.set(element, this.callback)
+            }
+            unobserve(element: Element) {
+                observed.delete(element)
+            }
+            disconnect() {
+                for (const [element, callback] of observed)
+                    if (callback === this.callback) observed.delete(element)
+            }
+        },
+    )
+    const { container } = app('/?lang=en&snap=full', true)
+    const root = document.getElementById('map-shell')!
+    const content = container.querySelector('.mobile-search-content')!
+    expect(root.style.getPropertyValue('--sheet-height')).toBe('580px')
+    contentHeight = 1200
+    act(() => observed.get(content)!([], {} as ResizeObserver))
+    expect(root.style.getPropertyValue('--sheet-height')).toBe('798px')
+    contentHeight = 620
+    act(() => observed.get(content)!([], {} as ResizeObserver))
+    expect(root.style.getPropertyValue('--sheet-height')).toBe('620px')
+    vi.stubGlobal('innerHeight', 600)
+    fireEvent.resize(window)
+    expect(root.style.getPropertyValue('--sheet-height')).toBe('554px')
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Change panel height (full)' }), {
+        key: 'ArrowDown',
+    })
+    expect(root.style.getPropertyValue('--sheet-height')).toBe('320px')
 })
