@@ -54,3 +54,25 @@ Prepared artifact: `map-polish-ef5b976/lycoris-map-polish-ef5b976.zip` in the
 surrounding deployment workspace, 21 files including the existing Cloudflare
 worker/routes/headers. Main bundle `index-BjV_7s2k.js`; CSS `index-BpF3nIJG.css`.
 This artifact has not been uploaded. The current live application is `ac226c1`.
+
+## Follow-up: contribution login gate — 2026-09-16
+
+Application commit `0c5b0eb` requires a confirmed session for contribution
+entry points and direct picker/composer URLs. Guest users see the existing
+login interface; successful login resumes the requested contribution route.
+Cancel closes the pending contribution using the usual panel close action,
+and cannot dismiss another route after navigation. A returning user waits for
+the initial session check instead of receiving an unnecessary login prompt.
+The account dialog now explicitly references its existing title for accessibility.
+
+All 275 tests, strict TypeScript/build, formatting and diff checks passed. New
+regressions cover both viewport modes, successful login, cancellation/re-entry,
+direct URLs, navigation during login, and initial session confirmation.
+Computer Use can still read Chrome but keyboard navigation does not activate
+the requested URL; browser QA and deployment remain pending.
+
+The latest prepared artifact supersedes the earlier ZIP above:
+`contribution-login-0c5b0eb/lycoris-contribution-login-0c5b0eb.zip` (21 files).
+Main bundle: `index-i_oX79Ep.js`; CSS: `index-BpF3nIJG.css`.
+SHA-256: `af9da322f8a67041cc46a1789ef852a34b6c523304fdf683aeac942f09b38795`.
+It has not been uploaded.
