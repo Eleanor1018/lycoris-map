@@ -25,7 +25,8 @@ expected = json.loads((backup / 'table-fingerprints.json').read_text())
 tables = ('users', 'map_markers', 'marker_favorites', 'marker_edit_proposals',
           'marker_image_proposals', 'map_marker_translations')
 assert set(expected) == set(tables), 'Unexpected backup table inventory'
-prefix = ['docker', 'compose', 'exec', '-T', 'postgres', 'psql', '-XqAt', '-U',
+# The source fingerprints render timestamptz using its Asia/Shanghai setting.
+prefix = ['docker', 'compose', 'exec', '-T', '-e', 'PGOPTIONS=-c timezone=Asia/Shanghai', 'postgres', 'psql', '-XqAt', '-U',
           'postgres', '-d', database, '-v', 'ON_ERROR_STOP=1', '-c']
 for table in tables:
     raw = subprocess.check_output(prefix + [f'COPY (SELECT row_to_json(t) FROM public.{table} t ORDER BY id) TO STDOUT'])
