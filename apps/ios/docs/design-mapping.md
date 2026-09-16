@@ -13,6 +13,10 @@ The four frames are 402 × 874. The scene uses real device safe areas instead of
 
 Apple Maps is the approved iOS map provider. The settings reference's OSM label becomes Apple Maps. Existing Web-specific 11px margins and 44px avatar do not override this iOS design. Anonymous users do not see the Bookmarks heading/group or an empty reserved gap.
 
+## Native UI for missing designs (updated 2026-09-17)
+
+The user has confirmed that components absent from Figma must use iOS-native controls and system presentation. Within the approved feature scope, use SwiftUI Form/List, NavigationStack, system sheets, pickers, alerts and semantic styles without requiring a new visual-design decision for each missing component. Existing Figma components and subsequent explicit layout refinements remain the reference. This does not add new features or imply that unsupported backend capabilities are available.
+
 ## Design gaps to resolve before their implementation
 
 | Flow | Available basis | Required decision / stage |
