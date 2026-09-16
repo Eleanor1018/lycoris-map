@@ -73,3 +73,25 @@ production custom domain. Physical-device Safari was not tested in this run.
 Cloudflare reported deployment success, and the live HTML references
 `index-DGjWsXvp.js` and `index-p4JTL1Pr.css`. Backend availability remains as
 recorded above; no backend or old-domain changes were part of this hotfix.
+
+## Mobile sheet P2 fixes — 2026-09-16
+
+Commit `fe193d6` anchors mobile panels to the viewport bottom, including account
+and contribution sheets. Safe-area spacing is inside the scrollable content;
+the expanded panel retains its 46px top offset. Drag limits and map attribution
+positioning use the same updated geometry. Secondary mobile panels now have a
+visible upper-right close icon, including settings, Nearby, bookmarks, details,
+and all account views. Existing contribution and desktop close controls remain.
+The new mobile controls have a 44px hit area and reuse the existing Figma icons.
+
+Validation: all 241 frontend tests and the strict TypeScript production build
+passed. Regression coverage checks closing every settings option, Nearby and
+place details with focus/list restoration, and cancelling mobile login/register.
+Chrome iPhone 16 Pro Max touch emulation verified the bottom alignment and close
+controls locally, plus the retained full-to-half drag. The custom domain was
+checked after deployment for full-height alignment, closing settings and login.
+Physical-device Safari was not tested in this run.
+
+Cloudflare reported success after uploading all 21 production files. Live HTML
+references `index-BmFrJzOL.js` and `index-DwCxC-gV.css`. This release only changes
+the frontend; backend availability remains as documented above.
