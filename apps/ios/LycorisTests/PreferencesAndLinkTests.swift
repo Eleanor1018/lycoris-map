@@ -12,14 +12,18 @@ import Testing
     let preferences = AppPreferences(defaults: defaults)
     #expect(preferences.radius == 1000)
     preferences.language = .chinese
+    preferences.mapAppearance = .satellite
     #expect(preferences.setRadius(2500))
     #expect(!preferences.setRadius(0))
     #expect(!preferences.setRadius(50_001))
     let restored = AppPreferences(defaults: defaults)
     #expect(restored.language == .chinese && restored.radius == 2500)
+    #expect(restored.mapAppearance == .satellite)
     defaults.set(-1, forKey: "lycoris.radius")
     defaults.set("unknown", forKey: "lycoris.language")
+    defaults.set("unknown", forKey: "lycoris.mapAppearance")
     #expect(AppPreferences(defaults: defaults).radius == 1000)
+    #expect(AppPreferences(defaults: defaults).mapAppearance == .explore)
   }
 
   @Test func derivedStringsUseSelectedBundle() {

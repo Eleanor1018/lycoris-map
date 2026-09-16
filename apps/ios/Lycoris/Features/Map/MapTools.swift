@@ -5,14 +5,18 @@ struct MapTools: View {
   var locate: () -> Void = {}
   var showNearby: () -> Void
   var contribute: () -> Void = {}
-  var onUnavailableAction: () -> Void
+  var showMapAppearance: () -> Void
+  var appearanceTransition: Namespace.ID
 
   var body: some View {
     VStack(spacing: spacing) {
       VStack(spacing: 0) {
-        Button(action: onUnavailableAction) {
+        Button(action: showMapAppearance) {
           Image("Map").resizable().frame(width: 20, height: 20).frame(width: 48, height: 48)
-        }.accessibilityLabel("Map source")
+            .contentShape(Rectangle())
+        }
+        .accessibilityLabel("Map Style").accessibilityIdentifier("map.appearance")
+        .matchedTransitionSource(id: "map-appearance", in: appearanceTransition)
         Button(action: locate) {
           Image(systemName: "location").font(.title3).foregroundStyle(Color.accentColor)
             .frame(width: 48, height: 48)

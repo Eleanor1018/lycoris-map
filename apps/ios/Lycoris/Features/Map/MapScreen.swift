@@ -3,6 +3,7 @@ import SwiftUI
 
 struct MapScreen: View {
   @State private var preferences = AppPreferences()
+  @Namespace private var appearanceTransition
   @State private var locationDenied = false
   @State private var linkError = false
   @State private var focusKeyboardAfterDismiss = false
@@ -91,6 +92,7 @@ struct MapScreen: View {
       ZStack(alignment: .topLeading) {
         NativeMapView(
           topInset: layout.topInset, bottomInset: mapBottomInset,
+          appearance: preferences.mapAppearance,
           places: mapPlaces, focus: store.focus,
           showsUserLocation: !store.isPreview && location.hasRequestedLocation
             && location.isAuthorized, animated: !reduceMotion,
@@ -106,7 +108,8 @@ struct MapScreen: View {
           locate: locate,
           showNearby: { showNearby(.toilet) },
           contribute: { beginContribution(.create) },
-          onUnavailableAction: { modal = .settings(.source) }
+          showMapAppearance: { modal = .mapAppearance(screenCenter) },
+          appearanceTransition: appearanceTransition
         )
         .position(x: layout.viewport.width - 40, y: panelTop - (selectedPlace == nil ? 131.5 : 116))
         .opacity(toolsVisible ? 1 : 0)
@@ -221,6 +224,9 @@ struct MapScreen: View {
       case .share(let place): PlaceShareSheet(place: place)
       case .settings(let destination):
         SettingsSheet(preferences: preferences, destination: destination)
+      case .mapAppearance(let center):
+        MapAppearanceSheet(preferences: preferences, center: center)
+          .navigationTransition(.zoom(sourceID: "map-appearance", in: appearanceTransition))
       case .voice:
         VoiceSearchSheet(
           language: preferences.language,
@@ -682,6 +688,7 @@ private enum MapModal: Identifiable {
   case share(PlacePresentation)
   case contribution
   case settings(SettingsDestination)
+  case mapAppearance(GeoPoint?)
   case voice
   case link(PlaceLink)
   var id: String {
@@ -690,6 +697,7 @@ private enum MapModal: Identifiable {
     case .share(let place): "share-\(place.id)"
     case .contribution: "contribution"
     case .settings(let destination): "settings-\(destination.rawValue)"
+    case .mapAppearance: "map-appearance"
     case .voice: "voice"
     case .link(let link): "link-\(link.id)"
     }

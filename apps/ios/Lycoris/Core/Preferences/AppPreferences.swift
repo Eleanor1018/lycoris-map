@@ -20,10 +20,15 @@ final class AppPreferences {
     didSet { defaults.set(language.rawValue, forKey: "lycoris.language") }
   }
   private(set) var radius: Int
+  var mapAppearance: MapAppearance {
+    didSet { defaults.set(mapAppearance.rawValue, forKey: "lycoris.mapAppearance") }
+  }
 
   init(defaults: UserDefaults = .standard) {
     self.defaults = defaults
     language = .current(in: defaults)
+    mapAppearance = defaults.string(forKey: "lycoris.mapAppearance")
+      .flatMap(MapAppearance.init(rawValue:)) ?? .explore
     let saved = defaults.integer(forKey: "lycoris.radius")
     radius = Self.validRadius(saved) ? saved : 1000
   }

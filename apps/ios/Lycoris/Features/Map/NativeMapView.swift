@@ -5,6 +5,7 @@ import SwiftUI
 struct NativeMapView: UIViewRepresentable {
   let topInset: CGFloat
   let bottomInset: CGFloat
+  var appearance: MapAppearance = .explore
   var places: [PlacePresentation] = []
   var focus: MapFocus? = nil
   var showsUserLocation = false
@@ -18,7 +19,8 @@ struct NativeMapView: UIViewRepresentable {
   func makeUIView(context: Context) -> MKMapView {
     let map = MKMapView(frame: .zero)
     map.delegate = context.coordinator
-    map.preferredConfiguration = MKStandardMapConfiguration(elevationStyle: .flat)
+    map.preferredConfiguration = appearance.configuration()
+    context.coordinator.appearance = appearance
     map.showsCompass = false
     map.isPitchEnabled = false
     map.layoutMargins = UIEdgeInsets(top: topInset, left: 10, bottom: bottomInset, right: 10)
@@ -44,6 +46,10 @@ struct NativeMapView: UIViewRepresentable {
   func updateUIView(_ map: MKMapView, context: Context) {
     let coordinator = context.coordinator
     coordinator.parent = self
+    if coordinator.appearance != appearance {
+      map.preferredConfiguration = appearance.configuration()
+      coordinator.appearance = appearance
+    }
     Self.updateMargins(
       UIEdgeInsets(top: topInset, left: 10, bottom: bottomInset, right: 10), on: map)
     map.showsUserLocation = showsUserLocation
@@ -89,6 +95,7 @@ struct NativeMapView: UIViewRepresentable {
   final class Coordinator: NSObject, MKMapViewDelegate {
     var parent: NativeMapView
     var focusID: UUID?
+    var appearance: MapAppearance?
     var lastViewport: MapViewport?
     init(parent: NativeMapView) { self.parent = parent }
 
