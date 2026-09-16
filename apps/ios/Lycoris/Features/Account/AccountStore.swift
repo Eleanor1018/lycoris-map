@@ -8,6 +8,7 @@ final class AccountStore {
   private(set) var isChecking = false
   private(set) var isBusy = false
   private(set) var hasChecked = false
+  private(set) var hasVerifiedIdentity = false
   private(set) var epoch = UUID()
   var message: String?
   private(set) var bookmarks: [Marker] = []
@@ -24,6 +25,7 @@ final class AccountStore {
   private var identityGeneration = UUID()
   private var libraryTask: Task<Void, Never>?
   private var detailTask: Task<Void, Never>?
+  @ObservationIgnored var onPrivateDataInvalidated: (() -> Void)?
 
   var baseURL: URL? { api.baseURL }
   var language: String { Locale.current.language.languageCode?.identifier == "zh" ? "zh" : "en" }
@@ -308,6 +310,31 @@ final class AccountStore {
     detailState = .idle
   }
 
+  /// Shares the auth mutation gate: a logout/login cannot replace cookies between
+  /// the owner check and a private contribution request. Release between chunks.
+  func contributionRequest(
+    _ request: AccountRequest, owner: String, token: UUID,
+    beforeSend: () throws -> Void = {}
+  ) async throws -> Data {
+    guard matches(owner, token) else { throw CancellationError() }
+    guard !isBusy, !isChecking else { throw ContributionFailure.accountBusy }
+    isBusy = true
+    identityGeneration = UUID()
+    defer { isBusy = false }
+    do {
+      try await verifyOwner(owner, token: token)
+      try Task.checkCancellation()
+      try beforeSend()
+      let data = try await api.send(request)
+      try Task.checkCancellation()
+      guard matches(owner, token) else { throw CancellationError() }
+      return data
+    } catch {
+      if matches(owner, token), (error as? AccountFailure)?.status == 401 { expire() }
+      throw error
+    }
+  }
+
   private func writeUser(_ operation: () async throws -> AccountUser) async -> Bool {
     guard !isBusy, let owner = user?.publicId else { return false }
     let token = epoch
@@ -363,6 +390,7 @@ final class AccountStore {
   private func accept(_ value: AccountUser) {
     if user?.publicId != value.publicId { invalidatePrivateData() }
     user = value
+    hasVerifiedIdentity = true
   }
 
   private func matches(_ owner: String, _ token: UUID) -> Bool {
@@ -371,9 +399,11 @@ final class AccountStore {
   private func expire() {
     invalidatePrivateData()
     user = nil
+    hasVerifiedIdentity = true
   }
 
   private func invalidatePrivateData() {
+    onPrivateDataInvalidated?()
     epoch = UUID()
     identityGeneration = UUID()
     libraryTask?.cancel()

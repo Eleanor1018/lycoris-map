@@ -1,7 +1,7 @@
 import Foundation
 
 /// Public read DTO. Rust identifiers stay Int64 all the way to the URL.
-struct Marker: Decodable, Equatable, Sendable {
+struct Marker: Codable, Equatable, Sendable {
   let id: Int64
   let version: Int64
   let lat: Double
@@ -19,7 +19,7 @@ struct Marker: Decodable, Equatable, Sendable {
   var point: GeoPoint? { GeoPoint(latitude: lat, longitude: lng) }
 }
 
-enum PlaceCategory: String, Decodable, CaseIterable, Sendable {
+enum PlaceCategory: String, Codable, CaseIterable, Sendable {
   case toilet = "accessible_toilet"
   case nursing = "baby_room"
   case medical = "friendly_clinic"

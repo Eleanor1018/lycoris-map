@@ -3,7 +3,7 @@ import MapKit
 
 /// API/database and Core Location coordinates are passed through as WGS84.
 /// Never apply a second regional offset to MapKit coordinates.
-struct GeoPoint: Equatable, Sendable {
+struct GeoPoint: Codable, Equatable, Sendable {
   let latitude: Double
   let longitude: Double
 

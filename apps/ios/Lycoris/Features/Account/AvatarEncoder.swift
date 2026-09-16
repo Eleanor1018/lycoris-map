@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 
 enum AvatarEncoder {
   /// Decode a bounded, orientation-correct thumbnail; HEIC never reaches the server.
-  static func jpeg(from data: Data) throws -> Data {
+  static func jpeg(from data: Data, maximumDimension: Int = 1024) throws -> Data {
     guard data.count <= 50 * 1024 * 1024,
       let source = CGImageSourceCreateWithData(data as CFData, nil),
       let image = CGImageSourceCreateThumbnailAtIndex(
@@ -11,7 +11,7 @@ enum AvatarEncoder {
         [
           kCGImageSourceCreateThumbnailFromImageAlways: true,
           kCGImageSourceCreateThumbnailWithTransform: true,
-          kCGImageSourceThumbnailMaxPixelSize: 1024,
+          kCGImageSourceThumbnailMaxPixelSize: maximumDimension,
         ] as CFDictionary)
     else { throw AccountFailure(status: 400) }
     let output = NSMutableData()
