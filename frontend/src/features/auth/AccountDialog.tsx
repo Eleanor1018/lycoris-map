@@ -44,6 +44,7 @@ export function AccountDialog({
                 <Dialog.Content
                     className={`account-dialog ${mobile ? 'account-mobile' : 'account-desktop'} account-${view}`}
                     data-account-dialog
+                    aria-labelledby="account-title"
                     aria-describedby={undefined}
                     onOpenAutoFocus={(event) => {
                         event.preventDefault()

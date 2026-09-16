@@ -57,10 +57,34 @@ export function MapShell({
         close,
         location,
     } = usePanelRoute(Boolean(sample), mobile ? 'back' : 'dismiss', !!browse)
-    const panel = requestedPanel === 'bookmarks' && !showBookmarks ? 'initial' : requestedPanel
+    const contributionNeedsLogin =
+        !sample &&
+        !!accountFlow &&
+        (requestedPanel === 'contribute' || requestedPanel === 'contribute-form') &&
+        !session.scope
+    const panel =
+        contributionNeedsLogin || (requestedPanel === 'bookmarks' && !showBookmarks)
+            ? 'initial'
+            : requestedPanel
     const contributionOpen = panel === 'contribute-form' || (mobile && panel === 'contribute')
     const activeRoute = useRef(location.key)
     activeRoute.current = location.key
+    const loginRoute = useRef<string | null>(null)
+    useEffect(() => {
+        if (!contributionNeedsLogin) {
+            loginRoute.current = null
+            return
+        }
+        if (session.status === 'checking' || session.busy || loginRoute.current === location.key)
+            return
+        loginRoute.current = location.key
+        const key = location.key
+        // The requested route resumes naturally once the session is confirmed.
+        // Keep both the picker and composer hidden until then, including deep links.
+        accountFlow?.requireLogin(undefined, () => {
+            if (activeRoute.current === key) close()
+        })
+    }, [contributionNeedsLogin, session.status, session.busy, location.key, accountFlow, close])
     useEffect(() => {
         if (mobile && panel === 'contribute') open('contribute-form', 'nav-contribute', true)
     }, [mobile, panel, open])

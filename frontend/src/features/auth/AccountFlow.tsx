@@ -12,7 +12,7 @@ type AccountFlow = {
     open: (view?: AccountView) => void
     close: () => void
     setView: (view: AccountView) => void
-    requireLogin: (resume?: Resume) => void
+    requireLogin: (resume?: Resume, onCancel?: () => void) => void
     authenticated: (round: number) => Promise<void>
     notify: (message: string | null) => void
     restoreFocus: () => void
@@ -31,23 +31,28 @@ export function AccountFlowProvider({ children }: { children: ReactNode }) {
     const isCurrent = (value: number) => value === currentRound.current
     const [message, notify] = useState<string | null>(null)
     const pending = useRef<Resume | undefined>(undefined)
+    const cancelPending = useRef<(() => void) | undefined>(undefined)
     const trigger = useRef<HTMLElement | null>(null)
     const remember = () => {
         trigger.current =
             document.activeElement instanceof HTMLElement ? document.activeElement : null
     }
     const close = () => {
+        const cancel = cancelPending.current
+        cancelPending.current = undefined
         setView(null)
         pending.current = undefined
         notify(null)
+        cancel?.()
     }
     const open = (next?: AccountView) => {
         remember()
         pending.current = undefined
+        cancelPending.current = undefined
         notify(null)
         setView(next ?? (store?.getSnapshot().user ? 'profile' : 'login'))
     }
-    const requireLogin = (resume?: Resume) => {
+    const requireLogin = (resume?: Resume, onCancel?: () => void) => {
         const scope = store?.getSnapshot().scope
         if (scope) {
             void resume?.(scope)
@@ -55,6 +60,7 @@ export function AccountFlowProvider({ children }: { children: ReactNode }) {
         }
         remember()
         pending.current = resume
+        cancelPending.current = onCancel
         notify(null)
         setView('login')
     }
@@ -64,6 +70,7 @@ export function AccountFlowProvider({ children }: { children: ReactNode }) {
         if (!scope) throw new Error('Could not confirm your session. Please log in again.')
         const resume = pending.current
         pending.current = undefined
+        cancelPending.current = undefined
         setView(null)
         notify(null)
         await resume?.(scope)
