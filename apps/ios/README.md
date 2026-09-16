@@ -2,17 +2,17 @@
 
 Native SwiftUI application, Apple Maps / MapKit, iPhone, iOS 26+. Open `Lycoris.xcodeproj` in Xcode and select the shared **Lycoris** scheme.
 
-## Current scope: I3
+## Current scope: I4
 
 The Figma map shell now reads public places from the Rust backend: viewport markers, debounced search, three Nearby categories, marker selection and real details. Core Location is requested from the location/Nearby controls; denied or unavailable location falls back to the explicitly labelled map center. Place sharing opens the native share sheet with a public Apple Maps destination link, and Navigate opens walking directions in Apple Maps. No user origin is embedded in shared links.
 
-Account, bookmarks, editing, contribution, settings destinations and voice input still show an honest unavailable alert and belong to I4–I6. No server deployment is performed.
+I4 connects account-password login and registration, cookie session restoration, logout, profile fields, native photo selection and avatar upload, password changes, Bookmarks and My Places. Account screens use an approved native sheet/Form/List mapping of the Figma auth design. Editing, contribution, settings destinations and voice input remain I5–I6 work. No server deployment is performed.
 
-The default app is anonymous with no sample bookmarks or selected place. Xcode canvas previews and explicit Debug launch arguments inject design fixtures without creating a login session. Release ignores the preview arguments.
+The default app revalidates its persisted account cookie; without a valid session it is anonymous, with no sample bookmarks or selected place. Xcode canvas previews and explicit Debug launch arguments inject design fixtures without creating a login session. Release ignores the preview arguments.
 
 In Xcode's Run scheme arguments, add `-lycoris-preview` followed by one of `collapsed`, `nearby`, `expanded`, `anonymousExpanded`, or `details`. `expanded` includes the three reference bookmark rows; tap one to open details. Clear the arguments to return to the anonymous default. The same variants are available in `App/MapPreviewScenario.swift` as named canvas previews.
 
-Fixture text, photo and coordinates are only visual reference data. The Figma toilet title, decorative photo and New Jersey map coordinate do not describe a verified real place. See `docs/i3-acceptance.md` for API behavior and current validation. Explicit visual previews disable networking and real sharing/navigation.
+Fixture text, photo and coordinates are only visual reference data. The Figma toilet title, decorative photo and New Jersey map coordinate do not describe a verified real place. See `docs/i3-acceptance.md` and `docs/i4-acceptance.md` for API behavior and validation. Explicit visual previews disable networking and real sharing/navigation.
 
 The initial map camera uses the public New Jersey area shown in the design. It is not the user's current location. Startup does not request location or start the user-location layer; that begins only after a location/Nearby action.
 
@@ -28,16 +28,16 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
   -project Lycoris.xcodeproj -scheme Lycoris \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   -derivedDataPath /tmp/lycoris-ios-build \
-  CODE_SIGNING_ALLOWED=NO build
+  CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- build
 
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
   -project Lycoris.xcodeproj -scheme Lycoris \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   -derivedDataPath /tmp/lycoris-ios-build \
-  CODE_SIGNING_ALLOWED=NO test
+  CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- test
 ```
 
-Simulator builds do not need a signing team. A physical device requires the owner's Xcode signing team. The bundle ID is currently `com.lycoris.maps`; confirm release identity when preparing distribution.
+Simulator builds do not need a signing team, but must keep local ad-hoc signing enabled for Keychain access; do not use `CODE_SIGNING_ALLOWED=NO` for account tests. A physical device requires the owner's Xcode signing team. The bundle ID is currently `com.lycoris.maps`; confirm release identity when preparing distribution.
 
 ## Service address
 
@@ -58,9 +58,10 @@ The `$()` escape preserves the double slash in an xcconfig URL. The phone and Ma
 - `Core/API`: environment configuration, public DTOs, transport and HTTP diagnostics.
 - `Core/Location`: WGS84 values, viewport splitting and on-demand Core Location.
 - `Features/Places`: shared rows, real details, public images and native share sheet.
+- `Features/Account`: session and private data lifecycle, Figma auth forms, native profile/password/library screens, and avatar encoding.
 - `Resources`: asset catalog and English / Simplified Chinese strings.
 - `LycorisTests`: configuration, HTTP/DTO boundaries, request races, coordinates, panel geometry and camera preservation.
-- `LycorisUITests`: keyboard/drag, design previews, anonymous visibility and read-only local Rust acceptance flows.
+- `LycorisUITests`: keyboard/drag, design previews, public browsing and isolated synthetic account acceptance flows.
 - `docs`: design references, gaps and acceptance evidence.
 
 The system sheet was prototyped first. On iOS 26.5 its largest detent becomes edge-to-edge; the design keeps 10 points on both sides. `PanelLayout` therefore owns only the custom container's geometry. SwiftUI controls, MapKit and system materials remain native. The map is not conditionally removed or keyed by panel state.
@@ -78,3 +79,15 @@ For a manual simulator review, use `-lycoris-test-center` followed by `31.2304,1
 Search debounces for 300 ms and viewport reads for 250 ms. Cancellation plus generation checks prevent late responses from replacing a newer state. Nearby keeps its captured origin while the map pans. A fresh location fix may update that origin only while its original action is still active. A 404 removes the old pin and reloads the other public results; image errors retain the textual detail. Search results and annotations are not silently truncated.
 
 The new public Lycoris domain is still unconfigured. Until it is supplied, Share uses the public Apple Maps destination; it does not invent a Lycoris URL or enable Universal Links. Real-world historical-coordinate alignment, physical-device permissions and route correctness remain device acceptance work.
+
+## I4 account behavior
+
+The account URLSession uses iOS cookie storage and disables URL caching and credential storage. Server-issued persistent cookies are also synchronously saved to device-only Keychain storage after Set-Cookie, so an immediate process termination cannot lose the session. The snapshot preserves domain, path, Secure, HttpOnly and the server expiry; session-only/expired cookies are not persisted. Empty snapshots preserve logout, and each service origin restores only once per process. Passwords are kept only in form state and cleared after a request; there is no password store. Public marker/image sessions remain cookie-free. Startup and foreground transitions revalidate `/api/me`; a 401 clears identity and private content, while an outage retains the last verified identity with an error. Login, logout and account writes serialize; response generations reject stale identities, libraries and private photos.
+
+Anonymous users see no Bookmarks group. Logged-in users see its heading, up to three native reference rows, or a compact empty/loading message. The heading opens the full list. A bookmark tap while anonymous opens login and resumes the original save after authentication. Failed writes display feedback without claiming success. Owned private or pending places and their images use the authenticated session; no private images enter the public image cache.
+
+The account sheet supports nickname, pronouns and signature, a native PhotosPicker, password change and My Places. Photos are orientation-corrected, downsampled to 1024px and encoded as JPEG before upload. Profile forms can be pulled to refresh after conflicts. My Places retains the server's public/private and review status. Apple/Google login and verification remain explicitly unavailable; registration needs no verification code. Password recovery and account deletion have no supported backend flow and are not presented as working actions.
+
+`AccountFlowTests` writes only to the identified loopback synthetic stack using dedicated random accounts persisted inside the test runner's container. It never uses a real account or previous S1/S4 credentials. The fixture's own profile, password session version, avatar, favorites and private place may change. For its native photo picker test, seed the selected simulator with the synthetic avatar via `xcrun simctl addmedia <device-id> <synthetic-avatar.png>`. The password test deliberately reuses the fixture password while verifying invalidation of another session. No passwords or cookies belong in repository artifacts.
+
+Keychain references: [Apple access class](https://developer.apple.com/documentation/security/ksecattraccessibleafterfirstunlockthisdeviceonly), [signing/entitlement diagnostics](https://developer.apple.com/documentation/security/errsecmissingentitlement). Local ad-hoc simulator signing supplies the app identity; physical-device and App Store signing remain separate release work.

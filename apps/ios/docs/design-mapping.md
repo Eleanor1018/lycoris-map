@@ -18,15 +18,23 @@ Apple Maps is the approved iOS map provider. The settings reference's OSM label 
 | Flow | Available basis | Required decision / stage |
 | --- | --- | --- |
 | Search / Nearby results | Existing point rows and approved Web behavior | I3 reuses the rounded iOS place rows, title3/subheadline styles and minimal loading/empty/retry text; category cards and radar share one destination |
-| Login / register / profile | Existing account forms, Figma auth reference 126:382 | Map fields and native presentation before I4; no iOS-complete auth frame yet |
+| Login / register / profile | Auth references 126:382 and 126:513 | I4 uses the user-approved native sheet and Form/List mapping; no iOS-complete account frames exist |
 | Contribution / editing | Existing contribution form and backend semantics | Native form/picking sequence before I5; pen is the entry; no public/private control |
 | Settings subpages | iOS settings rows, existing preferences | Native selection presentation before I6 |
 | Microphone | Symbol exists, no defined behavior | Decide native speech behavior or an honest unavailable state before completing search |
 | Apple / Google login, verification, recovery, account deletion | Backend does not implement these flows | Separate scoped backend work if included; logout is not account deletion |
 | iPad | No dedicated native design supplied | Separate adaptation decision |
 
-Explicit Debug fixtures remain isolated from live networking and real actions. Default and Release launches are anonymous and do not inject sample bookmarks. I3 connects category results, search, map pins, Core Location, sharing and navigation. Account/bookmark writes await I4, contribution/editing await I5, settings and voice decisions await I6. Those controls continue to show a native unavailable alert.
+Explicit Debug fixtures remain isolated from live networking and real actions. Default and Release launches revalidate their session and never inject sample bookmarks. I3 connects category results, search, map pins, Core Location, sharing and navigation. I4 account and bookmark actions are connected. Contribution/editing await I5, and settings and voice decisions await I6; those remaining controls show a native unavailable alert.
 
 I3 rechecked `65:1989` and the previously approved Nearby behavior reference `140:147` with Figma MCP. No complete iOS result screen exists in the supplied page, so the approved existing point-row style is reused within the same panel. A compact results heading/close control and status text support that flow. Actual missing photos/descriptions are omitted; the decorative Figma image never substitutes for absent API content. Real distance metadata explicitly names the reference point.
 
 I2 preserves the original photo bytes (300×168), 353:198 display ratio and 16pt image corners. Share/Navigate use native capsule button materials; the photo and panel height adapt to screen width. At accessibility text sizes the actions stack vertically and content remains scrollable. The iOS page's fixed 44pt status-bar sketch is replaced by the device safe area, so the full panel's content may need a short scroll on the baseline phone.
+
+## I4 approved account mapping
+
+On 2026-09-16 the user approved preserving the existing login/register fields, colors, rounded shapes and order in a native sheet with system fonts; profile, avatar, password and My Places use native Form/List. Figma MCP supplied login `126:382`, registration `126:513`, and the iOS avatar/bookmark references `45:278`, `45:324`, `67:2215`. Computer Use checked the actual simulator login/register screens; XCTest exercised real native controls and recorded screenshots.
+
+Auth uses #E8DEF8, #5A3850, #FAFCF9 and #EFB8C8, a 32pt scalable title, 20pt scalable labels, 44pt minimum input/button heights, 22pt input corners, 11pt horizontal form margins, 22pt group gaps and 24pt Apple/Google button corners. Provider buttons fill the mobile width and center their text. The original Web Fredoka/Roboto faces become SF according to the approved mapping. Native sheet safe areas, drag indicator and scrolling replace the desktop window chrome; no drawn status bar is copied. Four auth SVGs reuse the original Figma exports already checked into the Web app.
+
+The map keeps the iOS reference's 38pt avatar. Actual user initials or the current account avatar replace the anonymous AA placeholder. Bookmarks keeps the existing three-row preview style; an empty authenticated group has only compact status text. The outline bookmark asset is retained; its selected state uses the native `bookmark.fill` symbol because the supplied iOS frame defines only the outline. Long text and accessibility fonts can grow and scroll.
