@@ -1,0 +1,135 @@
+.map-source-popover {
+    z-index: 30;
+    width: min(286px, calc(100vw - 88px));
+    max-width: calc(100vw - 22px);
+    max-height: var(--radix-popover-content-available-height);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 16px;
+    border: 1px solid #00000014;
+    border-radius: 22px;
+    background: #f6f6f9eb;
+    -webkit-backdrop-filter: blur(28px) saturate(150%);
+    backdrop-filter: blur(28px) saturate(150%);
+    box-shadow:
+        0 8px 32px #00000026,
+        inset 0 1px 0 #ffffffb3;
+    color: #1d1d1f;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    outline: none;
+    transform-origin: var(--radix-popover-content-transform-origin);
+    animation: map-source-in 140ms ease-out;
+}
+.map-source-title {
+    margin: 0 0 16px;
+    text-align: center;
+    font:
+        600 14px/20px -apple-system,
+        BlinkMacSystemFont,
+        'Segoe UI',
+        sans-serif;
+}
+.map-source-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    align-items: start;
+}
+.map-source-options .map-source-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 0;
+    gap: 7px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #1d1d1f;
+    white-space: normal;
+    text-align: center;
+    font:
+        500 12px/16px -apple-system,
+        BlinkMacSystemFont,
+        'Segoe UI',
+        sans-serif;
+    border-radius: 16px;
+}
+.map-source-card:disabled {
+    opacity: 1;
+}
+.map-source-preview {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    padding: 3px;
+    border: 2px solid transparent;
+    border-radius: 18px;
+}
+.map-source-preview img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 12px;
+    box-shadow: 0 0 0 0.5px #00000012;
+}
+.map-source-card[aria-checked='true'] .map-source-preview {
+    border-color: #007aff;
+}
+.map-source-card:focus-visible {
+    outline: 2px solid #007aff;
+    outline-offset: 3px;
+}
+.map-source-status {
+    margin-top: -4px;
+    color: #6e6e73;
+    font-size: 10px;
+    line-height: 14px;
+}
+.map-source-options .map-source-credits,
+.preferences-content .map-source-options .map-source-credits {
+    margin: 16px 0 0;
+    text-align: center;
+    color: #6e6e73;
+    font:
+        400 9px/14px -apple-system,
+        BlinkMacSystemFont,
+        'Segoe UI',
+        sans-serif;
+}
+.map-source-options .map-source-credits a {
+    color: inherit;
+    text-decoration: none;
+}
+.map-source-credits a:hover {
+    text-decoration: underline;
+}
+.settings-popover:has(.map-source-options) {
+    width: 286px;
+    padding: 16px;
+}
+.map-tools #map-source[data-state='open'] {
+    background: #e9e9ed;
+}
+@keyframes map-source-in {
+    from {
+        opacity: 0;
+        transform: scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .map-source-popover {
+        animation: none;
+    }
+}
+@media (prefers-reduced-transparency: reduce) {
+    .map-source-popover {
+        background: #f6f6f9;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+}

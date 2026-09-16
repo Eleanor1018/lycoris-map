@@ -418,6 +418,40 @@ it.each([
     expect(document.getElementById('map-shell')).toHaveAttribute('data-snap', 'full')
     expect(container.querySelector('.leaflet-container')).toBe(map)
 })
+it.each([false, true])(
+    'chooses the available map source in place without changing the map or route (mobile=%s)',
+    async (mobile) => {
+        const url = '/?lang=en&snap=collapsed'
+        const { container } = app(url, mobile)
+        const map = container.querySelector('.leaflet-container')
+        const trigger = screen.getByRole('button', { name: 'Map source' })
+        fireEvent.click(trigger)
+        const popup = screen.getByRole('dialog', { name: 'Map Source' })
+        const osm = within(popup).getByRole('radio', { name: 'OSM' })
+        expect(osm).toBeChecked()
+        expect(osm).toHaveFocus()
+        for (const name of ['天地图', 'Google Maps']) {
+            const unavailable = within(popup).getByRole('radio', { name })
+            expect(unavailable).toBeDisabled()
+            expect(unavailable).toHaveAccessibleDescription('Not available yet')
+            fireEvent.click(unavailable)
+            expect(osm).toBeChecked()
+        }
+        fireEvent.click(osm)
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+        expect(trigger).toHaveFocus()
+        expect(screen.getByTestId('route')).toHaveTextContent(url)
+        expect(container.querySelector('.leaflet-container')).toBe(map)
+        expect(JSON.parse(localStorage.getItem('lycoris.map-preferences')!)).toMatchObject({
+            source: 'osm',
+        })
+        fireEvent.click(trigger)
+        fireEvent.keyDown(screen.getByRole('radio', { name: 'OSM' }), { key: 'Escape' })
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+        expect(trigger).toHaveFocus()
+        expect(screen.getByTestId('route')).toHaveTextContent(url)
+    },
+)
 it('closes phone Nearby back to the default half menu without remounting the map', async () => {
     const { container } = app('/?lang=en', true)
     const map = container.querySelector('.leaflet-container')

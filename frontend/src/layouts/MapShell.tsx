@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router'
 import { MobileSheet } from './MobileSheet'
 import { useMobileLayout, useViewportHeight } from './useMobileLayout'
 import { MapSurface } from '@/features/map/MapSurface'
+import { MapSourcePicker } from '@/features/map/MapSourcePicker'
 import { FigmaIcon, type FigmaIconName } from '@/shared/ui/figma-icon'
 import { DesignButton, IconButton } from './primitives'
 import { DesktopPanel } from './DesktopPanel'
@@ -518,13 +519,7 @@ export function MapShell({
                 />
             )}
             <div className="map-tools top-tools" inert={mobile && sheetTop < 142}>
-                <IconButton
-                    icon={mobile ? 'mobileMap' : 'map'}
-                    size={20}
-                    id="map-source"
-                    label="Map source"
-                    onClick={() => open('source', 'map-source')}
-                />
+                <MapSourcePicker mobile={mobile} resetKey={`${panel}:${snap}`} />
                 <IconButton
                     icon={mobile ? 'mobileDirection' : 'direction'}
                     size={20}

@@ -89,6 +89,8 @@ export const uiMessages = {
     'Searching Range': '搜索范围',
     'Searching Type': '搜索类别',
     'Map Source': '地图来源',
+    'Map Type': '地图模式',
+    'Not available yet': '暂未接入',
     'About Lycoris Maps': '关于 Lycoris Maps',
     Language: '语言',
     English: 'English',

@@ -7,6 +7,7 @@ import { DesignButton } from '@/shared/ui/design-primitives'
 import { FigmaIcon } from '@/shared/ui/figma-icon'
 import type { Panel } from '@/layouts/types'
 import { rangeLabel, searchCategories, usePreferences } from './PreferencesProvider'
+import { MapSourceOptions } from '@/features/map/MapSourcePicker'
 import './settings.css'
 
 export const settingsTitles = {
@@ -311,18 +312,7 @@ export function SettingsContent({
                     </form>
                 </>
             )}
-            {panel === 'source' && (
-                <>
-                    <Choices
-                        label={ui.text('Map Source')}
-                        value="osm"
-                        onSelect={onSelect}
-                        options={[{ value: 'osm', label: 'OSM' }]}
-                        change={() => update({ source: 'osm' })}
-                    />
-                    <p>{ui.text('OSM is the map source available in this version.')}</p>
-                </>
-            )}
+            {panel === 'source' && <MapSourceOptions onSelect={onSelect} />}
             {panel === 'about' && (
                 <div className="preference-about">
                     <p>{ui.text('A map of accessible and friendly places.')}</p>
