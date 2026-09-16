@@ -41,7 +41,10 @@ final class ContributionStore {
       invalidate(force: true)
       return
     }
-    guard boundEpoch != account.epoch else { resume(); return }
+    guard boundEpoch != account.epoch else {
+      resume()
+      return
+    }
     boundEpoch = account.epoch
     do {
       if var saved = try journal.load() {
@@ -49,7 +52,10 @@ final class ContributionStore {
           try journal.clear()
           return
         }
-        if saved.phase == .editing { saved.phase = .uncertainEdit; try journal.save(saved) }
+        if saved.phase == .editing {
+          saved.phase = .uncertainEdit
+          try journal.save(saved)
+        }
         draft = saved
         if saved.photoID != nil {
           photoPreview = try? journal.photo(saved)
@@ -71,7 +77,8 @@ final class ContributionStore {
     else { throw AccountFailure(status: 401) }
     if draft?.phase == .complete { try discard() }
     guard draft == nil else { return }
-    let value = ContributionDraft(owner: owner, origin: origin, point: point, language: account.language)
+    let value = ContributionDraft(
+      owner: owner, origin: origin, point: point, language: account.language)
     try journal.save(value)
     draft = value
     message = nil
@@ -79,19 +86,23 @@ final class ContributionStore {
 
   func edit(_ id: Int64) async throws {
     guard let account, let owner = account.user?.publicId, let token = boundEpoch,
-      let origin = account.baseURL?.absoluteString else { throw AccountFailure(status: 401) }
+      let origin = account.baseURL?.absoluteString
+    else { throw AccountFailure(status: 401) }
     if draft?.phase == .complete { try discard() }
     guard draft == nil else { return }
     let generation = self.generation
     let data = try await account.contributionRequest(
-      AccountRequest(path: "api/markers/\(id)", query: ["lang": account.language]), owner: owner, token: token)
+      AccountRequest(path: "api/markers/\(id)", query: ["lang": account.language]), owner: owner,
+      token: token)
     let marker = try JSONDecoder().decode(Marker.self, from: data)
     guard generation == self.generation, draft == nil, token == boundEpoch,
-      owner == account.user?.publicId else { throw CancellationError() }
+      owner == account.user?.publicId
+    else { throw CancellationError() }
     guard marker.id == id, let point = marker.point else {
       throw ContributionFailure.invalidReceipt
     }
-    let value = ContributionDraft(owner: owner, origin: origin, point: point,
+    let value = ContributionDraft(
+      owner: owner, origin: origin, point: point,
       language: marker.contentLanguage, marker: marker)
     try journal.save(value)
     draft = value
@@ -101,8 +112,11 @@ final class ContributionStore {
   func update(_ fields: ContributionFields) {
     guard var value = draft, value.editable, !isWorking else { return }
     value.fields = fields
-    do { try journal.save(value); draft = value; message = nil }
-    catch { message = String(localized: "Could not save the contribution on this device.") }
+    do {
+      try journal.save(value)
+      draft = value
+      message = nil
+    } catch { message = String(localized: "Could not save the contribution on this device.") }
   }
 
   func choosePhoto(_ encoded: Data) throws {
@@ -110,10 +124,19 @@ final class ContributionStore {
     let old = value.photoID
     let id = UUID()
     let info = try journal.savePhoto(encoded, id: id)
-    value.photoID = id; value.photoSize = info.size; value.photoHash = info.hash
-    value.upload = nil; value.photoRejected = false
-    do { try journal.save(value) } catch { journal.removePhoto(id); throw error }
-    draft = value; photoPreview = encoded; message = nil; paused = false
+    value.photoID = id
+    value.photoSize = info.size
+    value.photoHash = info.hash
+    value.upload = nil
+    value.photoRejected = false
+    do { try journal.save(value) } catch {
+      journal.removePhoto(id)
+      throw error
+    }
+    draft = value
+    photoPreview = encoded
+    message = nil
+    paused = false
     journal.removePhoto(old)
     if value.phase == .uploading { resume() }
   }
@@ -127,20 +150,29 @@ final class ContributionStore {
   func removePhoto() throws {
     guard var value = draft, value.editable, !isWorking else { return }
     let old = value.photoID
-    value.photoID = nil; value.photoSize = nil; value.photoHash = nil
-    value.upload = nil; value.photoRejected = false
+    value.photoID = nil
+    value.photoSize = nil
+    value.photoHash = nil
+    value.upload = nil
+    value.photoRejected = false
     try journal.save(value)
-    draft = value; photoPreview = nil
+    draft = value
+    photoPreview = nil
     journal.removePhoto(old)
   }
 
   func submit() {
     guard let draft, draft.editable, draft.canSubmit else { return }
-    paused = false; attempts = 0
+    paused = false
+    attempts = 0
     start()
   }
 
-  func retry() { paused = false; attempts = 0; resume() }
+  func retry() {
+    paused = false
+    attempts = 0
+    resume()
+  }
 
   /// The caller must explain the duplicate-proposal risk before this explicit action.
   func resendEdit() throws {
@@ -154,7 +186,11 @@ final class ContributionStore {
   func discard() throws {
     stop()
     try journal.clear()
-    draft = nil; photoPreview = nil; message = nil; paused = false; attempts = 0
+    draft = nil
+    photoPreview = nil
+    message = nil
+    paused = false
+    attempts = 0
   }
 
   func setActive(_ active: Bool) {
@@ -164,7 +200,8 @@ final class ContributionStore {
 
   func resume() {
     guard let draft, [.creating, .uploading].contains(draft.phase),
-      !draft.photoRejected, !paused else { return }
+      !draft.photoRejected, !paused
+    else { return }
     start()
   }
 
@@ -173,9 +210,13 @@ final class ContributionStore {
     guard force || boundEpoch != nil else { return }
     stop()
     boundEpoch = nil
-    draft = nil; photoPreview = nil; message = nil; paused = false
-    do { try journal.clear() }
-    catch { message = String(localized: "Could not clear the saved contribution.") }
+    draft = nil
+    photoPreview = nil
+    message = nil
+    paused = false
+    do { try journal.clear() } catch {
+      message = String(localized: "Could not clear the saved contribution.")
+    }
   }
 
   private func stop() {
@@ -184,12 +225,16 @@ final class ContributionStore {
       draft = value
       try? journal.save(value)
     }
-    task?.cancel(); task = nil; generation = UUID(); isWorking = false
+    task?.cancel()
+    task = nil
+    generation = UUID()
+    isWorking = false
   }
 
   private func start() {
     guard active, task == nil, draft != nil, let account,
-      boundEpoch == account.epoch, account.user?.publicId == draft?.owner else { return }
+      boundEpoch == account.epoch, account.user?.publicId == draft?.owner
+    else { return }
     let token = generation
     isWorking = true
     message = nil
@@ -216,18 +261,22 @@ final class ContributionStore {
     }
   }
 
-  private func request(_ input: AccountRequest, token: UUID,
-    beforeSend: () throws -> Void = {}) async throws -> Data {
+  private func request(
+    _ input: AccountRequest, token: UUID,
+    beforeSend: () throws -> Void = {}
+  ) async throws -> Data {
     try check(token)
     guard let account, let draft, let epoch = boundEpoch else { throw CancellationError() }
-    return try await account.contributionRequest(input, owner: draft.owner, token: epoch, beforeSend: beforeSend)
+    return try await account.contributionRequest(
+      input, owner: draft.owner, token: epoch, beforeSend: beforeSend)
   }
 
   private func check(_ token: UUID) throws {
     try Task.checkCancellation()
     guard token == generation, let draft, let account,
       account.epoch == boundEpoch, account.user?.publicId == draft.owner,
-      account.baseURL?.absoluteString == draft.origin else { throw CancellationError() }
+      account.baseURL?.absoluteString == draft.origin
+    else { throw CancellationError() }
   }
 
   private func checkpoint(_ value: ContributionDraft) throws {
@@ -246,16 +295,22 @@ final class ContributionStore {
       }
       if value.original == nil || value.hasChanges {
         let editing = value.original != nil
-        let data = try await request(AccountRequest(
-          path: editing ? "api/markers/\(value.original!.id)" : "api/markers",
-          method: editing ? "PATCH" : "POST", body: value.requestBody,
-          query: ["lang": value.fields.language]), token: token, beforeSend: {
-            if editing { value.phase = .editing; try self.checkpoint(value) }
+        let data = try await request(
+          AccountRequest(
+            path: editing ? "api/markers/\(value.original!.id)" : "api/markers",
+            method: editing ? "PATCH" : "POST", body: value.requestBody,
+            query: ["lang": value.fields.language]), token: token,
+          beforeSend: {
+            if editing {
+              value.phase = .editing
+              try self.checkpoint(value)
+            }
           })
         try check(token)
         let marker = try JSONDecoder().decode(Marker.self, from: data)
         guard marker.id > 0, marker.point != nil,
-          value.original == nil || marker.id == value.original?.id else {
+          value.original == nil || marker.id == value.original?.id
+        else {
           throw ContributionFailure.invalidReceipt
         }
         value.markerID = marker.id
@@ -273,7 +328,8 @@ final class ContributionStore {
           "clientRequestId": value.photoID!.uuidString, "totalBytes": value.photoSize!,
           "sha256": value.photoHash!,
         ])
-        data = try await request(AccountRequest(path: path, method: "POST", body: body), token: token)
+        data = try await request(
+          AccountRequest(path: path, method: "POST", body: body), token: token)
       }
       try check(token)
       var receipt = try JSONDecoder().decode(UploadReceipt.self, from: data)
@@ -289,12 +345,14 @@ final class ContributionStore {
         let response: Data
         if receipt.receivedBytes < receipt.totalBytes {
           let end = min(bytes.count, receipt.receivedBytes + receipt.chunkSize)
-          response = try await request(AccountRequest(
-            path: "\(base)/chunks/\(receipt.receivedBytes)", method: "POST",
-            body: bytes.subdata(in: receipt.receivedBytes..<end),
-            contentType: "application/octet-stream"), token: token)
+          response = try await request(
+            AccountRequest(
+              path: "\(base)/chunks/\(receipt.receivedBytes)", method: "POST",
+              body: bytes.subdata(in: receipt.receivedBytes..<end),
+              contentType: "application/octet-stream"), token: token)
         } else {
-          response = try await request(AccountRequest(path: "\(base)/complete", method: "POST"), token: token)
+          response = try await request(
+            AccountRequest(path: "\(base)/complete", method: "POST"), token: token)
         }
         try check(token)
         let next = try JSONDecoder().decode(UploadReceipt.self, from: response)
@@ -321,11 +379,14 @@ final class ContributionStore {
     let status = (error as? AccountFailure)?.status
     if value.phase == .editing {
       // Only an explicit 4xx rejection confirms that no proposal was accepted.
-      value.phase = status.map { (400..<500).contains($0) && $0 != 408 } == true ? .draft : .uncertainEdit
+      value.phase =
+        status.map { (400..<500).contains($0) && $0 != 408 } == true ? .draft : .uncertainEdit
       if value.phase == .draft { value.requestBody = nil }
       draft = value
       try? checkpoint(value)
-      message = value.phase == .draft ? (error as? AccountFailure)?.message
+      message =
+        value.phase == .draft
+        ? (error as? AccountFailure)?.message
         : String(localized: "The edit could not be confirmed. It may already be awaiting review.")
       return false
     }
@@ -337,20 +398,27 @@ final class ContributionStore {
       return true
     }
     if status == 410 || error as? ContributionFailure == .missingPhoto
-      || (value.phase == .uploading && [400, 413, 415].contains(status ?? 0)) {
+      || (value.phase == .uploading && [400, 413, 415].contains(status ?? 0))
+    {
       value.photoRejected = true
       try? checkpoint(value)
       message = String(localized: "Please choose the photo again. Your place submission is saved.")
       return false
     }
     let transient = (error is URLError) || status == 0 || status == 408 || (status ?? 0) >= 500
+    if value.phase == .draft {
+      message = (error as? AccountFailure)?.message ?? AccountFailure(status: 0).message
+      return false
+    }
     let conflict = status == 409 && value.phase == .uploading && attempts < 1
     if transient || conflict {
-      message = String(localized: "Saved on this device. Submission will resume when the connection returns.")
+      message = String(
+        localized: "Saved on this device. Submission will resume when the connection returns.")
       return true
     }
     paused = true
-    message = (error as? AccountFailure)?.message
+    message =
+      (error as? AccountFailure)?.message
       ?? String(localized: "Could not save or verify the contribution. Please try again.")
     return false
   }

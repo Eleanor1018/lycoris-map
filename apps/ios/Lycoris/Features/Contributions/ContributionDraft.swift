@@ -66,6 +66,27 @@ struct ContributionDraft: Codable, Equatable, Identifiable {
   var hasChanges: Bool { original.map { fields != ContributionFields(marker: $0) } ?? true }
   var canSubmit: Bool { fields.valid && (hasChanges || photoID != nil) }
 
+  var validCheckpoint: Bool {
+    guard !owner.isEmpty, !origin.isEmpty,
+      GeoPoint(latitude: point.latitude, longitude: point.longitude) != nil,
+      markerID == nil || markerID! > 0
+    else { return false }
+    if [.uploading, .complete].contains(phase), markerID == nil { return false }
+    if [.creating, .editing, .uncertainEdit].contains(phase), requestBody == nil { return false }
+    if [.editing, .uncertainEdit].contains(phase), original == nil { return false }
+    if phase == .creating && original != nil { return false }
+    if let original, original.point != point || original.id != markerID { return false }
+    if let photoSize, let photoHash, photoID != nil {
+      guard (1...(5 * 1024 * 1024)).contains(photoSize),
+        photoHash.range(of: #"^[a-f0-9]{64}$"#, options: .regularExpression) != nil
+      else { return false }
+    } else if photoID != nil || photoSize != nil || photoHash != nil || phase == .uploading {
+      return false
+    }
+    if let upload { return (try? upload.validate(for: self)) != nil }
+    return true
+  }
+
   func encodedRequest() throws -> Data {
     var json: [String: Any] = [
       "title": fields.title, "description": fields.description,
@@ -108,24 +129,30 @@ struct UploadReceipt: Codable, Equatable {
 struct ContributionJournal {
   let directory: URL
   init(directory: URL? = nil) {
-    self.directory = directory ?? URL.applicationSupportDirectory.appendingPathComponent(
-      "Contribution", isDirectory: true)
+    self.directory =
+      directory
+      ?? URL.applicationSupportDirectory.appendingPathComponent(
+        "Contribution", isDirectory: true)
   }
   private var record: URL { directory.appendingPathComponent("draft.json") }
   func photoURL(_ id: UUID) -> URL { directory.appendingPathComponent("\(id.uuidString).jpg") }
 
   func load() throws -> ContributionDraft? {
     guard FileManager.default.fileExists(atPath: record.path) else { return nil }
-    return try JSONDecoder().decode(ContributionDraft.self, from: Data(contentsOf: record))
+    let value = try JSONDecoder().decode(ContributionDraft.self, from: Data(contentsOf: record))
+    guard value.validCheckpoint else { throw ContributionFailure.storage }
+    return value
   }
   func save(_ draft: ContributionDraft) throws {
     try prepare()
-    try JSONEncoder().encode(draft).write(to: record, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+    try JSONEncoder().encode(draft).write(
+      to: record, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
   }
   func savePhoto(_ data: Data, id: UUID) throws -> (hash: String, size: Int) {
     guard !data.isEmpty, data.count <= 5 * 1024 * 1024 else { throw AccountFailure(status: 413) }
     try prepare()
-    try data.write(to: photoURL(id), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+    try data.write(
+      to: photoURL(id), options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
     // Hash the durable bytes, exactly as subsequent requests will read them.
     let saved = try Data(contentsOf: photoURL(id))
     return (Self.hash(saved), saved.count)
@@ -145,8 +172,12 @@ struct ContributionJournal {
     }
   }
   private func prepare() throws {
-    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
-      attributes: [.posixPermissions: 0o700, .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
+    try FileManager.default.createDirectory(
+      at: directory, withIntermediateDirectories: true,
+      attributes: [
+        .posixPermissions: 0o700,
+        .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication,
+      ])
     var location = directory
     var values = URLResourceValues()
     values.isExcludedFromBackup = true

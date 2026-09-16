@@ -1,10 +1,16 @@
 import Foundation
 import Testing
+
 @testable import Lycoris
 
 @MainActor struct ContributionTests {
-  private func setup(_ api: ContributionFixture, journal: ContributionJournal? = nil) async -> (AccountStore, ContributionStore, ContributionJournal) {
-    let journal = journal ?? ContributionJournal(directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+  private func setup(_ api: ContributionFixture, journal: ContributionJournal? = nil) async -> (
+    AccountStore, ContributionStore, ContributionJournal
+  ) {
+    let journal =
+      journal
+      ?? ContributionJournal(
+        directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
     let account = AccountStore(api: api)
     let store = ContributionStore(journal: journal)
     store.connect(account, monitorNetwork: false)
@@ -37,7 +43,8 @@ import Testing
     try await settle { store.message != nil }
     let frozen = try #require(store.draft)
     #expect(frozen.phase == .creating)
-    var edited = frozen.fields; edited.title = "Must not replace frozen payload"
+    var edited = frozen.fields
+    edited.title = "Must not replace frozen payload"
     store.update(edited)
     #expect(store.draft?.fields == frozen.fields)
     store.setActive(false)
@@ -84,7 +91,8 @@ import Testing
     await api.lose("create")
     let (_, store, journal) = await setup(api)
     defer { try? journal.clear() }
-    try fill(store); store.submit()
+    try fill(store)
+    store.submit()
     try await settle { store.message != nil }
     let frozen = store.draft?.requestBody
     store.setActive(false)
@@ -120,10 +128,15 @@ import Testing
     defer { try? journal.clear() }
     try await store.edit(55)
     var fields = try #require(store.draft?.fields)
-    fields.title = "Edited title"; fields.description = ""; fields.openTimeStart = ""; fields.openTimeEnd = ""
-    store.update(fields); store.submit()
+    fields.title = "Edited title"
+    fields.description = ""
+    fields.openTimeStart = ""
+    fields.openTimeEnd = ""
+    store.update(fields)
+    store.submit()
     try await settle { store.draft?.phase == .uncertainEdit }
-    store.retry(); store.setActive(false)
+    store.retry()
+    store.setActive(false)
     let (_, resumed, _) = await setup(api, journal: journal)
     #expect(resumed.draft?.phase == .uncertainEdit)
     #expect(await api.edits == 1)
@@ -152,19 +165,59 @@ import Testing
     store.setActive(false)
   }
 
+  @Test func editPreflightOutageKeepsAnExplicitSubmitWithoutClaimingAutomaticResume() async throws {
+    let api = ContributionFixture()
+    let (_, store, journal) = await setup(api)
+    defer { try? journal.clear() }
+    try await store.edit(55)
+    var fields = try #require(store.draft?.fields)
+    fields.title = "New title"
+    store.update(fields)
+    await api.lose("preflight")
+    store.submit()
+    try await settle { store.message != nil }
+    #expect(store.draft?.editable == true)
+    #expect(store.message == AccountFailure(status: 0).message)
+    #expect(await api.edits == 0)
+    store.submit()
+    try await settle { store.draft?.phase == .complete }
+    #expect(await api.edits == 1)
+    store.setActive(false)
+  }
+
+  @Test func malformedDurableCheckpointIsRejectedBeforeAnyRequest() async throws {
+    let journal = ContributionJournal(
+      directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+    defer { try? journal.clear() }
+    var value = ContributionDraft(
+      owner: "a", origin: "https://i5.example.invalid", point: GeoPoint(latitude: 1, longitude: 1)!,
+      language: "en")
+    value.phase = .uploading
+    try journal.save(value)
+    #expect(throws: ContributionFailure.storage) { try journal.load() }
+    let api = ContributionFixture()
+    let (_, store, _) = await setup(api, journal: journal)
+    #expect(store.draft == nil && store.message != nil)
+    #expect(await api.creates == 0)
+  }
+
   @Test func logoutPurgesJournalAndSwitchCannotSubmitOldWork() async throws {
     let api = ContributionFixture()
     await api.lose("chunk")
     let (account, store, journal) = await setup(api)
     defer { try? journal.clear() }
-    try fill(store); try store.choosePhoto(Data(repeating: 8, count: 300_000)); store.submit()
+    try fill(store)
+    try store.choosePhoto(Data(repeating: 8, count: 300_000))
+    store.submit()
     try await settle { store.message != nil }
     let writes = await api.chunkOffsets.count
     await account.logout()
     #expect(store.draft == nil && store.photoPreview == nil)
     #expect(try journal.load() == nil)
     await api.switchOwner("b")
-    await account.restore(); store.synchronize(); store.resume()
+    await account.restore()
+    store.synchronize()
+    store.resume()
     #expect(store.draft == nil && account.user?.publicId == "b")
     #expect(await api.chunkOffsets.count == writes)
     store.setActive(false)
@@ -174,7 +227,8 @@ import Testing
     let api = ContributionFixture()
     let (_, store, journal) = await setup(api)
     defer { try? journal.clear() }
-    try fill(store); store.setActive(false)
+    try fill(store)
+    store.setActive(false)
     await api.switchOwner("b")
     let (_, other, _) = await setup(api, journal: journal)
     #expect(other.draft == nil)
@@ -186,10 +240,13 @@ import Testing
     let api = ContributionFixture()
     let (_, store, journal) = await setup(api)
     defer { try? journal.clear() }
-    try fill(store); try store.choosePhoto(Data(repeating: 1, count: 10))
+    try fill(store)
+    try store.choosePhoto(Data(repeating: 1, count: 10))
     var saved = try #require(store.draft)
-    saved.markerID = 55; saved.phase = .uploading
-    try journal.save(saved); journal.removePhoto(saved.photoID)
+    saved.markerID = 55
+    saved.phase = .uploading
+    try journal.save(saved)
+    journal.removePhoto(saved.photoID)
     store.setActive(false)
     let (_, resumed, _) = await setup(api, journal: journal)
     try await settle { resumed.draft?.photoRejected == true }
@@ -203,7 +260,8 @@ import Testing
     resumed.setActive(false)
   }
 
-  @Test func durableWriteFailurePreventsNetworkAndReceiptValidationRejectsCorruption() async throws {
+  @Test func durableWriteFailurePreventsNetworkAndReceiptValidationRejectsCorruption() async throws
+  {
     let api = ContributionFixture()
     let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try Data("not a directory".utf8).write(to: file)
@@ -211,9 +269,12 @@ import Testing
     let (_, store, _) = await setup(api, journal: ContributionJournal(directory: file))
     #expect(throws: (any Error).self) { try fill(store) }
     #expect(await api.creates == 0)
-    var draft = ContributionDraft(owner: "a", origin: "fixture", point: GeoPoint(latitude: 0, longitude: 0)!, language: "en")
-    draft.markerID = 55; draft.photoSize = 300_000
-    let invalid = UploadReceipt(uploadId: UUID().uuidString, markerId: 55, totalBytes: 300_000,
+    var draft = ContributionDraft(
+      owner: "a", origin: "fixture", point: GeoPoint(latitude: 0, longitude: 0)!, language: "en")
+    draft.markerID = 55
+    draft.photoSize = 300_000
+    let invalid = UploadReceipt(
+      uploadId: UUID().uuidString, markerId: 55, totalBytes: 300_000,
       receivedBytes: 100, chunkSize: 262_144, status: "COMPLETED")
     #expect(throws: ContributionFailure.invalidReceipt) { try invalid.validate(for: draft) }
   }
@@ -241,19 +302,32 @@ private actor ContributionFixture: AccountServing {
   func lose(_ value: String) { lost = value }
   func rejectCreate(_ status: Int?) { createRejection = status }
   func holdDetail() { holdsDetail = true }
-  func releaseDetail() { detailContinuation?.resume(); detailContinuation = nil; holdsDetail = false }
+  func releaseDetail() {
+    detailContinuation?.resume()
+    detailContinuation = nil
+    holdsDetail = false
+  }
   func switchOwner(_ value: String) { owner = value }
   private func loseIfNeeded(_ value: String) throws {
-    if lost == value { lost = nil; throw URLError(.networkConnectionLost) }
+    if lost == value {
+      lost = nil
+      throw URLError(.networkConnectionLost)
+    }
   }
   func send(_ request: AccountRequest) async throws -> Data {
-    if request.path == "api/logout" { owner = nil; return Data() }
+    if request.path == "api/logout" {
+      owner = nil
+      return Data()
+    }
     guard let owner else { throw AccountFailure(status: 401) }
     if request.path == "api/me" {
+      try loseIfNeeded("preflight")
       return Data("{\"code\":0,\"data\":{\"publicId\":\"\(owner)\"}}".utf8)
     }
     if request.path.contains("/me/") { return Data("[]".utf8) }
-    let marker = Data(#"{"id":55,"version":1,"lat":31.2,"lng":121.4,"category":"accessible_toilet","title":"Original","description":"Before","openTimeStart":"09:00","openTimeEnd":"17:00","contentLanguage":"zh","reviewStatus":"PENDING"}"#.utf8)
+    let marker = Data(
+      #"{"id":55,"version":1,"lat":31.2,"lng":121.4,"category":"accessible_toilet","title":"Original","description":"Before","openTimeStart":"09:00","openTimeEnd":"17:00","contentLanguage":"zh","reviewStatus":"PENDING"}"#
+        .utf8)
     if request.path == "api/markers", request.method == "POST" {
       if let createRejection { throw AccountFailure(status: createRejection) }
       createBodies.append(request.body!)
@@ -263,8 +337,14 @@ private actor ContributionFixture: AccountServing {
       return marker
     }
     if request.path == "api/markers/55" {
-      if holdsDetail && request.method == "GET" { await withCheckedContinuation { detailContinuation = $0 } }
-      if request.method == "PATCH" { edits += 1; editBody = request.body; try loseIfNeeded("edit") }
+      if holdsDetail && request.method == "GET" {
+        await withCheckedContinuation { detailContinuation = $0 }
+      }
+      if request.method == "PATCH" {
+        edits += 1
+        editBody = request.body
+        try loseIfNeeded("edit")
+      }
       return marker
     }
     if request.path.hasSuffix("image-uploads") {
@@ -281,8 +361,10 @@ private actor ContributionFixture: AccountServing {
       completed = true
       try loseIfNeeded("complete")
     }
-    return try JSONEncoder().encode(UploadReceipt(uploadId: uploadID, markerId: 55,
-      totalBytes: total, receivedBytes: uploaded.count, chunkSize: 262_144,
-      status: completed ? "COMPLETED" : "UPLOADING"))
+    return try JSONEncoder().encode(
+      UploadReceipt(
+        uploadId: uploadID, markerId: 55,
+        totalBytes: total, receivedBytes: uploaded.count, chunkSize: 262_144,
+        status: completed ? "COMPLETED" : "UPLOADING"))
   }
 }
