@@ -1,6 +1,6 @@
 # Profile layout polish — 2026-09-17
 
-Branch: `deploy/lycoris-map-com`. Status: locally verified, not deployed.
+Branch: `deploy/lycoris-map-com`. Status: deployed to lycoris-map.com on 2026-09-17.
 
 The profile header now shows the saved nickname and email beside the 44px
 avatar, with Change avatar below. The nickname uses the former Change avatar

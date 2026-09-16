@@ -1,6 +1,6 @@
 # Map source picker — 2026-09-17
 
-Branch: `deploy/lycoris-map-com`. Status: locally verified, not deployed.
+Branch: `deploy/lycoris-map-com`. Status: deployed to lycoris-map.com on 2026-09-17.
 
 The toolbar map-source button opens an anchored popover instead of navigating
 to a second panel. Its layout follows the macOS Maps map-mode popover observed
