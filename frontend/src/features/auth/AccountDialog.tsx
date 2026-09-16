@@ -1,3 +1,4 @@
+import { useUi } from '@/shared/i18n/ui'
 import { Dialog } from 'radix-ui'
 import { useAccountFlow } from './AccountFlow'
 import { useMobileLayout } from '@/layouts/useMobileLayout'
@@ -16,6 +17,7 @@ export function AccountDialog({
     browse: PlaceBrowse
     onSelect: (place: Marker, focus: string) => void
 }) {
+    const ui = useUi()
     const flow = useAccountFlow(),
         mobile = useMobileLayout()
     if (!flow) return null
@@ -56,7 +58,7 @@ export function AccountDialog({
                     <Dialog.Close asChild>
                         <DesignButton
                             className={mobile ? 'account-sheet-handle' : 'account-close'}
-                            aria-label="Close account window"
+                            aria-label={ui.text('Close account window')}
                         >
                             {mobile ? (
                                 <span />
@@ -68,7 +70,7 @@ export function AccountDialog({
                     <div className="account-dialog-scroll">
                         <div className="account-dialog-inner">
                             <Dialog.Title id="account-title" tabIndex={-1}>
-                                {title}
+                                {ui.message(title)}
                             </Dialog.Title>
                             {(view === 'login' || view === 'register') && (
                                 <AuthForm

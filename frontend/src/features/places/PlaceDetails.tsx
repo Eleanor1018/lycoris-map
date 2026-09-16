@@ -1,3 +1,4 @@
+import { useUi } from '@/shared/i18n/ui'
 import { useEffect, useRef, useState } from 'react'
 import { IconButton } from '@/shared/ui/design-primitives'
 import { distanceLabel, openingHours, publicImageUrl } from './model'
@@ -15,6 +16,7 @@ export function PlaceDetails({
     mobile?: boolean
     onEdit?: (() => void) | undefined
 }) {
+    const ui = useUi()
     const { detail: place, detailState } = browse
     const [failedImage, setFailedImage] = useState<string | null>(null)
     const heading = useRef<HTMLHeadingElement>(null)
@@ -59,7 +61,7 @@ export function PlaceDetails({
                     )}
                     <span className="place-meta">
                         {distance && (
-                            <span title="Straight-line distance from your location">
+                            <span title={ui.text('Straight-line distance from your location')}>
                                 {distance}
                             </span>
                         )}

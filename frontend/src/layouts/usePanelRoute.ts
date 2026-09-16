@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { parsePanel, type Panel } from './types'
+import { isSettingsPanel } from '@/features/preferences/Settings'
 type ReturnState = { owner: string; focusId: string; replaceClose: boolean }
 function readReturnState(value: unknown): ReturnState | null {
     if (!value || typeof value !== 'object' || !('owner' in value) || !('focusId' in value))
@@ -98,7 +99,9 @@ export function usePanelRoute(
                         ? state?.focusId === 'desktop-bookmark-place'
                             ? 'bookmarks'
                             : 'search'
-                        : panel
+                        : isSettingsPanel(panel) && panel !== 'languages'
+                          ? 'settings'
+                          : panel
             restoreFocus.current =
                 closeBehavior === 'dismiss' ? `nav-${desktopPanel}` : 'nav-search'
             void navigate(

@@ -1,3 +1,4 @@
+import { useUi } from '@/shared/i18n/ui'
 import { useRef, useState } from 'react'
 import type { Marker } from '@/shared/api/markers'
 import { CategoryBadge, DesignButton } from '@/shared/ui/design-primitives'
@@ -6,12 +7,16 @@ import { categoryBadges, categoryLabels, distanceLabel, openingHours } from './m
 import type { PlaceBrowse, PlaceReadState } from './usePlaceBrowse'
 
 export function ReadMessage({ state, empty = false }: { state: PlaceReadState; empty?: boolean }) {
+    const ui = useUi()
     return (
         <div className="place-read-message" role="status" aria-live="polite">
-            {state.error ?? (state.pending ? 'Loading places…' : empty ? 'No places found.' : '')}
+            {ui.message(
+                state.error ??
+                    (state.pending ? 'Loading places…' : empty ? 'No places found.' : ''),
+            )}
             {state.error && state.retryable !== false && (
                 <DesignButton className="read-retry" onClick={state.retry}>
-                    Try again
+                    {ui.text('Try again')}
                 </DesignButton>
             )}
         </div>
@@ -56,6 +61,7 @@ function ResultList({
     mobile: boolean
     listKey: string
 }) {
+    const ui = useUi()
     const { results, state } = browse
     const saved = browse.listPositions.current.get(listKey)
     const scroller = useRef<HTMLDivElement>(null)
@@ -86,9 +92,9 @@ function ResultList({
     return (
         <section
             className={`place-results ${mobile ? 'mobile-place-results' : ''}`}
-            aria-label={heading}
+            aria-label={ui.message(heading) ?? undefined}
         >
-            <h2 className="results-heading">{heading}</h2>
+            <h2 className="results-heading">{ui.message(heading)}</h2>
             {browse.mode === 'nearby' && (
                 <p className="nearby-reference">
                     Within 1km of {browse.nearby?.located ? 'your location' : 'the map center'}
@@ -103,7 +109,7 @@ function ResultList({
                     }}
                     className="place-result-scroll"
                     role="list"
-                    aria-label={heading}
+                    aria-label={ui.message(heading) ?? undefined}
                     tabIndex={virtual ? 0 : undefined}
                     onScroll={(event) => remember(event.currentTarget.scrollTop, active)}
                     onKeyDown={(event) => {
@@ -204,7 +210,11 @@ function ResultList({
                                             <span className="card-title">{place.title}</span>
                                             <span className="place-meta">
                                                 {distance && (
-                                                    <span title="Straight-line distance from your location">
+                                                    <span
+                                                        title={ui.text(
+                                                            'Straight-line distance from your location',
+                                                        )}
+                                                    >
                                                         {distance}
                                                     </span>
                                                 )}

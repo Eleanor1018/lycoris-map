@@ -1,3 +1,4 @@
+import { useUi } from '@/shared/i18n/ui'
 import { useRef, type ComponentProps } from 'react'
 import { Button } from '@/shared/ui/button'
 import { FigmaIcon, type FigmaIconName } from '@/shared/ui/figma-icon'
@@ -25,8 +26,9 @@ export function IconButton({
     size = 24,
     ...props
 }: ComponentProps<typeof DesignButton> & { icon: FigmaIconName; label: string; size?: number }) {
+    const ui = useUi()
     return (
-        <DesignButton aria-label={label} {...props}>
+        <DesignButton aria-label={ui.message(label) ?? undefined} {...props}>
             <FigmaIcon name={icon} size={size} />
         </DesignButton>
     )
@@ -42,6 +44,7 @@ export function SearchField({
     bookmarks?: boolean
     mobile?: boolean
 }) {
+    const ui = useUi()
     const input = useRef<HTMLInputElement>(null)
     const placeholder = mobile
         ? 'Search Positions'
@@ -59,8 +62,8 @@ export function SearchField({
             <FigmaIcon name="search" size={20} />
             <input
                 ref={input}
-                aria-label={placeholder}
-                placeholder={placeholder}
+                aria-label={ui.message(placeholder) ?? undefined}
+                placeholder={ui.message(placeholder) ?? undefined}
                 value={value}
                 onChange={(event) => onChange(event.target.value)}
                 autoComplete="off"
@@ -90,6 +93,7 @@ export function NearbyCards({
     half?: boolean
     onSelect?: ((category: 'toilet' | 'nursing' | 'medical') => void) | undefined
 }) {
+    const ui = useUi()
     const entries = [
         { category: 'toilet', title: mobile ? 'Accessible\nToilets' : 'Accessible Toilets' },
         {
@@ -104,13 +108,15 @@ export function NearbyCards({
                 <DesignButton
                     id={`${mobile ? 'mobile' : 'desktop'}-nearby-${category}`}
                     className="category-card"
-                    aria-label={title.replace(/\s+/g, ' ')}
+                    aria-label={ui.message(title.replace(/\s+/g, ' ')) ?? undefined}
                     available={!!onSelect}
                     key={category}
                     onClick={() => onSelect?.(category)}
                 >
                     <CategoryBadge category={category} />
-                    <span className="card-title">{title}</span>
+                    <span className="card-title">
+                        {ui.language === 'en' ? title : ui.message(title.replace(/\s+/g, ' '))}
+                    </span>
                 </DesignButton>
             ))}
         </div>

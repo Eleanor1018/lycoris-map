@@ -1,0 +1,102 @@
+.preferences-content {
+    position: relative;
+    margin: 80px 16px 16px;
+    color: #1d1b20;
+    font: 400 17px/1.4 var(--ui-font-body);
+}
+.preferences-content .language-options {
+    position: static;
+    width: 100%;
+}
+.preferences-content .language-options .design-button {
+    text-align: left;
+    min-height: 66px;
+    height: auto;
+    padding-block: 16px;
+    gap: 12px;
+}
+.preferences-content .language-options .design-button > .figma-icon {
+    flex: none;
+}
+.preference-form,
+.preference-about {
+    display: grid;
+    gap: 16px;
+}
+.preference-form {
+    margin-top: 22px;
+}
+.preferences-content p {
+    margin: 16px 0;
+}
+.preference-about p {
+    margin: 0;
+}
+.preference-form input {
+    min-width: 0;
+    width: 100%;
+    border: 1px solid #d9d9d9;
+    border-radius: 8px;
+    background: #fef7ff;
+    padding: 12px;
+}
+.preference-form .design-button {
+    min-height: 44px;
+    background: #eaddff;
+    border-radius: 24px;
+}
+.preference-form input:focus-visible {
+    outline: 2px solid #65558f;
+    outline-offset: 0;
+}
+.preferences-content a {
+    color: #65558f;
+    text-decoration: underline;
+    overflow-wrap: anywhere;
+}
+.mobile-preferences {
+    margin: 29px var(--mobile-content-inset) 22px;
+}
+.mobile-preferences h1 {
+    font: 400 32px/1.2 var(--ui-font-heading);
+    letter-spacing: 0.1px;
+    margin: 0 0 22px;
+}
+.settings-cards .setting-card {
+    padding-right: 11px;
+    gap: 12px;
+    text-align: left;
+}
+.settings-cards .setting-value,
+.settings-cards .chevron-slot {
+    position: static;
+}
+.settings-cards .setting-value {
+    margin-left: auto;
+    text-align: right;
+}
+.settings-cards .chevron-slot img {
+    position: static;
+}
+.setting-card > span:first-child {
+    min-width: 0;
+    flex-shrink: 0;
+}
+.setting-card .setting-value {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.mobile-settings .setting-card .setting-value {
+    flex: 1;
+    text-align: right;
+}
+@media (prefers-reduced-motion: reduce) {
+    .map-shell *,
+    .account-dialog * {
+        scroll-behavior: auto !important;
+        transition-duration: 0s !important;
+        animation-duration: 0s !important;
+    }
+}

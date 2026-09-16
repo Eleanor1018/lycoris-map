@@ -35,12 +35,12 @@ it('dismisses desktop Languages without returning to Settings and keeps the choi
     fireEvent.click(screen.getByRole('button', { name: 'Choose Language English' }))
     fireEvent.click(screen.getByRole('radio', { name: '简体中文' }))
     expect(screen.getByRole('radio', { name: '简体中文' })).toHaveAttribute('aria-checked', 'true')
-    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }))
+    fireEvent.click(screen.getByRole('button', { name: '关闭面板' }))
     await waitFor(() =>
-        expect(screen.queryByRole('heading', { name: 'Languages' })).not.toBeInTheDocument(),
+        expect(screen.queryByRole('heading', { name: '语言' })).not.toBeInTheDocument(),
     )
-    expect(screen.queryByRole('heading', { name: 'Settings' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Languages' }))
+    expect(screen.queryByRole('heading', { name: '设置' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '语言' }))
     expect(screen.getByRole('radio', { name: '简体中文' })).toHaveAttribute('aria-checked', 'true')
     expect(localStorage.getItem('lycoris.language')).toBe(before)
 })

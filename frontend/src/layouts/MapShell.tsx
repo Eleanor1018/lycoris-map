@@ -1,3 +1,6 @@
+import { usePreferences } from '@/features/preferences/PreferencesProvider'
+import { isSettingsPanel, settingsTitles, SettingsContent } from '@/features/preferences/Settings'
+import { useUi } from '@/shared/i18n/ui'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Map as LeafletMap } from 'leaflet'
 import { useNavigate } from 'react-router'
@@ -38,6 +41,8 @@ export function MapShell({
     browse?: PlaceBrowse
     sharedTarget?: SharedTarget | undefined
 }) {
+    const ui = useUi()
+    const { preferences } = usePreferences()
     const mobile = useMobileLayout()
     const accountFlow = useAccountFlow()
     const contributions = useContributions()
@@ -60,7 +65,8 @@ export function MapShell({
     const params = new URLSearchParams(location.search)
     const snapValue = params.get(mobileFixture ? 'screen' : 'snap')
     const snap: Snap =
-        contributionOpen || (mobile && (panel === 'bookmarks' || panel === 'nearby'))
+        contributionOpen ||
+        (mobile && (panel === 'bookmarks' || panel === 'nearby' || isSettingsPanel(panel)))
             ? 'full'
             : snapValue === 'half' || snapValue === 'full'
               ? snapValue
@@ -140,7 +146,9 @@ export function MapShell({
     const requestedCategory =
         nearbyCategory === 'baby_room' || nearbyCategory === 'friendly_clinic'
             ? nearbyCategory
-            : 'accessible_toilet'
+            : nearbyCategory === 'accessible_toilet'
+              ? nearbyCategory
+              : preferences.category
     useEffect(() => {
         // Also initialize a direct Nearby URL once the map has a real center.
         if (panel !== 'nearby' || !browse) return
@@ -171,7 +179,6 @@ export function MapShell({
         [open],
     )
     const [bookmarksSearch, setBookmarksSearch] = useState('')
-    const [language, setLanguage] = useState<'en' | 'zh'>('en')
     const [contributionDraft, setContributionDraft] =
         useState<ContributionDraft>(emptyContributionDraft)
     const [contributionPoint, setContributionPoint] = useState<{ lat: number; lng: number } | null>(
@@ -251,7 +258,7 @@ export function MapShell({
     }
     return (
         <main
-            lang="en"
+            lang={ui.language}
             id="map-shell"
             tabIndex={-1}
             className="map-shell"
@@ -345,8 +352,8 @@ export function MapShell({
                 />
             )}
             {!mobile && (
-                <aside className="desktop-nav" aria-label="Main navigation">
-                    <div className="desktop-logo">Lycoris Maps</div>
+                <aside className="desktop-nav" aria-label={ui.text('Main navigation')}>
+                    <div className="desktop-logo">{ui.text('Lycoris Maps')}</div>
                     <nav>
                         {navigation.map((item) => (
                             <DesignButton
@@ -372,8 +379,8 @@ export function MapShell({
                                 <FigmaIcon name={item.icon} />
                                 <span>
                                     {panel === 'settings' && item.panel === 'bookmarks'
-                                        ? 'Bookmarked'
-                                        : item.label}
+                                        ? ui.text('Bookmarks')
+                                        : ui.message(item.label)}
                                 </span>
                             </DesignButton>
                         ))}
@@ -405,8 +412,6 @@ export function MapShell({
                     setSearch={updateSearch}
                     bookmarksSearch={bookmarksSearch}
                     setBookmarksSearch={setBookmarksSearch}
-                    language={language}
-                    setLanguage={setLanguage}
                     open={open}
                     close={close}
                     contribution={contribution}
@@ -441,9 +446,18 @@ export function MapShell({
                             ? editPlace
                             : undefined
                     }
-                    secondaryLabel={panel === 'nearby' ? 'Nearby' : 'Bookmarks'}
+                    openSettings={open}
+                    secondaryLabel={
+                        isSettingsPanel(panel)
+                            ? settingsTitles[panel]
+                            : panel === 'nearby'
+                              ? 'Nearby'
+                              : 'Bookmarks'
+                    }
                     secondary={
-                        panel === 'nearby' && browse ? (
+                        isSettingsPanel(panel) ? (
+                            <SettingsContent panel={panel} open={open} mobile />
+                        ) : panel === 'nearby' && browse ? (
                             <NearbyResults browse={browse} onSelect={selectPlace} mobile />
                         ) : panel === 'bookmarks' && browse && !sample ? (
                             <BookmarksPanel browse={browse} onSelect={selectPlace} mobile />
@@ -463,8 +477,9 @@ export function MapShell({
                 <IconButton
                     icon={mobile ? 'mobileMap' : 'map'}
                     size={20}
+                    id="map-source"
                     label="Map source"
-                    available={false}
+                    onClick={() => open('source', 'map-source')}
                 />
                 <IconButton
                     icon={mobile ? 'mobileDirection' : 'direction'}
@@ -484,7 +499,7 @@ export function MapShell({
                         label="Find nearby"
                         available={!!browse}
                         onClick={() => {
-                            showNearby('accessible_toilet', 'mobile-nearby')
+                            showNearby(preferences.category, 'mobile-nearby')
                         }}
                     />
                     <IconButton
@@ -516,13 +531,15 @@ export function MapShell({
             )}
             {browse && (browse.location.error || browse.location.pending) && (
                 <p className="map-location-status" role="status">
-                    {browse.location.pending ? 'Finding your location…' : browse.location.error}
+                    {ui.message(
+                        browse.location.pending ? 'Finding your location…' : browse.location.error,
+                    )}
                 </p>
             )}
             {browse?.mode === 'map' && browse.state.error && (
                 <div className="map-read-status" role="status">
-                    {browse.state.error}{' '}
-                    <DesignButton onClick={browse.state.retry}>Try again</DesignButton>
+                    {ui.message(browse.state.error)}{' '}
+                    <DesignButton onClick={browse.state.retry}>{ui.text('Try again')}</DesignButton>
                 </div>
             )}
         </main>

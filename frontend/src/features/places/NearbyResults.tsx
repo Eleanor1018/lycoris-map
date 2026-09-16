@@ -1,3 +1,4 @@
+import { useUi } from '@/shared/i18n/ui'
 import { useState } from 'react'
 import type { Marker } from '@/shared/api/markers'
 import { DesignButton } from '@/shared/ui/design-primitives'
@@ -6,6 +7,7 @@ import { categoryLabels, distanceLabel, openingHours, publicImageUrl } from './m
 import { PlaceActions } from './PlaceActions'
 import { ReadMessage } from './PlaceResults'
 import { NearbyWindow } from './NearbyWindow'
+import { rangeLabel } from '@/features/preferences/PreferencesProvider'
 import './nearby.css'
 
 type Props = {
@@ -25,11 +27,15 @@ export function NearbyResults(props: Props) {
 }
 
 function NearbyList({ browse, onSelect, mobile = false, listKey }: Props & { listKey: string }) {
+    const ui = useUi()
     const { nearby, results, state } = browse
-    const heading = `${categoryLabels[nearby?.category ?? 'accessible_toilet']} in 1km`
+    const heading = ui.text('{category} in {range}', {
+        category: ui.message(categoryLabels[nearby?.category ?? 'accessible_toilet']) ?? '',
+        range: rangeLabel(nearby?.radius ?? 1000),
+    })
     return (
         <div className={`nearby-results ${mobile ? 'mobile-nearby-results' : ''}`}>
-            {mobile && <h1 className="nearby-title">Nearby</h1>}
+            {mobile && <h1 className="nearby-title">{ui.text('Nearby')}</h1>}
             <h2 className="nearby-category-heading">{heading}</h2>
             <ReadMessage
                 state={nearby ? state : { ...state, pending: true, error: null }}
@@ -52,6 +58,7 @@ function NearbyList({ browse, onSelect, mobile = false, listKey }: Props & { lis
 }
 
 function NearbyPlace({ place, browse, onSelect, mobile }: Props & { place: Marker }) {
+    const ui = useUi()
     const [failedImage, setFailedImage] = useState<string | null>(null)
     const image = publicImageUrl(place.markImage)
     const focusId = `${mobile ? 'mobile' : 'desktop'}-nearby-place-${place.id}`
@@ -71,7 +78,11 @@ function NearbyPlace({ place, browse, onSelect, mobile }: Props & { place: Marke
             <span className="place-meta">
                 {distance && (
                     <span
-                        title={`Straight-line distance from ${browse.nearby?.located ? 'your location' : 'the map center'}`}
+                        title={ui.text(
+                            browse.nearby?.located
+                                ? 'Straight-line distance from your location'
+                                : 'Straight-line distance from the map center',
+                        )}
                     >
                         {distance}
                     </span>

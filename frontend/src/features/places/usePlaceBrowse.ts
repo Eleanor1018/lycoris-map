@@ -14,6 +14,7 @@ import { useSession } from '@/features/auth/SessionProvider'
 import { readAccountPlace } from '@/shared/api/privatePlaces'
 import type { LatLng } from '@/features/map/coords'
 import type { MapFocus, MapView } from '@/features/map/viewport'
+import { usePreferences } from '@/features/preferences/PreferencesProvider'
 import { useLocationFix } from '@/features/map/useLocationFix'
 
 function useDebounced<T>(value: T, delay: number): T {
@@ -51,6 +52,7 @@ export function usePlaceBrowse(
     initialSearch = '',
     reads: PlaceReads = defaultReads,
 ) {
+    const { preferences } = usePreferences()
     const client = useQueryClient()
     const session = useSession()
     const scope = reads === defaultReads ? session.scope : null
@@ -122,7 +124,7 @@ export function usePlaceBrowse(
         ? {
               lat: Math.round(nearby.point.lat * 1e6) / 1e6,
               lng: Math.round(nearby.point.lng * 1e6) / 1e6,
-              radius: 1000,
+              radius: preferences.radius,
               category: nearby.category,
           }
         : null
@@ -219,7 +221,7 @@ export function usePlaceBrowse(
         search,
         setSearch,
         mode,
-        nearby,
+        nearby: nearby ? { ...nearby, radius: preferences.radius } : null,
         chooseCategory,
         results,
         markers: results,

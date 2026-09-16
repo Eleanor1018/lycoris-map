@@ -1,3 +1,4 @@
+import { PreferencesProvider } from '@/features/preferences/PreferencesProvider'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, useLocation } from 'react-router'
@@ -8,6 +9,7 @@ import { MapPage } from './MapPage'
 const clients: QueryClient[] = []
 afterEach(() => {
     cleanup()
+    localStorage.clear()
     clients.splice(0).forEach((client) => client.clear())
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
@@ -20,6 +22,17 @@ function Route() {
             {route.search}
             {route.hash}
         </output>
+    )
+}
+function PageProviders() {
+    const lang = new URLSearchParams(useLocation().search).get('lang')
+    return (
+        <LanguageProvider override={lang === 'en' || lang === 'zh' ? lang : undefined}>
+            <PreferencesProvider>
+                <MapPage />
+                <Route />
+            </PreferencesProvider>
+        </LanguageProvider>
     )
 }
 function app(url: string, mobile = false, count = 5) {
@@ -61,12 +74,9 @@ function app(url: string, mobile = false, count = 5) {
     clients.push(client)
     const view = render(
         <QueryClientProvider client={client}>
-            <LanguageProvider>
-                <MemoryRouter initialEntries={[url]}>
-                    <MapPage />
-                    <Route />
-                </MemoryRouter>
-            </LanguageProvider>
+            <MemoryRouter initialEntries={[url]}>
+                <PageProviders />
+            </MemoryRouter>
         </QueryClientProvider>,
     )
     return { ...view, fetcher }
@@ -111,6 +121,7 @@ it('opens the Nearby list from the phone radar and dismisses a direct search wit
     expect(document.getElementById('map-shell')).toHaveAttribute('data-snap', 'full')
     expect(screen.getByTestId('route')).not.toHaveTextContent('markerId')
     cleanup()
+    localStorage.clear()
     app('/search?q=place&lang=en', true)
     await screen.findByRole('list', { name: 'Search Results' })
     fireEvent.keyDown(screen.getByRole('textbox', { name: 'Search Positions' }), { key: 'Escape' })
@@ -167,6 +178,7 @@ it('renders a legacy shared coordinate target and gives markerId precedence over
         'Meeting Point',
     )
     cleanup()
+    localStorage.clear()
     const second = app('/maps?markerId=1&lat=31.2&lng=121.4&title=Meeting%20Point&lang=zh')
     await screen.findByRole('heading', { name: 'Synthetic place 1' })
     expect(second.container.querySelector('#map-shared-location')).toBeNull()
@@ -346,4 +358,37 @@ it('keeps End and the return target visible when measured Nearby cards exceed th
         expect(within(restored).getByRole('button', { name: 'Synthetic place 500' })).toHaveFocus(),
     )
     expect(restored.scrollTop).toBe(offset)
+})
+
+it('keeps a chosen phone language after closing the panel and updates the real requests without replacing the map', async () => {
+    const { container, fetcher } = app('/?lang=en&snap=full', true)
+    const map = container.querySelector('.leaflet-container')
+    fireEvent.click(screen.getByRole('button', { name: 'Choose Language English' }))
+    fireEvent.click(screen.getByRole('radio', { name: '简体中文' }))
+    expect(document.documentElement.lang).toBe('zh-CN')
+    fireEvent.click(screen.getByRole('button', { name: '关闭语言设置' }))
+    await screen.findByRole('button', { name: '选择语言 简体中文' })
+    expect(container.querySelector('.leaflet-container')).toBe(map)
+    await waitFor(() =>
+        expect(fetcher.mock.calls.some(([url]) => String(url).includes('lang=zh'))).toBe(true),
+    )
+    expect(localStorage.getItem('lycoris.language')).toBe('zh')
+})
+it('uses a saved range and radar category while the category cards remain explicit', async () => {
+    localStorage.setItem(
+        'lycoris.map-preferences',
+        JSON.stringify({ radius: 2500, category: 'baby_room', source: 'osm' }),
+    )
+    const { fetcher } = app('/?lang=en', true)
+    fireEvent.click(screen.getByRole('button', { name: 'Find nearby' }))
+    await screen.findByRole('heading', { name: 'Nursing Rooms in 2.5km' })
+    await waitFor(() =>
+        expect(
+            fetcher.mock.calls.some(
+                ([url]) =>
+                    String(url).includes('radius=2500') &&
+                    String(url).includes('category=baby_room'),
+            ),
+        ).toBe(true),
+    )
 })

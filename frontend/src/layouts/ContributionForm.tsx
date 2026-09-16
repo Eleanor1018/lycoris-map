@@ -1,3 +1,4 @@
+import { useUi } from '@/shared/i18n/ui'
 import { useEffect, useId, useRef } from 'react'
 import { CategoryBadge, DesignButton, IconButton } from './primitives'
 import { FigmaIcon } from '@/shared/ui/figma-icon'
@@ -32,6 +33,7 @@ export function ContributionForm({
     onPhoto,
     onView,
 }: ContributionFormProps) {
+    const ui = useUi()
     const id = useId()
     const heading = useRef<HTMLHeadingElement>(null)
     const photoInput = useRef<HTMLInputElement>(null)
@@ -69,7 +71,7 @@ export function ContributionForm({
     return (
         <form
             className={`contribution-form ${mobile ? 'contribution-form-mobile' : ''} ${state ? 'contribution-form-live' : ''}`}
-            aria-label={state?.base ? 'Edit proposal' : 'Contribution draft'}
+            aria-label={ui.text(state?.base ? 'Edit proposal' : 'Contribution draft')}
             aria-busy={busy || undefined}
             data-lat={import.meta.env.DEV ? point?.lat : undefined}
             data-lng={import.meta.env.DEV ? point?.lng : undefined}
@@ -81,7 +83,7 @@ export function ContributionForm({
             }}
         >
             <h1 ref={heading} tabIndex={-1}>
-                {state?.base ? 'Edit place' : 'Contribute'}
+                {ui.text(state?.base ? 'Edit place' : 'Contribute')}
             </h1>
             <IconButton
                 className="contribution-close"
@@ -90,19 +92,19 @@ export function ContributionForm({
                 onClick={close}
             />
             <label className="contribution-label title-label" htmlFor={`${id}-title`}>
-                Title
+                {ui.text('Title')}
             </label>
             <input
                 id={`${id}-title`}
                 className="contribution-input contribution-title"
-                placeholder={mobile ? 'Input title here' : undefined}
+                placeholder={mobile ? ui.text('Input title here') : undefined}
                 value={draft.title}
                 disabled={locked}
                 onChange={(event) => update('title', event.target.value)}
                 autoComplete="off"
             />
             <span id={`${id}-category`} className="contribution-label category-label">
-                Category
+                {ui.text('Category')}
             </span>
             <div
                 className="contribution-categories"
@@ -113,7 +115,7 @@ export function ContributionForm({
                     <DesignButton
                         key={category}
                         role="radio"
-                        aria-label={label}
+                        aria-label={ui.message(label)}
                         aria-checked={draft.category === category}
                         disabled={locked}
                         tabIndex={
@@ -146,11 +148,11 @@ export function ContributionForm({
                     </DesignButton>
                 ))}
                 {draft.category === 'custom' && (
-                    <span className="contribution-custom-category">Custom</span>
+                    <span className="contribution-custom-category">{ui.text('Custom')}</span>
                 )}
             </div>
             <label className="contribution-label description-label" htmlFor={`${id}-description`}>
-                Description
+                {ui.text('Description')}
             </label>
             <textarea
                 id={`${id}-description`}
@@ -169,7 +171,7 @@ export function ContributionForm({
                         aria-labelledby={`${id}-${kind}`}
                     >
                         <span id={`${id}-${kind}`} className="contribution-label">
-                            {label}
+                            {ui.message(label)}
                         </span>
                         <div className="time-inputs">
                             {(['Hour', 'Minute'] as const).map((part, index) => (
@@ -181,7 +183,7 @@ export function ContributionForm({
                                     )}
                                     <input
                                         className="contribution-input"
-                                        aria-label={`${label} ${part.toLowerCase()}`}
+                                        aria-label={ui.message(`${label} ${part.toLowerCase()}`)}
                                         inputMode="numeric"
                                         autoComplete="off"
                                         maxLength={2}
@@ -209,7 +211,7 @@ export function ContributionForm({
                 )
             })}
             <span className="contribution-label upload-label" id={`${id}-photo-label`}>
-                Upload Photo (Optional)
+                {ui.text('Upload Photo (Optional)')}
             </span>
             <input
                 ref={photoInput}
@@ -229,43 +231,51 @@ export function ContributionForm({
             <DesignButton
                 className="contribution-action contribution-upload"
                 aria-label={
-                    draft.photo ? `Upload photo: ${draft.photo.name} selected` : 'Upload photo'
+                    draft.photo
+                        ? ui.text('Upload photo: {name} selected', { name: draft.photo.name })
+                        : ui.text('Upload photo')
                 }
                 disabled={!!state && !['draft', 'photo-error'].includes(state.phase)}
                 onClick={() => photoInput.current?.click()}
             >
-                <span>Upload</span>
+                <span>{ui.text('Upload')}</span>
                 <FigmaIcon name="upload" />
             </DesignButton>
             {state && (
                 <div className="contribution-feedback" ref={feedback}>
-                    {state.base && <p>Location is fixed. Changes are submitted for review.</p>}
+                    {state.base && (
+                        <p>{ui.text('Location is fixed. Changes are submitted for review.')}</p>
+                    )}
                     {draft.photo && (
                         <p className="contribution-photo-name">
                             {draft.photo.name}{' '}
                             {['draft', 'photo-error'].includes(state.phase) && (
-                                <DesignButton onClick={() => onPhoto?.(null)}>Remove</DesignButton>
+                                <DesignButton onClick={() => onPhoto?.(null)}>
+                                    {ui.text('Remove')}
+                                </DesignButton>
                             )}
                         </p>
                     )}
                     <p role={state.error ? 'alert' : 'status'}>
-                        {state.error ??
-                            (state.phase === 'complete'
-                                ? state.base
-                                    ? 'Your changes have been submitted for review.'
-                                    : 'Place saved. Public places appear on the map after review.'
-                                : state.phase === 'photo-saving'
-                                  ? 'Place saved. Uploading photo…'
-                                  : state.phase === 'checking-photo'
-                                    ? 'Checking photo…'
-                                    : '')}
+                        {ui.message(
+                            state.error ??
+                                (state.phase === 'complete'
+                                    ? state.base
+                                        ? 'Your changes have been submitted for review.'
+                                        : 'Place saved. Public places appear on the map after review.'
+                                    : state.phase === 'photo-saving'
+                                      ? 'Place saved. Uploading photo…'
+                                      : state.phase === 'checking-photo'
+                                        ? 'Checking photo…'
+                                        : ''),
+                        )}
                     </p>
                     {unconfirmed && (
                         <DesignButton
                             className="contribution-resend"
                             onClick={() => onSubmit?.(true)}
                         >
-                            Send again
+                            {ui.text('Send again')}
                         </DesignButton>
                     )}
                 </div>
@@ -277,7 +287,7 @@ export function ContributionForm({
                 disabled={!!state && (busy || !!unconfirmed)}
                 available={!!onSubmit && !busy && !unconfirmed}
             >
-                <span>{action}</span>
+                <span>{ui.message(action)}</span>
                 <FigmaIcon name="send" />
             </DesignButton>
         </form>

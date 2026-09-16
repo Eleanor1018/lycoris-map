@@ -1,3 +1,4 @@
+import { useUi } from '@/shared/i18n/ui'
 import { useRef, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSession } from '@/features/auth/SessionProvider'
@@ -20,15 +21,18 @@ import { ReadMessage } from '@/features/places/PlaceResults'
 import { SavedPlaceRow } from '@/features/bookmarks/BookmarksPanel'
 
 export function ProfilePanel({ password = false }: { password?: boolean }) {
+    const ui = useUi()
     const session = useSession(),
         flow = useAccountFlow()!
     if (!session.user || !session.scope || !session.store)
         return (
             <div className="profile-content">
                 <p className="account-status" role="status">
-                    {session.status === 'checking'
-                        ? 'Checking your session…'
-                        : (session.error ?? 'Please log in to open your account.')}
+                    {ui.message(
+                        session.status === 'checking'
+                            ? 'Checking your session…'
+                            : (session.error ?? 'Please log in to open your account.'),
+                    )}
                 </p>
                 <DesignButton
                     onClick={() =>
@@ -37,7 +41,7 @@ export function ProfilePanel({ password = false }: { password?: boolean }) {
                             : flow.setView('login')
                     }
                 >
-                    {session.status === 'error' ? 'Try again' : 'Login'}
+                    {ui.text(session.status === 'error' ? 'Try again' : 'Login')}
                 </DesignButton>
             </div>
         )
@@ -48,6 +52,7 @@ export function ProfilePanel({ password = false }: { password?: boolean }) {
     )
 }
 function ProfileForm() {
+    const ui = useUi()
     const session = useSession(),
         flow = useAccountFlow()!,
         client = useQueryClient()
@@ -126,11 +131,11 @@ function ProfileForm() {
                 <span className="profile-avatar">
                     <AccountAvatar />
                 </span>
-                <span>Change avatar</span>
+                <span>{ui.text('Change avatar')}</span>
                 <input
                     className="sr-only"
                     type="file"
-                    aria-label="Change avatar"
+                    aria-label={ui.text('Change avatar')}
                     accept="image/jpeg,image/png,image/gif,image/webp"
                     disabled={busy || session.busy}
                     onChange={(event) => {
@@ -172,7 +177,7 @@ function ProfileForm() {
             </form>
             {(message || flow.message) && (
                 <p className="account-status" role="status">
-                    {message ?? flow.message}
+                    {ui.message(message ?? flow.message)}
                 </p>
             )}
             <div className="profile-options">
@@ -184,7 +189,7 @@ function ProfileForm() {
                         flow.setView('password')
                     }}
                 >
-                    <span>Change Password</span>
+                    <span>{ui.text('Change Password')}</span>
                     <FigmaIcon name="chevron" />
                 </DesignButton>
                 <DesignButton
@@ -195,7 +200,7 @@ function ProfileForm() {
                         flow.setView('created')
                     }}
                 >
-                    <span>My Places</span>
+                    <span>{ui.text('My Places')}</span>
                     <FigmaIcon name="chevron" />
                 </DesignButton>
                 <DesignButton
@@ -203,7 +208,7 @@ function ProfileForm() {
                     disabled={busy || session.busy}
                     onClick={() => void logout()}
                 >
-                    <span>Logout</span>
+                    <span>{ui.text('Logout')}</span>
                     <FigmaIcon name="authLogin" />
                 </DesignButton>
             </div>
@@ -211,6 +216,7 @@ function ProfileForm() {
     )
 }
 function PasswordForm() {
+    const ui = useUi()
     const session = useSession(),
         flow = useAccountFlow()!
     const [oldPassword, setOld] = useState(''),
@@ -274,7 +280,7 @@ function PasswordForm() {
             </div>
             {(message || flow.message) && (
                 <p className="account-status" role="alert">
-                    {message ?? flow.message}
+                    {ui.message(message ?? flow.message)}
                 </p>
             )}
             <AccountSubmit disabled={session.busy}>
@@ -292,6 +298,7 @@ export function MyPlacesPanel({
     mobile: boolean
     onSelect: (place: Marker, focus: string) => void
 }) {
+    const ui = useUi()
     const { store, scope, busy } = useSession()
     const query = useQuery({
         queryKey: scope ? privateKeys.created(scope, browse.language) : ['private', 'created-idle'],
@@ -314,7 +321,7 @@ export function MyPlacesPanel({
                 empty={!query.data?.length}
             />
             {!query.isError && (
-                <div role="list" aria-label="My Places">
+                <div role="list" aria-label={ui.text('My Places')}>
                     {query.data?.map((place) => (
                         <div role="listitem" key={place.id}>
                             <SavedPlaceRow
@@ -325,8 +332,8 @@ export function MyPlacesPanel({
                                 prefix="created"
                             />
                             <p className="created-state">
-                                {place.isPublic ? 'Public' : 'Private'} ·{' '}
-                                {place.reviewStatus.toLowerCase()}
+                                {ui.text(place.isPublic ? 'Public' : 'Private')} ·{' '}
+                                {ui.message(place.reviewStatus.toLowerCase())}
                             </p>
                         </div>
                     ))}
