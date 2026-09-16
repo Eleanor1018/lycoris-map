@@ -18,6 +18,7 @@ import type { PlaceBrowse } from '@/features/places/usePlaceBrowse'
 import type { SharedTarget } from '@/features/map/MapPlaces'
 import type { Marker } from '@/shared/api/markers'
 import { AccountEntry } from '@/features/auth/AccountEntry'
+import { useSession } from '@/features/auth/SessionProvider'
 import { NearbyResults } from '@/features/places/NearbyResults'
 import type { MarkerCategory } from '@/shared/query/keys'
 import { BookmarksPanel } from '@/features/bookmarks/BookmarksPanel'
@@ -44,15 +45,19 @@ export function MapShell({
     const ui = useUi()
     const { preferences } = usePreferences()
     const mobile = useMobileLayout()
+    const session = useSession()
+    const showBookmarks = Boolean(sample) || session.status === 'authenticated'
     const accountFlow = useAccountFlow()
     const contributions = useContributions()
     const contributor = !sample && browse ? contributions.store : null
     const contributionState = contributor ? contributions.state : null
-    const { panel, open, close, location } = usePanelRoute(
-        Boolean(sample),
-        mobile ? 'back' : 'dismiss',
-        !!browse,
-    )
+    const {
+        panel: requestedPanel,
+        open,
+        close,
+        location,
+    } = usePanelRoute(Boolean(sample), mobile ? 'back' : 'dismiss', !!browse)
+    const panel = requestedPanel === 'bookmarks' && !showBookmarks ? 'initial' : requestedPanel
     const contributionOpen = panel === 'contribute-form' || (mobile && panel === 'contribute')
     const activeRoute = useRef(location.key)
     activeRoute.current = location.key
@@ -355,35 +360,37 @@ export function MapShell({
                 <aside className="desktop-nav" aria-label={ui.text('Main navigation')}>
                     <div className="desktop-logo">{ui.text('Lycoris Maps')}</div>
                     <nav>
-                        {navigation.map((item) => (
-                            <DesignButton
-                                key={item.panel}
-                                id={`nav-${item.panel}`}
-                                className={`nav-row ${panel === item.panel || (panel === 'nearby' && item.panel === 'search') || (panel === 'contribute-form' && item.panel === 'contribute') ? 'selected' : ''}`}
-                                aria-current={
-                                    panel === item.panel ||
-                                    (panel === 'nearby' && item.panel === 'search') ||
-                                    (panel === 'contribute-form' && item.panel === 'contribute')
-                                        ? 'page'
-                                        : undefined
-                                }
-                                onClick={() => {
-                                    if (item.panel === 'contribute') {
-                                        startContribution(false)
-                                        return
+                        {navigation
+                            .filter((item) => item.panel !== 'bookmarks' || showBookmarks)
+                            .map((item) => (
+                                <DesignButton
+                                    key={item.panel}
+                                    id={`nav-${item.panel}`}
+                                    className={`nav-row ${panel === item.panel || (panel === 'nearby' && item.panel === 'search') || (panel === 'contribute-form' && item.panel === 'contribute') ? 'selected' : ''}`}
+                                    aria-current={
+                                        panel === item.panel ||
+                                        (panel === 'nearby' && item.panel === 'search') ||
+                                        (panel === 'contribute-form' && item.panel === 'contribute')
+                                            ? 'page'
+                                            : undefined
                                     }
-                                    if (item.panel === 'search') browse?.clearResults()
-                                    open(item.panel, `nav-${item.panel}`)
-                                }}
-                            >
-                                <FigmaIcon name={item.icon} />
-                                <span>
-                                    {panel === 'settings' && item.panel === 'bookmarks'
-                                        ? ui.text('Bookmarks')
-                                        : ui.message(item.label)}
-                                </span>
-                            </DesignButton>
-                        ))}
+                                    onClick={() => {
+                                        if (item.panel === 'contribute') {
+                                            startContribution(false)
+                                            return
+                                        }
+                                        if (item.panel === 'search') browse?.clearResults()
+                                        open(item.panel, `nav-${item.panel}`)
+                                    }}
+                                >
+                                    <FigmaIcon name={item.icon} />
+                                    <span>
+                                        {panel === 'settings' && item.panel === 'bookmarks'
+                                            ? ui.text('Bookmarks')
+                                            : ui.message(item.label)}
+                                    </span>
+                                </DesignButton>
+                            ))}
                     </nav>
                     {!sample ? (
                         <AccountEntry />
@@ -427,6 +434,7 @@ export function MapShell({
             )}
             {mobile && (
                 <MobileSheet
+                    showBookmarks={showBookmarks}
                     snap={snap}
                     setSnap={setSnap}
                     detail={panel === 'details'}

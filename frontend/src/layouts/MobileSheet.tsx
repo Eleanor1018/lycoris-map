@@ -32,6 +32,7 @@ export function MobileSheet({
     secondary,
     secondaryLabel = 'Bookmarks',
     openBookmarks,
+    showBookmarks,
     openSettings,
     editPlace,
 }: {
@@ -53,6 +54,7 @@ export function MobileSheet({
     secondary?: ReactNode
     openSettings: (panel: Panel, focusId?: string) => void
     openBookmarks?: (() => void) | undefined
+    showBookmarks: boolean
     editPlace?: (() => void) | undefined
 }) {
     const ui = useUi()
@@ -303,36 +305,42 @@ export function MobileSheet({
                         )}
                         {snap === 'full' && !hasPlaceResults && (
                             <>
-                                <DesignButton
-                                    className="mobile-section-heading mobile-bookmarks-heading"
-                                    available={!!openBookmarks}
-                                    onClick={openBookmarks}
-                                >
-                                    <span>{ui.text('Bookmarks')}</span>
-                                    <FigmaIcon name="mobileChevronDark" />
-                                </DesignButton>
-                                {!sample && browse && selectPlace && (
-                                    <BookmarksPanel
-                                        browse={browse}
-                                        onSelect={selectPlace}
-                                        mobile
-                                        preview
-                                    />
-                                )}
-                                {sample && (
-                                    <div className="mobile-bookmarks">
-                                        {[0, 1].map((index) => (
-                                            <DesignButton
-                                                id={`mobile-place-${index}`}
-                                                className="mobile-place-row"
-                                                key={index}
-                                                onClick={() => openDetails(`mobile-place-${index}`)}
-                                            >
-                                                <CategoryBadge category="toilet" />
-                                                <PlaceSummary place={sample.place} />
-                                            </DesignButton>
-                                        ))}
-                                    </div>
+                                {showBookmarks && (
+                                    <>
+                                        <DesignButton
+                                            className="mobile-section-heading mobile-bookmarks-heading"
+                                            available={!!openBookmarks}
+                                            onClick={openBookmarks}
+                                        >
+                                            <span>{ui.text('Bookmarks')}</span>
+                                            <FigmaIcon name="mobileChevronDark" />
+                                        </DesignButton>
+                                        {!sample && browse && selectPlace && (
+                                            <BookmarksPanel
+                                                browse={browse}
+                                                onSelect={selectPlace}
+                                                mobile
+                                                preview
+                                            />
+                                        )}
+                                        {sample && (
+                                            <div className="mobile-bookmarks">
+                                                {[0, 1].map((index) => (
+                                                    <DesignButton
+                                                        id={`mobile-place-${index}`}
+                                                        className="mobile-place-row"
+                                                        key={index}
+                                                        onClick={() =>
+                                                            openDetails(`mobile-place-${index}`)
+                                                        }
+                                                    >
+                                                        <CategoryBadge category="toilet" />
+                                                        <PlaceSummary place={sample.place} />
+                                                    </DesignButton>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                                 <h2 className="mobile-section-heading mobile-settings-heading">
                                     <span>{ui.text('Settings')}</span>

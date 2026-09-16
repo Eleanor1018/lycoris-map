@@ -64,7 +64,8 @@ it('preserves the actual Leaflet object and camera across panel history in Stric
     expect(map.dataset.mapId).toBe(instance)
     expect(map.dataset.center).toBe(center)
     expect(map.dataset.zoom).toBe('15')
-    for (const name of ['Bookmarks', 'Languages', 'Settings', 'Contribute']) {
+    expect(screen.queryByRole('button', { name: 'Bookmarks' })).not.toBeInTheDocument()
+    for (const name of ['Languages', 'Settings', 'Contribute']) {
         fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${name}$`) }))
         expect(container.querySelector('.leaflet-container')).toBe(map)
         expect(map.dataset.mapId).toBe(instance)
