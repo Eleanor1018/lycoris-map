@@ -1,7 +1,10 @@
 # Map and mobile interaction polish — 2026-09-16
 
 Branch: `deploy/lycoris-map-com`. Application commits: `6d11a97`, `ef5b976`.
-Status: implemented and built; browser interaction QA and deployment are pending.
+Status: deployed on 2026-09-17 with application source `05773a5`.
+The dated checks below record the earlier local work and its limitations.
+See the [production deployment record](../deploy/cloudflare/README.md) for the
+completed upload and current browser checks; physical-device QA remains open.
 
 ## Changes
 

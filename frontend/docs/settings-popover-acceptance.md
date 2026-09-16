@@ -1,7 +1,8 @@
 # Settings popovers — 2026-09-16
 
 Branch: `deploy/lycoris-map-com`.
-Status: implemented and verified in a local preview; not deployed.
+Status: deployed on 2026-09-17 with application source `05773a5`.
+See the [production deployment record](../deploy/cloudflare/README.md).
 
 ## Behavior
 
@@ -52,4 +53,5 @@ All 59 affected settings, navigation, MapPage and sheet-drag tests passed;
 strict TypeScript, build, formatting and diff checks passed. Computer Use
 verified the initial phone view at 375×667 without a snap query, dragging it to
 full, and the title-free popovers on phone and desktop. The viewport override
-was reset. These changes remain local and are not deployed.
+was reset. These changes were subsequently deployed and checked on the custom
+domain on 2026-09-17; see the production deployment record above.

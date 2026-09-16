@@ -151,3 +151,31 @@ Cloudflare reported success after uploading all 21 artifact files. The custom
 domain serves `index-NlT5wN_y.js`; `/health/ready` reports PostgreSQL and Redis
 healthy. Chrome verified the deployed radar → Nearby → full downward drag flow
 returns to the original collapsed primary menu without an application error.
+
+## Map polish, contribution login and settings menus — 2026-09-17
+
+Application source `05773a587c05404cadcbbaf3511219e0b08181aa` includes the
+previously pending map/location and sheet polish, contribution login gate,
+anchored title-free settings popovers, and default half-open phone menu.
+
+All 282 frontend tests, three deployment proxy tests, strict TypeScript and
+the production build passed. Only the 21 production artifact files were
+uploaded through Chrome Computer Use; the local synthetic preview, sources,
+credentials and test data are not in the artifact. Cloudflare reported success
+for production deployment `3e00e4c3-3c57-4ef9-8350-339f05eef04e`.
+The previous deployment is `eed3063f-9574-422a-9bf2-78335bd4d96d`.
+
+The custom domain serves `index-MlC4fVRD.js` and `index-DuBdz8aK.css`.
+The home HTML and both resources were byte-compared with the release artifact.
+`/admin/review` returns the updated SPA; `/health/ready` returns HTTP 200 with
+PostgreSQL and Redis healthy. Chrome verified the title-free desktop settings
+popover, Escape preserving Settings, guest Contribute opening login and cancel
+returning home. iPhone SE emulation at 375×667 verified first-load half snap,
+dragging to full and the title-free anchored phone settings popover. DevTools
+was closed and the production homepage was left without test snap parameters.
+Physical-device compass and touch behavior remain untested.
+
+Release ZIP: `settings-mobile-05773a5/lycoris-settings-mobile-05773a5.zip` in the
+surrounding deployment workspace. SHA-256:
+`96dbbc69cf2a98f0d06fdff6528d93c0b7504645bbd562bf0a692f8a97729275`.
+The backend, database and old domain were not modified in this release.
