@@ -2,6 +2,11 @@
 # Initialize new-host configuration. Never replace existing credentials.
 set -Eeuo pipefail
 umask 077
+# Bind mounts retain host permissions, including checkouts made under umask 077.
+# These two files contain no credentials and must be readable inside containers.
+deployment_dir="$(cd -- "$(dirname -- "$0")" && pwd)"
+chmod 0644 "$deployment_dir/Caddyfile"
+chmod 0755 "$deployment_dir/init-database.sh"
 root=/opt/lycoris
 private="$root/private"
 admin_hash=
