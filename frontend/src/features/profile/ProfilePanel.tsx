@@ -1,3 +1,4 @@
+import { AdminEntry } from '@/features/admin/AdminEntry'
 import { useUi } from '@/shared/i18n/ui'
 import { useRef, useState, type FormEvent } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -181,6 +182,7 @@ function ProfileForm() {
                 </p>
             )}
             <div className="profile-options">
+                <AdminEntry />
                 <DesignButton
                     className="setting-card"
                     disabled={busy || session.busy}

@@ -1,0 +1,354 @@
+import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import type { Marker } from '@/shared/api/markers'
+import { DesignButton, CategoryBadge } from '@/shared/ui/design-primitives'
+import {
+    categoryBadges,
+    categoryLabels,
+    openingHours,
+    publicImageUrl,
+} from '@/features/places/model'
+import * as api from './api'
+import { useAdminWork } from './work'
+import { useAdminUi } from './ui'
+import { MarkerEditor } from './MarkerEditor'
+import { readAccountPlace } from '@/shared/api/privatePlaces'
+type Kind = 'markers' | 'edits' | 'images'
+type Entry =
+    | { kind: 'markers'; item: Marker }
+    | { kind: 'edits'; item: api.EditProposal }
+    | { kind: 'images'; item: api.ImageProposal }
+export function Moderation({ all }: { all: boolean }) {
+    const work = useAdminWork(),
+        ui = useAdminUi(),
+        [kind, setKind] = useState<Kind>('markers'),
+        [page, setPage] = useState(0),
+        [editing, setEditing] = useState<Marker | null>(null)
+    const query = useQuery({
+        queryKey: [...work.prefix, all ? 'all' : kind, ui.language],
+        gcTime: 0,
+        retry: false,
+        queryFn: ({ signal }): Promise<Entry[]> =>
+            work.run(
+                async (s) =>
+                    kind === 'markers'
+                        ? (await api.readMarkers(all, ui.language, s)).map(
+                              (item) => ({ kind: 'markers', item }) as const,
+                          )
+                        : kind === 'edits'
+                          ? (await api.readEdits(s)).map(
+                                (item) => ({ kind: 'edits', item }) as const,
+                            )
+                          : (await api.readImages(s)).map(
+                                (item) => ({ kind: 'images', item }) as const,
+                            ),
+                signal,
+            ),
+    })
+    const items = query.data ?? [],
+        total = Math.max(1, Math.ceil(items.length / 20)),
+        current = Math.min(page, total - 1)
+    useEffect(() => {
+        setPage(0)
+        setEditing(null)
+        work.clearConfirmation()
+    }, [kind, ui.language])
+    if (editing) return <MarkerEditor marker={editing} close={() => setEditing(null)} />
+    return (
+        <section className="admin-content">
+            <div className="admin-toolbar">
+                {!all && (
+                    <div className="admin-tabs" aria-label={ui.message('Review')}>
+                        {(['markers', 'edits', 'images'] as const).map((value) => (
+                            <DesignButton
+                                key={value}
+                                aria-pressed={kind === value}
+                                disabled={work.busy}
+                                onClick={() => setKind(value)}
+                            >
+                                {ui.message(
+                                    { markers: 'Markers', edits: 'Edits', images: 'Images' }[value],
+                                )}
+                            </DesignButton>
+                        ))}
+                    </div>
+                )}
+                <DesignButton
+                    disabled={query.isFetching || work.busy}
+                    onClick={() => void query.refetch()}
+                >
+                    {ui.message('Refresh')}
+                </DesignButton>
+                {all && (
+                    <DesignButton
+                        disabled={work.busy}
+                        onClick={() =>
+                            work.confirm({
+                                label: ui.message('Clean missing images'),
+                                detail: ui.message(
+                                    'This removes references to missing image files.',
+                                ),
+                                action: api.cleanupImages,
+                            })
+                        }
+                    >
+                        {ui.message('Clean missing images')}
+                    </DesignButton>
+                )}
+            </div>
+            <p role="status">
+                {ui.message(
+                    query.isError
+                        ? 'The request failed. Refresh and try again.'
+                        : query.isFetching
+                          ? 'Loading places…'
+                          : !items.length
+                            ? 'No items.'
+                            : '',
+                )}
+            </p>
+            {!query.isError && !query.isPending && (
+                <div className="admin-list">
+                    {items.slice(current * 20, (current + 1) * 20).map((entry) => (
+                        <ReviewCard
+                            key={`${entry.kind}:${entry.item.id}`}
+                            entry={entry}
+                            all={all}
+                            edit={setEditing}
+                        />
+                    ))}
+                </div>
+            )}
+            <Pagination
+                page={current}
+                total={total}
+                busy={work.busy || query.isFetching}
+                change={setPage}
+            />
+        </section>
+    )
+}
+function ReviewCard({
+    entry,
+    all,
+    edit,
+}: {
+    entry: Entry
+    all: boolean
+    edit: (marker: Marker) => void
+}) {
+    const ui = useAdminUi(),
+        work = useAdminWork(),
+        { item } = entry
+    const title = entry.kind === 'markers' ? entry.item.title : entry.item.markerTitle
+    const proposalLanguage = entry.kind === 'edits' && entry.item.language === 'en' ? 'en' : 'zh'
+    const current = useQuery({
+        queryKey: [
+            ...work.prefix,
+            'current',
+            entry.kind === 'edits' ? entry.item.markerId : 0,
+            proposalLanguage,
+        ],
+        enabled: entry.kind === 'edits',
+        retry: false,
+        gcTime: 0,
+        queryFn: ({ signal }) =>
+            work.run(
+                (s) =>
+                    readAccountPlace(
+                        String(entry.kind === 'edits' ? entry.item.markerId : 0),
+                        proposalLanguage,
+                        s,
+                    ),
+                signal,
+            ),
+    })
+    const creator = entry.kind === 'markers' ? entry.item.username : entry.item.proposerUsername
+    const image =
+        entry.kind === 'images'
+            ? publicImageUrl(entry.item.imageUrl)
+            : entry.kind === 'markers'
+              ? publicImageUrl(entry.item.markImage)
+              : null
+    const decide = (decision: 'approve' | 'reject') =>
+        work.confirm({
+            label: `${ui.message(decision === 'approve' ? 'Approve' : 'Reject')} · ${title} #${item.id}`,
+            detail: entry.kind === 'edits' ? entry.item.title : title,
+            action: (signal) => api.moderate(entry.kind, item.id, decision, ui.language, signal),
+        })
+    return (
+        <article className="admin-card">
+            <h2>{title}</h2>
+            <p className="admin-meta">
+                #{entry.kind === 'markers' ? item.id : entry.item.markerId} ·{' '}
+                {ui.message('Submitted by')} {creator}
+            </p>
+            <p className="admin-meta">
+                {ui.message('Submitted')}: <time dateTime={item.createdAt}>{item.createdAt}</time>
+            </p>
+            {entry.kind !== 'images' && (
+                <>
+                    <p className="admin-category">
+                        {categoryBadges[entry.item.category] && (
+                            <CategoryBadge category={categoryBadges[entry.item.category]!} />
+                        )}
+                        {ui.message(categoryLabels[entry.item.category])} ·{' '}
+                        {ui.message(entry.item.isPublic ? 'Public' : 'Private')}
+                    </p>
+                    <p className="admin-meta">
+                        {ui.message('Location')}: {entry.item.lat}, {entry.item.lng} ·{' '}
+                        {openingHours(entry.item, ui.language)}
+                    </p>
+                    {entry.kind === 'edits' && (
+                        <>
+                            <h3>{ui.message('Current place')}</h3>
+                            {current.data && !current.isError ? (
+                                <>
+                                    <p>{current.data.title}</p>
+                                    <p className="admin-description">
+                                        {ui.message('Description')}:{' '}
+                                        {current.data.description || '—'}
+                                    </p>
+                                    <p>
+                                        {ui.message(categoryLabels[current.data.category])} ·{' '}
+                                        {ui.message(current.data.isPublic ? 'Public' : 'Private')} ·{' '}
+                                        {openingHours(current.data, ui.language)}
+                                    </p>
+                                    <p>
+                                        {ui.message('Active flag')}:{' '}
+                                        {ui.message(current.data.isActive ? 'Yes' : 'No')}
+                                    </p>
+                                    {current.data.contentLanguage !== entry.item.language && (
+                                        <p>
+                                            {ui.message(
+                                                'Original content shown because this translation is unavailable.',
+                                            )}
+                                        </p>
+                                    )}
+                                </>
+                            ) : (
+                                <p role="status">
+                                    {ui.message(
+                                        current.isError
+                                            ? 'This place is unavailable.'
+                                            : 'Loading places…',
+                                    )}
+                                    {current.isError && (
+                                        <DesignButton onClick={() => void current.refetch()}>
+                                            {ui.message('Retry')}
+                                        </DesignButton>
+                                    )}
+                                </p>
+                            )}
+                            <h3>{ui.message('Proposed changes')}</h3>
+                            <p>{entry.item.title}</p>
+                            <p>
+                                {ui.message(categoryLabels[entry.item.category])} ·{' '}
+                                {ui.message(entry.item.isPublic ? 'Public' : 'Private')} ·{' '}
+                                {openingHours(entry.item, ui.language)}
+                            </p>
+                            <p>
+                                {ui.message('Language')}: {entry.item.language}
+                            </p>
+                            <p>
+                                {ui.message('Active flag')}:{' '}
+                                {ui.message(entry.item.isActive ? 'Yes' : 'No')}
+                            </p>
+                            <p className="admin-description">
+                                {ui.message('Description')}: {entry.item.description || '—'}
+                            </p>
+                        </>
+                    )}
+                    {entry.kind === 'markers' && entry.item.description && (
+                        <p className="admin-description">{entry.item.description}</p>
+                    )}
+                    {entry.kind === 'markers' && (
+                        <p>
+                            {ui.message('Review status')}:{' '}
+                            {ui.message(entry.item.reviewStatus.toLowerCase())}
+                        </p>
+                    )}
+                </>
+            )}
+            {image && <AdminImage key={image} src={image} />}
+            {entry.kind === 'images' && !image && <p>{ui.message('Image unavailable.')}</p>}
+            <div className="admin-actions">
+                <DesignButton
+                    disabled={
+                        work.busy ||
+                        (entry.kind === 'edits' &&
+                            (!current.data || current.isError || current.isFetching))
+                    }
+                    onClick={() => decide('approve')}
+                >
+                    {ui.message('Approve')}
+                </DesignButton>
+                <DesignButton disabled={work.busy} onClick={() => decide('reject')}>
+                    {ui.message('Reject')}
+                </DesignButton>
+                {all && entry.kind === 'markers' && (
+                    <>
+                        <DesignButton disabled={work.busy} onClick={() => edit(entry.item)}>
+                            {ui.message('Edit')}
+                        </DesignButton>
+                        <DesignButton
+                            disabled={work.busy}
+                            onClick={() =>
+                                work.confirm({
+                                    label: `${ui.message('Delete')} · ${title} #${item.id}`,
+                                    detail: ui.message(
+                                        'This action permanently deletes the place.',
+                                    ),
+                                    action: (signal) => api.deleteMarker(item.id, signal),
+                                })
+                            }
+                        >
+                            {ui.message('Delete')}
+                        </DesignButton>
+                    </>
+                )}
+            </div>
+        </article>
+    )
+}
+function AdminImage({ src }: { src: string }) {
+    const [failed, setFailed] = useState(false),
+        ui = useAdminUi()
+    return failed ? (
+        <p>{ui.message('Image unavailable.')}</p>
+    ) : (
+        <img
+            className="admin-photo"
+            src={src}
+            alt={ui.message('Photo')}
+            loading="lazy"
+            onError={() => setFailed(true)}
+        />
+    )
+}
+export function Pagination({
+    page,
+    total,
+    busy,
+    change,
+}: {
+    page: number
+    total: number
+    busy: boolean
+    change: (page: number) => void
+}) {
+    const ui = useAdminUi()
+    return (
+        <nav className="admin-pagination" aria-label={ui.message('Pages')}>
+            <DesignButton disabled={busy || page === 0} onClick={() => change(page - 1)}>
+                {ui.message('Previous')}
+            </DesignButton>
+            <span>
+                {page + 1} / {total}
+            </span>
+            <DesignButton disabled={busy || page + 1 >= total} onClick={() => change(page + 1)}>
+                {ui.message('Next')}
+            </DesignButton>
+        </nav>
+    )
+}

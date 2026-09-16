@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { BrowserRouter, useLocation } from 'react-router'
 import { MapPage } from './MapPage'
 import { AppProviders } from './providers'
+const AdminPage = lazy(() => import('@/features/admin/AdminPage'))
 const DevelopmentPage = import.meta.env.DEV ? lazy(() => import('./devRoutes')) : null
 export function App() {
     return (
@@ -16,7 +17,11 @@ function Application() {
     const isDevelopmentPath = /^\/__(dev|design)\//.test(location.pathname)
     return (
         <AppProviders languageOverride={lang === 'en' || lang === 'zh' ? lang : undefined}>
-            {DevelopmentPage && isDevelopmentPath ? (
+            {location.pathname === '/admin' || location.pathname.startsWith('/admin/') ? (
+                <Suspense fallback={null}>
+                    <AdminPage />
+                </Suspense>
+            ) : DevelopmentPage && isDevelopmentPath ? (
                 <Suspense fallback={null}>
                     <DevelopmentPage />
                 </Suspense>
