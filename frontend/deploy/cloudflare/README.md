@@ -131,3 +131,23 @@ Cloudflare reported deployment success after all 21 artifact files uploaded.
 The custom-domain HTML references `index-DlFBwTjC.js` and
 `index-Y45GkDWD.css`; `/health/ready` returns HTTP 200 with PostgreSQL and Redis
 healthy. Chrome verified the deployed menu can be dragged open and closed.
+
+## Nearby drag dismissal P1 — 2026-09-16
+
+Commit `ac226c1` makes a completed secondary-sheet dismissal invoke the same
+close action as X in the release event. It removes the extra 280ms close timer
+and the intermediate hidden panel; the primary menu settles from the released
+finger position. No deferred close can run after another panel has opened.
+
+All 253 tests and the strict TypeScript production build passed. New real-page
+regressions compare Nearby drag dismissal with X from the radar, half/full menu
+category cards, and direct links, including route, menu height, focus and map
+preservation. Gesture coverage also checks cancellation and duplicate release.
+Chrome iPhone SE touch emulation verified local radar → Nearby → complete pull
+down → original collapsed primary menu. The originally reported error was not
+reproduced in Chrome before the change; physical-device Safari remains untested.
+
+Cloudflare reported success after uploading all 21 artifact files. The custom
+domain serves `index-NlT5wN_y.js`; `/health/ready` reports PostgreSQL and Redis
+healthy. Chrome verified the deployed radar → Nearby → full downward drag flow
+returns to the original collapsed primary menu without an application error.
