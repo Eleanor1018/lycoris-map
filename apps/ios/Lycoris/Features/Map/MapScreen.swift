@@ -76,7 +76,8 @@ struct MapScreen: View {
           ? nil
           : 208 + (selectedPlace?.hasPhoto == true ? (geometry.size.width - 50) * 198 / 353 : 0)
             + (selectedPlace?.distanceReference != nil ? 30 : 0)
-            + max(geometry.safeAreaInsets.bottom, 29)
+            + max(geometry.safeAreaInsets.bottom, 29),
+        collapsedHeaderHeight: max(44, searchHeight) + 28
       )
       let panelTop = layout.clampedTop(layout.top(for: detent) + dragTranslation)
       let panelHeight = layout.height(at: panelTop)
@@ -451,12 +452,16 @@ struct MapScreen: View {
   }
 
   private func grabber(layout: PanelLayout) -> some View {
-    Button {
+    let progress = layout.collapsedProgress(
+      at: layout.clampedTop(layout.top(for: detent) + dragTranslation))
+    return Button {
       movePanel(to: detent == .collapsed ? .nearby : detent == .nearby ? .expanded : .collapsed)
     } label: {
       Capsule().fill(.secondary.opacity(0.4))
         .frame(width: 48, height: 4)
-        .frame(maxWidth: .infinity).frame(height: 44)
+        // At rest the search row has 14pt above and below. Restore the full
+        // handle area continuously as the floating search panel is pulled up.
+        .frame(maxWidth: .infinity).frame(height: 44 - 30 * progress)
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)

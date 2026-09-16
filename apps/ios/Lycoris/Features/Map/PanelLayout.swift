@@ -12,9 +12,12 @@ struct PanelLayout {
   let headerHeight: CGFloat
   let nearbyContentHeight: CGFloat
   var detailHeight: CGFloat? = nil
+  var collapsedHeaderHeight: CGFloat? = nil
 
   var collapsedTop: CGFloat {
-    max(expandedTop, viewport.height - max(bottomInset, 29) - headerHeight)
+    max(
+      expandedTop,
+      viewport.height - max(bottomInset, 29) - (collapsedHeaderHeight ?? headerHeight))
   }
   var expandedTop: CGFloat { topInset + 8 }
   var nearbyTop: CGFloat {

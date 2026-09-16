@@ -68,3 +68,9 @@ The user's follow-up changes the fully expanded panel to an edge-attached surfac
 Map and detail scrolling explicitly own their bottom safe area once. With the keyboard visible, the home-indicator space already included in its height is not added again to the content. The last row/actions remain scrollable and reachable. Short anonymous content can naturally leave unused panel space; rows are not enlarged or populated with new content to fill it.
 
 Verified with 6 PanelLayout tests and 3 map interaction UI flows on iPhone 17, including full-width bounds, merged detents, large text, keyboard scrolling and details. Computer Use on iPhone 17 Pro compared Apple Maps, verified the new expanded surface, and restored Simplified Chinese. Log: `/tmp/lycoris-ios-panel-edges.log`; screenshots: task `outputs/ios-panel-edges`.
+
+## Collapsed panel spacing refinement (2026-09-17)
+
+The collapsed search row now has equal 14pt space above and below it. A separate collapsed header height removes the excess upper space without changing Nearby or Expanded geometry. The grabber region interpolates from 14pt collapsed to its full 44pt height as the panel opens; the search, microphone and account controls retain their existing sizes and Dynamic Type behavior.
+
+Verified with the 6 PanelLayout tests and 3 map interaction UI flows, including keyboard scrolling and preserving search text after collapse. Computer Use on iPhone 17 Pro confirmed the visual balance, dragged directly from the compact grabber to Expanded, and returned to Collapsed. Log: `/tmp/lycoris-ios-collapsed-spacing2.log`.
