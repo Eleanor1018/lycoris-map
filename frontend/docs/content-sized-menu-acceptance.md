@@ -1,7 +1,8 @@
 # Content-sized mobile menu and settings polish — 2026-09-17
 
 Branch: `deploy/lycoris-map-com`.
-Status: locally verified; not deployed to production.
+Status: deployed to lycoris-map.com on 2026-09-17 in production release
+`e0c442e4-8654-4728-86f8-70c7786c1bec`; see `deploy/cloudflare/README.md`.
 
 ## Behavior
 
@@ -41,4 +42,4 @@ Status: locally verified; not deployed to production.
 
 This supersedes the local appearance described in
 [settings-popover-acceptance.md](settings-popover-acceptance.md). That document
-continues to identify the earlier version currently deployed to production.
+records the earlier production version.

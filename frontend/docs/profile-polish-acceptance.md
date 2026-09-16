@@ -30,3 +30,6 @@ Verification:
   still opens the password form.
 - The viewport override was reset. No real account, password, avatar or
   production data was changed. Physical devices were not tested.
+
+Production follow-up: deployed on 2026-09-17 in release
+`e0c442e4-8654-4728-86f8-70c7786c1bec`; see `deploy/cloudflare/README.md`.

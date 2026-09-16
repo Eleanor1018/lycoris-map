@@ -179,3 +179,42 @@ Release ZIP: `settings-mobile-05773a5/lycoris-settings-mobile-05773a5.zip` in th
 surrounding deployment workspace. SHA-256:
 `96dbbc69cf2a98f0d06fdff6528d93c0b7504645bbd562bf0a692f8a97729275`.
 The backend, database and old domain were not modified in this release.
+
+## Menu, profile, map picker and search-range polish — 2026-09-17
+
+Application source `37f4b442225a41d5b7190c73a2c3fcc6ab4dcd56` includes the
+content-sized full phone menu, full-width phone login action, profile identity
+and grouped account options, map-source preview picker and search-range styling.
+OSM remains the default and active provider; Tianditu and Google Maps are
+disabled previews pending service keys, as agreed. The range popup now uses
+24px outer corners, 22px controls, lavender selection and the app's blush action
+button. Preset and custom-range behavior is unchanged.
+
+All 286 frontend tests, three proxy tests, strict TypeScript, the production
+build and changed-source formatting checks passed. Chrome Computer Use checked
+custom range saving and preset dismissal locally, plus the deployed desktop
+and 320×667 range popup and desktop map-source previews. Escape dismissed the
+popup while preserving Settings; closing Settings returned to the primary map.
+Physical-device touch, software keyboards and Safari were not tested.
+
+Chrome uploaded all 24 production artifact files and Cloudflare reported
+success. Production deployment: `e0c442e4-8654-4728-86f8-70c7786c1bec`.
+The previous deployment shown by Cloudflare immediately before this release
+was `b5ef9730-3413-4d5a-ac65-7decbb1b6d05` (rollback target); its public page
+still referenced `index-MlC4fVRD.js` and `index-DuBdz8aK.css`.
+
+The custom domain now serves `index-DCArVGfo.js` and `index-3ENa2zIT.css`.
+Home HTML, both resources, all three preview images and the `/admin/review`
+SPA response were byte-compared successfully with the artifact. All returned
+HTTP 200; `/health/ready` returned PostgreSQL and Redis healthy. Cloudflare's
+optional analytics beacon had a connection error in this browser session;
+the application and API health checks succeeded. Guest `/api/me` returned the
+expected HTTP 401.
+
+Release ZIP: `ui-polish-37f4b44/lycoris-ui-polish-37f4b44.zip` in the surrounding
+deployment workspace. SHA-256:
+`67d31e82f4ee5b24a39dc5af2e56a59e918ea1305f46d09e4c1464716f6fe8b9`.
+Release metadata and verification results are beside the ZIP. Only built
+assets and the existing Pages worker/routes/headers were uploaded; fixtures,
+credentials and source files were excluded. No backend, database or old-domain
+changes were made.

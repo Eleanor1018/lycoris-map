@@ -39,3 +39,6 @@ Verification:
 - Apple Maps on the web did not load reliably in this session; the working
   native macOS Maps app supplied the visual reference. The local QA page uses
   synthetic coordinates and data. No production data or accounts were changed.
+
+Production follow-up: deployed on 2026-09-17 in release
+`e0c442e4-8654-4728-86f8-70c7786c1bec`; see `deploy/cloudflare/README.md`.
