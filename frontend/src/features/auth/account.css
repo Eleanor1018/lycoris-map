@@ -263,6 +263,9 @@ body:has(.account-mobile) .mobile-sheet {
 .account-mobile .auth-form {
     margin-top: 27px;
 }
+.account-mobile.account-login .account-submit {
+    width: 100%;
+}
 .account-mobile.account-register .auth-form {
     margin-top: 23px;
 }

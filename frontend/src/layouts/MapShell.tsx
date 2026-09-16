@@ -105,11 +105,20 @@ export function MapShell({
                   ? 'half'
                   : 'collapsed'
     const [detailHeight, setDetailHeight] = useState(433)
+    const [menuHeight, setMenuHeight] = useState<number | null>(null)
+    const mainMenu =
+        (panel === 'initial' || panel === 'search') &&
+        browse?.mode !== 'search' &&
+        browse?.mode !== 'cluster'
+    const fullSheetHeight = Math.min(
+        viewportHeight - 46,
+        mainMenu ? (menuHeight ?? Infinity) : Infinity,
+    )
     const sheetHeight =
         panel === 'details'
             ? Math.min(detailHeight, viewportHeight - 46)
             : snap === 'full'
-              ? viewportHeight - 46
+              ? fullSheetHeight
               : Math.min(snap === 'half' ? 320 : 158, viewportHeight - 46)
     const sheetTop = viewportHeight - sheetHeight
     const setSnap = (next: Snap) => {
@@ -470,7 +479,9 @@ export function MapShell({
                     openDetails={(focusId) => open('details', focusId)}
                     close={close}
                     height={sheetHeight}
+                    fullHeight={fullSheetHeight}
                     onDetailHeight={setDetailHeight}
+                    onMenuHeight={setMenuHeight}
                     contribution={contributionOpen ? contribution : undefined}
                     browse={browse}
                     selectPlace={selectPlace}

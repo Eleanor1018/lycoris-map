@@ -20,6 +20,7 @@ export function useSheetDrag({
     sheet,
     snap,
     height,
+    maxHeight = Infinity,
     resetKey,
     expandedPanel,
     close,
@@ -28,6 +29,7 @@ export function useSheetDrag({
     sheet: RefObject<HTMLElement | null>
     snap: Snap
     height: number
+    maxHeight?: number
     resetKey: string
     expandedPanel: boolean
     close: () => void
@@ -102,7 +104,7 @@ export function useSheetDrag({
         const bottom = Math.max(0, parseFloat(getComputedStyle(element).bottom) || 0)
         const limit = Math.max(
             1,
-            Math.min(box.height, (viewport?.height || window.innerHeight) - 46 - bottom),
+            Math.min(box.height, (viewport?.height || window.innerHeight) - 46 - bottom, maxHeight),
         )
         const visibleHeight = Math.max(
             0,

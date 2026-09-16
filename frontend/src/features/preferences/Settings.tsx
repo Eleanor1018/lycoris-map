@@ -3,7 +3,7 @@ import { Popover } from 'radix-ui'
 import { useLocation, useNavigate } from 'react-router'
 import { useOptionalLanguage } from '@/shared/i18n/LanguageProvider'
 import { useUi } from '@/shared/i18n/ui'
-import { DesignButton, IconButton } from '@/shared/ui/design-primitives'
+import { DesignButton } from '@/shared/ui/design-primitives'
 import { FigmaIcon } from '@/shared/ui/figma-icon'
 import type { Panel } from '@/layouts/types'
 import { rangeLabel, searchCategories, usePreferences } from './PreferencesProvider'
@@ -98,16 +98,6 @@ export function SettingsRows({ mobile = false }: { mobile?: boolean }) {
                         event.stopPropagation()
                     }}
                 >
-                    <div className="settings-popover-actions">
-                        <Popover.Close asChild>
-                            <IconButton
-                                className="settings-popover-close"
-                                icon="close"
-                                size={20}
-                                label="Close panel"
-                            />
-                        </Popover.Close>
-                    </div>
                     <SettingsContent panel={panel} compact onSelect={() => setActive(null)} />
                 </Popover.Content>
             </Popover.Portal>

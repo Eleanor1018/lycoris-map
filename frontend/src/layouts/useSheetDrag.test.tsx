@@ -20,16 +20,27 @@ function Harness({
     initial = 'collapsed',
     expanded = false,
     route = 'search',
+    maxHeight = 754,
 }: {
     initial?: Snap
     expanded?: boolean
     route?: string
+    maxHeight?: number
 }) {
     const sheet = useRef<HTMLElement>(null)
     const [snap, setSnap] = useState<Snap>(initial)
-    const height = { collapsed: 158, half: 320, full: 754 }[snap]
+    const height = { collapsed: 158, half: 320, full: maxHeight }[snap]
     rendered()
-    useSheetDrag({ sheet, snap, height, resetKey: route, expandedPanel: expanded, close, setSnap })
+    useSheetDrag({
+        sheet,
+        snap,
+        height,
+        maxHeight,
+        resetKey: route,
+        expandedPanel: expanded,
+        close,
+        setSnap,
+    })
     return (
         <div data-testid="viewport" style={{ '--sheet-height': `${height}px` } as CSSProperties}>
             <section ref={sheet} data-testid="sheet" data-snap={snap} style={{ height: 754 }}>
@@ -328,4 +339,19 @@ it('keeps outgoing content visible until its settling transition finishes', () =
     Object.defineProperty(end, 'propertyName', { value: 'transform' })
     fireEvent(sheet, end)
     expect(sheet.dataset.settling).toBeUndefined()
+})
+
+it('stops an upward drag at the measured menu height and settles there', () => {
+    render(<Harness initial="half" maxHeight={560} />)
+    const title = screen.getByRole('heading')
+    touch(title, 'start', 500)
+    touch(title, 'move', 50)
+    expect(visualHeight()).toBe('560px')
+    touch(title, 'end', 50)
+    expect(screen.getByTestId('sheet')).toHaveAttribute('data-snap', 'full')
+    expect(screen.getByTestId('viewport').style.getPropertyValue('--sheet-height')).toBe('560px')
+    touch(title, 'start', 250)
+    touch(title, 'move', 490)
+    touch(title, 'end', 490)
+    expect(screen.getByTestId('sheet')).toHaveAttribute('data-snap', 'half')
 })

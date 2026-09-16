@@ -102,8 +102,16 @@
     }
 }
 
-.setting-card[data-state='open'] {
-    box-shadow: inset 0 0 0 1px var(--ui-brand);
+.settings-cards .setting-card[data-state='open'],
+.mobile-settings .setting-card[data-state='open'],
+.settings-cards .setting-card:active,
+.mobile-settings .setting-card:active {
+    background: #e9e9ed;
+    box-shadow: none;
+}
+.setting-card:focus-visible {
+    outline: 2px solid #007aff;
+    outline-offset: 2px;
 }
 .settings-popover {
     z-index: 30;
@@ -112,37 +120,28 @@
     max-height: var(--radix-popover-content-available-height);
     overflow-y: auto;
     overscroll-behavior: contain;
-    border: 1px solid #e6dced;
-    border-radius: 22px;
+    border: 1px solid #00000014;
+    border-radius: 16px;
     padding: 6px;
-    background: #fffbff;
+    background: #f9f9fbf2;
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    backdrop-filter: blur(24px) saturate(150%);
     box-shadow:
-        0 8px 28px #261b3a26,
-        0 2px 6px #261b3a0d;
-    color: var(--ui-brand-deep);
+        0 12px 32px #00000024,
+        0 2px 6px #0000000d,
+        inset 0 1px 0 #ffffffb3;
+    color: #1c1c1e;
     font: 400 15px/20px var(--ui-font-body);
     outline: none;
     transform-origin: var(--radix-popover-content-transform-origin);
     animation: settings-popover-in 120ms ease-out;
-}
-.settings-popover-actions {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    min-height: 36px;
-}
-.settings-popover .settings-popover-close {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    flex: none;
 }
 .settings-popover .compact-preferences {
     margin: 0;
     font: inherit;
 }
 .settings-popover .language-options {
-    border-radius: 16px;
+    border-radius: 10px;
     background: transparent;
 }
 .settings-popover .language-options .design-button {
@@ -150,29 +149,46 @@
     padding: 11px;
     gap: 10px;
     border: 0;
-    border-radius: 12px;
+    border-radius: 10px;
     font: 400 16px/22px var(--ui-font-body);
     letter-spacing: normal;
     white-space: normal;
 }
-.settings-popover .language-options .design-button[aria-checked='true'] {
-    background: var(--ui-selected);
-    color: var(--ui-brand-deep);
+.settings-popover .language-options .design-button + .design-button {
+    border-top: 0;
 }
-.settings-popover .language-options .design-button:focus-visible,
-.settings-popover-close:focus-visible {
-    outline: 2px solid var(--ui-brand);
+.settings-popover .language-options .design-button[aria-checked='true'] {
+    background: #00000008;
+    color: #1c1c1e;
+}
+@media (hover: hover) {
+    .settings-popover .language-options .design-button:hover {
+        background: #0000000d;
+    }
+}
+.settings-popover .language-options .design-button:focus-visible {
+    outline: 2px solid #007aff;
     outline-offset: -2px;
 }
 .settings-popover .preference-form {
     margin: 8px 11px 11px;
     padding-top: 11px;
-    border-top: 1px solid #e6dced;
+    border-top: 1px solid #3c3c4329;
     gap: 8px;
 }
 .settings-popover .preference-form input {
     min-height: 44px;
     padding: 8px 11px;
+    background: #ffffffb3;
+    border-color: #3c3c4333;
+}
+.settings-popover .preference-form input:focus-visible {
+    outline-color: #007aff;
+}
+.settings-popover .preference-form .design-button {
+    background: #007aff;
+    color: white;
+    border-radius: 10px;
 }
 .settings-popover .preferences-content p {
     margin: 8px 11px 11px;
@@ -201,5 +217,12 @@
 @media (prefers-reduced-motion: reduce) {
     .settings-popover {
         animation: none;
+    }
+}
+@media (prefers-reduced-transparency: reduce) {
+    .settings-popover {
+        background: #f9f9fb;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
     }
 }

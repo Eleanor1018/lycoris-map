@@ -796,6 +796,9 @@
 .mobile-tools {
     top: 152px;
 }
+.map-shell[data-mobile='true'] .map-tools[inert] {
+    visibility: hidden;
+}
 .map-shell[data-mobile='true'] .leaflet-bottom {
     bottom: 4px;
     transform: translateY(calc(0px - var(--sheet-height)));

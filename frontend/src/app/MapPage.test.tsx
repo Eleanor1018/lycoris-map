@@ -410,7 +410,7 @@ it.each([
     const popup = screen.getByRole('dialog', { name: title })
     expect(popup).toBeInTheDocument()
     expect(screen.getByTestId('route')).toHaveTextContent('?lang=en&snap=full')
-    fireEvent.click(within(popup).getByRole('button', { name: 'Close panel' }))
+    fireEvent.click(screen.getByRole('button', { name: option }))
     await waitFor(() =>
         expect(screen.queryByRole('dialog', { name: title })).not.toBeInTheDocument(),
     )
@@ -520,4 +520,54 @@ it('closes a directly opened Nearby by dragging, without leaving the app', async
     expect(screen.getByRole('textbox', { name: 'Search Positions' })).toBeInTheDocument()
     expect(screen.getByTestId('route')).toHaveTextContent('#retained')
     expect(container.querySelector('.leaflet-container')).toBe(map)
+})
+
+it('fits the open primary menu to changing content and caps it to the viewport', () => {
+    vi.stubGlobal('innerHeight', 844)
+    let contentHeight = 580
+    const bounds = HTMLElement.prototype.getBoundingClientRect
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+        this: HTMLElement,
+    ) {
+        return this.classList.contains('mobile-search-content')
+            ? new DOMRect(0, 0, 375, contentHeight)
+            : bounds.call(this)
+    })
+    const observed = new Map<Element, ResizeObserverCallback>()
+    vi.stubGlobal(
+        'ResizeObserver',
+        class {
+            callback: ResizeObserverCallback
+            constructor(callback: ResizeObserverCallback) {
+                this.callback = callback
+            }
+            observe(element: Element) {
+                observed.set(element, this.callback)
+            }
+            unobserve(element: Element) {
+                observed.delete(element)
+            }
+            disconnect() {
+                for (const [element, callback] of observed)
+                    if (callback === this.callback) observed.delete(element)
+            }
+        },
+    )
+    const { container } = app('/?lang=en&snap=full', true)
+    const root = document.getElementById('map-shell')!
+    const content = container.querySelector('.mobile-search-content')!
+    expect(root.style.getPropertyValue('--sheet-height')).toBe('580px')
+    contentHeight = 1200
+    act(() => observed.get(content)!([], {} as ResizeObserver))
+    expect(root.style.getPropertyValue('--sheet-height')).toBe('798px')
+    contentHeight = 620
+    act(() => observed.get(content)!([], {} as ResizeObserver))
+    expect(root.style.getPropertyValue('--sheet-height')).toBe('620px')
+    vi.stubGlobal('innerHeight', 600)
+    fireEvent.resize(window)
+    expect(root.style.getPropertyValue('--sheet-height')).toBe('554px')
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Change panel height (full)' }), {
+        key: 'ArrowDown',
+    })
+    expect(root.style.getPropertyValue('--sheet-height')).toBe('320px')
 })

@@ -24,7 +24,9 @@ export function MobileSheet({
     openDetails,
     close,
     height,
+    fullHeight,
     onDetailHeight,
+    onMenuHeight,
     contribution,
     browse,
     selectPlace,
@@ -44,7 +46,9 @@ export function MobileSheet({
     openDetails: (focusId: string) => void
     close: () => void
     height: number
+    fullHeight: number
     onDetailHeight: (height: number) => void
+    onMenuHeight: (height: number) => void
     contribution?: Omit<ContributionFormProps, 'mobile'> | undefined
     browse?: PlaceBrowse | undefined
     selectPlace?: ((place: Marker, focusId: string) => void) | undefined
@@ -60,21 +64,28 @@ export function MobileSheet({
     const sheet = useRef<HTMLElement>(null)
     const composing = !!contribution
     const liveDetail = detail && !!browse
+    const expandedPanel = detail || Boolean(contribution) || Boolean(secondary)
+    const mainMenu = !expandedPanel && !hasPlaceResults
     useLayoutEffect(() => {
-        const content = sheet.current?.querySelector<HTMLElement>('.live-mobile-detail')
+        if (!liveDetail && !mainMenu) return
+        const content = sheet.current?.querySelector<HTMLElement>(
+            liveDetail ? '.live-mobile-detail' : '.mobile-search-content',
+        )
         const scroll = content?.parentElement
-        if (!liveDetail || !content || !scroll) return
+        if (!content || !scroll) return
         const measure = () => {
             const natural = content.getBoundingClientRect().height
             if (!natural) return
             const safeArea = parseFloat(getComputedStyle(scroll).paddingBottom) || 0
-            onDetailHeight(Math.max(158, Math.ceil(natural + safeArea)))
+            const onHeight = liveDetail ? onDetailHeight : onMenuHeight
+            onHeight(Math.max(liveDetail ? 158 : 320, Math.ceil(natural + safeArea)))
         }
         measure()
         const observer = new ResizeObserver(measure)
         observer.observe(content)
+        observer.observe(scroll)
         return () => observer.disconnect()
-    }, [liveDetail, onDetailHeight])
+    }, [liveDetail, mainMenu, onDetailHeight, onMenuHeight])
     useEffect(() => {
         const element = sheet.current,
             viewport = window.visualViewport
@@ -110,7 +121,6 @@ export function MobileSheet({
             element.style.removeProperty('--contribution-keyboard-offset')
         }
     }, [composing])
-    const expandedPanel = detail || Boolean(contribution) || Boolean(secondary)
     const cycle = () =>
         expandedPanel
             ? close()
@@ -119,6 +129,7 @@ export function MobileSheet({
         sheet,
         snap,
         height,
+        maxHeight: fullHeight,
         expandedPanel,
         close,
         setSnap,
