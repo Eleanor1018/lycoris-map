@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n    id, marker_id, marker_title, proposer_username, proposer_public_id,\n    image_url, status, created_at\nFROM marker_image_proposals\nWHERE status = 'PENDING'\nORDER BY created_at DESC, id DESC\n",
+  "query": "SELECT\n    id, marker_id, marker_title, proposer_username, proposer_public_id,\n    image_url, status, created_at\nFROM marker_image_proposals\nWHERE status = 'PENDING'\n  AND EXISTS (SELECT 1 FROM map_markers m WHERE m.id = marker_id AND m.deactivated = false)\nORDER BY created_at DESC, id DESC\n",
   "describe": {
     "columns": [
       {
@@ -106,5 +106,5 @@
       false
     ]
   },
-  "hash": "0585d28d2dc3a43a4b78a50e29431da4c808b249ebf3baa9b24b14e4c35eccab"
+  "hash": "c15a01c494ce770ae646a1e35ade407c13a75647222cba10caf3b7060925ee95"
 }

@@ -28,7 +28,7 @@ const CONTROL_TITLE: &str = "中\"文\\\n😀";
 const CONTROL_DESCRIPTION: &str = "line\t\u{1f}";
 const CONTROL_TITLE_HASH: &str = "69041ef21862545c32d414958ea2e68ef0287b0b67807d93ebfce3179dae8e87";
 
-const MARKER_KEYS: [&str; 23] = [
+const MARKER_KEYS: [&str; 24] = [
     "id",
     "version",
     "lat",
@@ -43,6 +43,7 @@ const MARKER_KEYS: [&str; 23] = [
     "userPublicId",
     "clientRequestId",
     "isActive",
+    "deactivated",
     "openTimeStart",
     "openTimeEnd",
     "reviewStatus",
@@ -1747,5 +1748,64 @@ async fn redis_outage_is_bounded_and_falls_back_to_database() {
         );
     }
 
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn deactivated_places_are_hidden_on_all_public_paths_even_with_stale_cache_ids() {
+    let (temp, pool) = TempDatabase::create_migrated().await;
+    let redis = connect_redis().await;
+    let app = app_with(
+        pool.clone(),
+        redis,
+        temp.url(),
+        &unique_cache_namespace(),
+        true,
+    );
+    let marker = insert(&pool, Seed::default()).await;
+    let hash = source_hash_components("zh", Some("marker"), None);
+    insert_translation(&pool, marker, "en", "translated", None, &hash).await;
+    let routes = [
+        "/api/markers/public",
+        "/api/markers/search?q=marker",
+        "/api/markers/search?q=translated&lang=en",
+        "/api/markers/search?q=0,0",
+        "/api/markers/nearby?lat=0&lng=0",
+        "/api/markers/viewport?minLat=-1&maxLat=1&minLng=-1&maxLng=1",
+        "/api/markers/viewport?minLat=-1&maxLat=1&minLng=-1&maxLng=1&categories=accessible_toilet",
+    ];
+    for route in routes {
+        assert_eq!(
+            parse(&call(&app, route).await.2).as_array().unwrap().len(),
+            1,
+            "{route}"
+        );
+    }
+    // Deliberately skip cache invalidation to simulate an unavailable Redis during deletion.
+    sqlx::query("UPDATE map_markers SET deactivated = true WHERE id = $1")
+        .bind(marker)
+        .execute(&pool)
+        .await
+        .unwrap();
+    for route in routes {
+        let (status, _, body) = call(&app, route).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(parse(&body), json!([]), "{route}");
+    }
+    assert_eq!(
+        call(&app, &format!("/api/markers/{marker}")).await.0,
+        StatusCode::NOT_FOUND
+    );
+    // A cache miss must apply the same rule.
+    let uncached = app_with(
+        pool.clone(),
+        connect_redis().await,
+        temp.url(),
+        &unique_cache_namespace(),
+        false,
+    );
+    for route in routes {
+        assert_eq!(parse(&call(&uncached, route).await.2), json!([]), "{route}");
+    }
     pool.close().await;
 }

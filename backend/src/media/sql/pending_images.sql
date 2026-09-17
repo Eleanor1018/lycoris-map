@@ -3,4 +3,5 @@ SELECT
     image_url, status, created_at
 FROM marker_image_proposals
 WHERE status = 'PENDING'
+  AND EXISTS (SELECT 1 FROM map_markers m WHERE m.id = marker_id AND m.deactivated = false)
 ORDER BY created_at DESC, id DESC

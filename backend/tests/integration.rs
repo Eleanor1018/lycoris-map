@@ -43,13 +43,13 @@ async fn migrates_baseline_and_passes_health_checks() {
             .fetch_all(&pool)
             .await
             .expect("查询迁移记录失败");
-    // 完整迁移应登记内嵌迁移集合的全部版本；0003 之后即为 [1, 2, 3]。
+    // 完整迁移应登记内嵌迁移集合的全部版本；0004 之后即为 [1, 2, 3, 4]。
     let expected: Vec<i64> = MIGRATOR.iter().map(|migration| migration.version).collect();
     assert_eq!(applied, expected, "完整迁移应登记内嵌迁移的全部版本");
     assert_eq!(
         applied,
-        vec![1, 2, 3],
-        "0003 之后完整迁移版本应为 [1, 2, 3]"
+        vec![1, 2, 3, 4],
+        "0004 之后完整迁移版本应为 [1, 2, 3, 4]"
     );
 
     let redis = connect_redis().await;
@@ -418,13 +418,13 @@ async fn migrate_lock_contention_is_bounded_then_reusable() {
             .fetch_all(&contender)
             .await
             .expect("查询迁移记录失败");
-    // 完整迁移应登记内嵌迁移集合的全部版本；0003 之后即为 [1, 2, 3]。
+    // 完整迁移应登记内嵌迁移集合的全部版本；0004 之后即为 [1, 2, 3, 4]。
     let expected: Vec<i64> = MIGRATOR.iter().map(|migration| migration.version).collect();
     assert_eq!(applied, expected, "释放迁移锁后应登记内嵌迁移的全部版本");
     assert_eq!(
         applied,
-        vec![1, 2, 3],
-        "0003 之后完整迁移版本应为 [1, 2, 3]"
+        vec![1, 2, 3, 4],
+        "0004 之后完整迁移版本应为 [1, 2, 3, 4]"
     );
 
     contender.close().await;

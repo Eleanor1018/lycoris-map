@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n    t.marker_id, t.language, t.title, t.description, t.source_hash\nFROM map_marker_translations t\nJOIN map_markers m ON m.id = t.marker_id\nWHERE m.is_public = true\n  AND m.review_status = 'APPROVED'\n  AND t.language IN ('en', 'zh')\n  AND (\n    lower(t.title) LIKE lower('%' || $1 || '%')\n    OR lower(t.description) LIKE lower('%' || $1 || '%')\n  )\nORDER BY t.id ASC\n",
+  "query": "SELECT\n    t.marker_id, t.language, t.title, t.description, t.source_hash\nFROM map_marker_translations t\nJOIN map_markers m ON m.id = t.marker_id\nWHERE m.is_public = true\n  AND m.review_status = 'APPROVED'\n  AND m.deactivated = false\n  AND t.language IN ('en', 'zh')\n  AND (\n    lower(t.title) LIKE lower('%' || $1 || '%')\n    OR lower(t.description) LIKE lower('%' || $1 || '%')\n  )\nORDER BY t.id ASC\n",
   "describe": {
     "columns": [
       {
@@ -72,5 +72,5 @@
       false
     ]
   },
-  "hash": "42bde2a90f99483e618b2116ca3bfc2ef3f26b9ce1bb63cf44de2df33582004e"
+  "hash": "76d4ccea4db52e4d96a50b4b3d00db68e2e96fc11dadaf592c3fc070e2ea863c"
 }

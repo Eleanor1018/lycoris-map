@@ -5,4 +5,5 @@ SELECT
     base_marker_version, created_at
 FROM marker_edit_proposals
 WHERE status = 'PENDING'
+  AND EXISTS (SELECT 1 FROM map_markers m WHERE m.id = marker_id AND m.deactivated = false)
 ORDER BY created_at DESC

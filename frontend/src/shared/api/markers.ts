@@ -1,6 +1,6 @@
 /**
  * Public DTO schemas for the marker read endpoints, modelled on
- * `backend/src/modules/markers/model.rs` (`MarkerDto`, 23 fields).
+ * `backend/src/modules/markers/model.rs` (`MarkerDto`, including soft-deletion state).
  *
  * Only the read shape used by S1/S3 lives here; write DTOs arrive with S5.
  * `id`/`version` are Rust `i64`, so they are validated as safe integers rather
@@ -33,6 +33,8 @@ export const markerSchema = z.object({
     userPublicId: z.string().nullable(),
     clientRequestId: z.string().nullable(),
     isActive: z.boolean(),
+    // Optional while older production responses and native clients transition.
+    deactivated: z.boolean().optional(),
     openTimeStart: openTimeSchema.nullable(),
     openTimeEnd: openTimeSchema.nullable(),
     reviewStatus: reviewStatusSchema,

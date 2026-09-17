@@ -1,21 +1,10 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n    p.proposer_public_id,\n    m.id, m.version, m.lat, m.lng, m.category, m.title, m.description, m.source_language,\n    m.is_public, m.username, m.user_public_id, m.client_request_id, m.is_active,\n    m.open_time_start, m.open_time_end, m.review_status, m.last_edited_by,\n    m.last_edited_by_public_id, m.last_edited_by_owner, m.mark_image, m.created_at, m.updated_at\nFROM marker_image_proposals p\nINNER JOIN map_markers m ON m.id = p.marker_id\nWHERE p.image_url = $1\nORDER BY p.id ASC\n",
+  "query": "UPDATE map_markers SET\n    category = $2,\n    title = $3,\n    description = $4,\n    source_language = $5,\n    is_public = $6,\n    is_active = $7,\n    open_time_start = $8,\n    open_time_end = $9,\n    review_status = $10,\n    last_edited_by = $11,\n    last_edited_by_public_id = $12,\n    last_edited_by_owner = $13,\n    updated_at = now(),\n    version = version + 1\nWHERE id = $1\nRETURNING\n    id, version, lat, lng, category, title, description, source_language,\n    is_public, username, user_public_id, client_request_id, is_active,\n    open_time_start, open_time_end, review_status, last_edited_by,\n    last_edited_by_public_id, last_edited_by_owner, mark_image, deactivated, created_at, updated_at\n",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "proposer_public_id",
-        "type_info": "Varchar",
-        "origin": {
-          "Table": {
-            "table": "marker_image_proposals",
-            "name": "proposer_public_id"
-          }
-        }
-      },
-      {
-        "ordinal": 1,
         "name": "id",
         "type_info": "Int8",
         "origin": {
@@ -26,7 +15,7 @@
         }
       },
       {
-        "ordinal": 2,
+        "ordinal": 1,
         "name": "version",
         "type_info": "Int8",
         "origin": {
@@ -37,7 +26,7 @@
         }
       },
       {
-        "ordinal": 3,
+        "ordinal": 2,
         "name": "lat",
         "type_info": "Float8",
         "origin": {
@@ -48,7 +37,7 @@
         }
       },
       {
-        "ordinal": 4,
+        "ordinal": 3,
         "name": "lng",
         "type_info": "Float8",
         "origin": {
@@ -59,7 +48,7 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 4,
         "name": "category",
         "type_info": "Varchar",
         "origin": {
@@ -70,7 +59,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 5,
         "name": "title",
         "type_info": "Varchar",
         "origin": {
@@ -81,7 +70,7 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 6,
         "name": "description",
         "type_info": "Text",
         "origin": {
@@ -92,7 +81,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 7,
         "name": "source_language",
         "type_info": "Varchar",
         "origin": {
@@ -103,7 +92,7 @@
         }
       },
       {
-        "ordinal": 9,
+        "ordinal": 8,
         "name": "is_public",
         "type_info": "Bool",
         "origin": {
@@ -114,7 +103,7 @@
         }
       },
       {
-        "ordinal": 10,
+        "ordinal": 9,
         "name": "username",
         "type_info": "Varchar",
         "origin": {
@@ -125,7 +114,7 @@
         }
       },
       {
-        "ordinal": 11,
+        "ordinal": 10,
         "name": "user_public_id",
         "type_info": "Varchar",
         "origin": {
@@ -136,7 +125,7 @@
         }
       },
       {
-        "ordinal": 12,
+        "ordinal": 11,
         "name": "client_request_id",
         "type_info": "Varchar",
         "origin": {
@@ -147,7 +136,7 @@
         }
       },
       {
-        "ordinal": 13,
+        "ordinal": 12,
         "name": "is_active",
         "type_info": "Bool",
         "origin": {
@@ -158,7 +147,7 @@
         }
       },
       {
-        "ordinal": 14,
+        "ordinal": 13,
         "name": "open_time_start",
         "type_info": "Varchar",
         "origin": {
@@ -169,7 +158,7 @@
         }
       },
       {
-        "ordinal": 15,
+        "ordinal": 14,
         "name": "open_time_end",
         "type_info": "Varchar",
         "origin": {
@@ -180,7 +169,7 @@
         }
       },
       {
-        "ordinal": 16,
+        "ordinal": 15,
         "name": "review_status",
         "type_info": "Varchar",
         "origin": {
@@ -191,7 +180,7 @@
         }
       },
       {
-        "ordinal": 17,
+        "ordinal": 16,
         "name": "last_edited_by",
         "type_info": "Varchar",
         "origin": {
@@ -202,7 +191,7 @@
         }
       },
       {
-        "ordinal": 18,
+        "ordinal": 17,
         "name": "last_edited_by_public_id",
         "type_info": "Varchar",
         "origin": {
@@ -213,7 +202,7 @@
         }
       },
       {
-        "ordinal": 19,
+        "ordinal": 18,
         "name": "last_edited_by_owner",
         "type_info": "Bool",
         "origin": {
@@ -224,13 +213,24 @@
         }
       },
       {
-        "ordinal": 20,
+        "ordinal": 19,
         "name": "mark_image",
         "type_info": "Varchar",
         "origin": {
           "Table": {
             "table": "map_markers",
             "name": "mark_image"
+          }
+        }
+      },
+      {
+        "ordinal": 20,
+        "name": "deactivated",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "deactivated"
           }
         }
       },
@@ -259,11 +259,22 @@
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Int8",
+        "Varchar",
+        "Varchar",
+        "Text",
+        "Varchar",
+        "Bool",
+        "Bool",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Bool"
       ]
     },
     "nullable": [
-      true,
       false,
       false,
       false,
@@ -284,9 +295,10 @@
       true,
       false,
       true,
+      false,
       false,
       false
     ]
   },
-  "hash": "66c0224010ab296524354802e11fe0f21bce1bf78c1da74d7f4e06663ff4f78b"
+  "hash": "b9a5111319a991a48532e9cdbf489df61cf3392f380ca612a167c5b91548cb97"
 }

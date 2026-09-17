@@ -344,6 +344,7 @@ mod tests {
         description: Option<&str>,
     ) -> MarkerRow {
         MarkerRow {
+            deactivated: false,
             id,
             version: 0,
             lat: 0.0,

@@ -100,6 +100,7 @@ pub struct ProposalMarkerRow {
     pub last_edited_by_public_id: Option<String>,
     pub last_edited_by_owner: bool,
     pub mark_image: Option<String>,
+    pub deactivated: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -128,6 +129,7 @@ impl ProposalMarkerRow {
             last_edited_by_public_id: self.last_edited_by_public_id,
             last_edited_by_owner: self.last_edited_by_owner,
             mark_image: self.mark_image,
+            deactivated: self.deactivated,
             created_at: self.created_at,
             updated_at: self.updated_at,
         };

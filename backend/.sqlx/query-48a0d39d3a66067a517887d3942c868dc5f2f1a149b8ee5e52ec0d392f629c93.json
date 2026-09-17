@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n    id, version, lat, lng, category, title, description, source_language,\n    is_public, username, user_public_id, client_request_id, is_active,\n    open_time_start, open_time_end, review_status, last_edited_by,\n    last_edited_by_public_id, last_edited_by_owner, mark_image, created_at, updated_at\nFROM map_markers\nWHERE is_public = true\n  AND review_status = 'APPROVED'\nORDER BY id ASC\n",
+  "query": "SELECT\n    id, version, lat, lng, category, title, description, source_language,\n    is_public, username, user_public_id, client_request_id, is_active,\n    open_time_start, open_time_end, review_status, last_edited_by,\n    last_edited_by_public_id, last_edited_by_owner, mark_image, deactivated, created_at, updated_at\nFROM map_markers\nWHERE review_status = 'PENDING'\n  AND deactivated = false\nORDER BY updated_at DESC\n",
   "describe": {
     "columns": [
       {
@@ -225,6 +225,17 @@
       },
       {
         "ordinal": 20,
+        "name": "deactivated",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "deactivated"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
         "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -235,7 +246,7 @@
         }
       },
       {
-        "ordinal": 21,
+        "ordinal": 22,
         "name": "updated_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -271,8 +282,9 @@
       false,
       true,
       false,
+      false,
       false
     ]
   },
-  "hash": "fd5f20d83e1a28525d19c8b7bb7f6dd14d2ce2e910ee85db0798e16c05c55f9e"
+  "hash": "48a0d39d3a66067a517887d3942c868dc5f2f1a149b8ee5e52ec0d392f629c93"
 }

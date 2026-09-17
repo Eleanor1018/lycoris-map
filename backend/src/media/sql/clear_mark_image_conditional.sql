@@ -5,3 +5,4 @@ SET mark_image = NULL,
 WHERE id = $1
   AND version = $2
   AND mark_image = $3
+  AND deactivated = false

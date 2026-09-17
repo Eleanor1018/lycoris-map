@@ -27,8 +27,8 @@ use uuid::Uuid;
 const ALLOWED_ORIGIN: &str = "https://app.example.com";
 const SECOND_PASSCODE: &str = "second-pass";
 
-/// Java `MapMarker` 成功响应的 23 个字段（与契约第 3 节逐字一致）。
-const MARKER_KEYS: [&str; 23] = [
+/// 兼容原有点位字段，并增加独立的软删除标志 `deactivated`。
+const MARKER_KEYS: [&str; 24] = [
     "id",
     "version",
     "lat",
@@ -43,6 +43,7 @@ const MARKER_KEYS: [&str; 23] = [
     "userPublicId",
     "clientRequestId",
     "isActive",
+    "deactivated",
     "openTimeStart",
     "openTimeEnd",
     "reviewStatus",
@@ -754,8 +755,54 @@ async fn owner_and_admin_delete_semantics() {
         Some(admin.as_str()),
     )
     .await;
-    assert_eq!(admin_delete_missing.status, StatusCode::NOT_FOUND);
-    assert_eq!(admin_delete_missing.text(), "点位不存在");
+    assert_eq!(admin_delete_missing.status, StatusCode::OK);
+    let hidden = get(
+        &env,
+        &format!("/api/markers/{second_id}"),
+        Some(owner_token.as_str()),
+    )
+    .await;
+    assert_eq!(hidden.status, StatusCode::NOT_FOUND);
+    let all = get(&env, "/api/admin/markers/all", Some(admin.as_str())).await;
+    assert!(
+        all.json()
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["id"] == second_id && m["deactivated"] == true)
+    );
+    let forbidden_restore = post_empty(
+        &env,
+        &format!("/api/admin/markers/{second_id}/restore"),
+        Some(owner_token.as_str()),
+    )
+    .await;
+    assert_eq!(forbidden_restore.status, StatusCode::FORBIDDEN);
+    assert_eq!(
+        post_empty(
+            &env,
+            &format!("/api/admin/markers/{second_id}/restore"),
+            Some(admin.as_str())
+        )
+        .await
+        .status,
+        StatusCode::OK
+    );
+    // Restoring a pending point must not publish it or approve it.
+    assert_eq!(
+        get(&env, &format!("/api/markers/{second_id}"), None)
+            .await
+            .status,
+        StatusCode::NOT_FOUND
+    );
+    let owned = get(
+        &env,
+        &format!("/api/markers/{second_id}"),
+        Some(owner_token.as_str()),
+    )
+    .await;
+    assert_eq!(owned.json()["reviewStatus"], "PENDING");
+    assert_eq!(owned.json()["deactivated"], false);
 }
 
 #[tokio::test]
