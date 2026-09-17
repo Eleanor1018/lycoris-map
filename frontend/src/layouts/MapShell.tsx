@@ -31,7 +31,6 @@ const navigation: { panel: Panel; label: string; icon: FigmaIconName }[] = [
     { panel: 'search', label: 'Search', icon: 'navSearch' },
     { panel: 'bookmarks', label: 'Bookmarks', icon: 'navBookmarks' },
     { panel: 'contribute', label: 'Contribute', icon: 'navContribute' },
-    { panel: 'languages', label: 'Languages', icon: 'navLanguages' },
     { panel: 'settings', label: 'Settings', icon: 'navSettings' },
 ]
 export function MapShell({

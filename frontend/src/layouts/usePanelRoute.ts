@@ -99,7 +99,7 @@ export function usePanelRoute(
                         ? state?.focusId === 'desktop-bookmark-place'
                             ? 'bookmarks'
                             : 'search'
-                        : isSettingsPanel(panel) && panel !== 'languages'
+                        : isSettingsPanel(panel)
                           ? 'settings'
                           : panel
             restoreFocus.current =
