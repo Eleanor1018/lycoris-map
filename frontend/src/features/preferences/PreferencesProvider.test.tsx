@@ -54,7 +54,9 @@ it('keeps settings usable when storage writes fail', () => {
             </PreferencesProvider>
         </MemoryRouter>,
     )
-    fireEvent.click(screen.getByRole('radio', { name: '2.5km' }))
+    const range = screen.getByRole('spinbutton', { name: 'Range (meters)' })
+    fireEvent.change(range, { target: { value: '2500' } })
+    fireEvent.submit(range.closest('form')!)
     expect(screen.getByRole('status')).toHaveTextContent('2500')
     fail.mockRestore()
 })

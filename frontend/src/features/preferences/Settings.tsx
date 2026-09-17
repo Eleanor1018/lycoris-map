@@ -260,58 +260,46 @@ export function SettingsContent({
                 />
             )}
             {panel === 'range' && (
-                <>
-                    <Choices
-                        label={ui.text('Searching Range')}
-                        value={preferences.radius}
-                        onSelect={onSelect}
-                        options={[1000, 2500].map((value) => ({ value, label: rangeLabel(value) }))}
-                        change={(radius) => {
-                            update({ radius })
-                            setError(false)
-                        }}
+                <form
+                    className="preference-form"
+                    onSubmit={(event) => {
+                        event.preventDefault()
+                        const number = Number(radius)
+                        if (
+                            !/^\d+$/.test(radius) ||
+                            !Number.isSafeInteger(number) ||
+                            number < 1 ||
+                            number > 50000
+                        ) {
+                            setError(true)
+                            return
+                        }
+                        update({ radius: number })
+                        setError(false)
+                        onSelect?.()
+                    }}
+                >
+                    <label htmlFor="search-range">{ui.text('Range (meters)')}</label>
+                    <input
+                        id="search-range"
+                        type="number"
+                        min="1"
+                        max="50000"
+                        step="1"
+                        inputMode="numeric"
+                        required
+                        value={radius}
+                        aria-invalid={error || undefined}
+                        aria-describedby={error ? 'range-error' : undefined}
+                        onChange={(event) => setRadius(event.target.value)}
                     />
-                    <form
-                        className="preference-form"
-                        onSubmit={(event) => {
-                            event.preventDefault()
-                            const number = Number(radius)
-                            if (
-                                !/^\d+$/.test(radius) ||
-                                !Number.isSafeInteger(number) ||
-                                number < 1 ||
-                                number > 50000
-                            ) {
-                                setError(true)
-                                return
-                            }
-                            update({ radius: number })
-                            setError(false)
-                            onSelect?.()
-                        }}
-                    >
-                        <label htmlFor="search-range">{ui.text('Range (meters)')}</label>
-                        <input
-                            id="search-range"
-                            type="number"
-                            min="1"
-                            max="50000"
-                            step="1"
-                            inputMode="numeric"
-                            required
-                            value={radius}
-                            aria-invalid={error || undefined}
-                            aria-describedby={error ? 'range-error' : undefined}
-                            onChange={(event) => setRadius(event.target.value)}
-                        />
-                        {error && (
-                            <p id="range-error" role="alert">
-                                {ui.text('Use a whole number between 1 and 50000.')}
-                            </p>
-                        )}
-                        <DesignButton type="submit">{ui.text('Save')}</DesignButton>
-                    </form>
-                </>
+                    {error && (
+                        <p id="range-error" role="alert">
+                            {ui.text('Use a whole number between 1 and 50000.')}
+                        </p>
+                    )}
+                    <DesignButton type="submit">{ui.text('Save')}</DesignButton>
+                </form>
             )}
             {panel === 'source' && <MapSourceOptions onSelect={onSelect} />}
             {panel === 'about' && (
