@@ -234,3 +234,13 @@ it('disables and restores a place with confirmation while preventing edits to di
     expect(restore).toHaveBeenCalledWith(marker.id, expect.any(AbortSignal))
     expect(screen.getByRole('button', { name: 'Edit' })).toBeEnabled()
 })
+
+it('does not send a supposedly recoverable deletion to an older backend', async () => {
+    const disable = vi.spyOn(api, 'deactivateMarker')
+    mount('/admin/all')
+    const waiting = await screen.findByRole('button', { name: 'Server update required' })
+    expect(waiting).toBeDisabled()
+    fireEvent.click(waiting)
+    expect(disable).not.toHaveBeenCalled()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+})

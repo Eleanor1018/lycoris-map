@@ -302,7 +302,7 @@ function ReviewCard({
                             {ui.message('Edit')}
                         </DesignButton>
                         <DesignButton
-                            disabled={work.busy}
+                            disabled={work.busy || entry.item.deactivated === undefined}
                             onClick={() =>
                                 work.confirm({
                                     label: `${ui.message(entry.item.deactivated ? 'Restore' : 'Disable')} · ${title} #${item.id}`,
@@ -318,7 +318,13 @@ function ReviewCard({
                                 })
                             }
                         >
-                            {ui.message(entry.item.deactivated ? 'Restore' : 'Disable')}
+                            {ui.message(
+                                entry.item.deactivated === undefined
+                                    ? 'Server update required'
+                                    : entry.item.deactivated
+                                      ? 'Restore'
+                                      : 'Disable',
+                            )}
                         </DesignButton>
                     </>
                 )}

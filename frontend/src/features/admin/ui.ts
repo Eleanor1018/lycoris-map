@@ -65,6 +65,7 @@ const messages = {
     'Edit approved content': '修改并通过内容',
     'Review status': '审核状态',
     'Image unavailable.': '图片暂不可用。',
+    'Server update required': '等待服务器更新',
     'Checking access…': '正在确认权限…',
 } as const
 export function useAdminUi() {
