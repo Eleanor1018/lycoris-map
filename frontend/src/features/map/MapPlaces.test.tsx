@@ -5,6 +5,8 @@ import type { Map as LeafletMap } from 'leaflet'
 import { syntheticPlace } from '@/features/dev/placeFixtures'
 import { MapSurface } from './MapSurface'
 import type { MapPlacesProps } from './MapPlaces'
+import { mapView } from './viewport'
+import { viewportWindow } from './viewportWindow'
 afterEach(cleanup)
 function fixture() {
     let map: LeafletMap | null = null
@@ -147,4 +149,25 @@ it('reveals the original direction fan only for a compass reading without replac
     expect(dot).toHaveClass('has-heading')
     view.unmount()
     vi.useRealTimers()
+})
+
+it('reuses the fetched window across a real Leaflet 15-to-14 zoom at Dandong latitude', () => {
+    const f = fixture()
+    render(f.tree({}))
+    const map = f.map()
+    const snapshot = () => {
+        const b = map.getBounds()
+        return mapView(
+            b.getSouth(),
+            b.getNorth(),
+            b.getWest(),
+            b.getEast(),
+            map.getCenter(),
+            map.getZoom(),
+        )
+    }
+    act(() => map.setView([40.109309, 124.359705], 15, { animate: false }))
+    const first = viewportWindow(null, snapshot())
+    act(() => map.setZoom(14, { animate: false }))
+    expect(viewportWindow(first, snapshot())).toBe(first)
 })
