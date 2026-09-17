@@ -31,7 +31,6 @@ const navigation: { panel: Panel; label: string; icon: FigmaIconName }[] = [
     { panel: 'search', label: 'Search', icon: 'navSearch' },
     { panel: 'bookmarks', label: 'Bookmarks', icon: 'navBookmarks' },
     { panel: 'contribute', label: 'Contribute', icon: 'navContribute' },
-    { panel: 'languages', label: 'Languages', icon: 'navLanguages' },
     { panel: 'settings', label: 'Settings', icon: 'navSettings' },
 ]
 export function MapShell({
@@ -107,6 +106,7 @@ export function MapShell({
                   : 'collapsed'
     const [detailHeight, setDetailHeight] = useState(433)
     const [menuHeight, setMenuHeight] = useState<number | null>(null)
+    const [nearbyHeight, setNearbyHeight] = useState(326)
     const mainMenu =
         (panel === 'initial' || panel === 'search') &&
         browse?.mode !== 'search' &&
@@ -115,12 +115,15 @@ export function MapShell({
         viewportHeight - 46,
         mainMenu ? (menuHeight ?? Infinity) : Infinity,
     )
+    const halfSheetHeight = Math.min(mainMenu ? nearbyHeight : 320, fullSheetHeight)
     const sheetHeight =
         panel === 'details'
             ? Math.min(detailHeight, viewportHeight - 46)
             : snap === 'full'
               ? fullSheetHeight
-              : Math.min(snap === 'half' ? 320 : 158, viewportHeight - 46)
+              : snap === 'half'
+                ? halfSheetHeight
+                : Math.min(158, viewportHeight - 46)
     const sheetTop = viewportHeight - sheetHeight
     const setSnap = (next: Snap) => {
         const nextParams = new URLSearchParams(location.search)
@@ -480,9 +483,11 @@ export function MapShell({
                     openDetails={(focusId) => open('details', focusId)}
                     close={close}
                     height={sheetHeight}
+                    halfHeight={halfSheetHeight}
                     fullHeight={fullSheetHeight}
                     onDetailHeight={setDetailHeight}
                     onMenuHeight={setMenuHeight}
+                    onNearbyHeight={setNearbyHeight}
                     contribution={contributionOpen ? contribution : undefined}
                     browse={browse}
                     selectPlace={selectPlace}

@@ -47,7 +47,7 @@ Developer overview: [Rust backend guide (Chinese)](./backend/README.md).
 - `frontend`: new Web v2 project, React 19 + TypeScript 7 + Vite 8 + Tailwind 4 (production Web app on Cloudflare Pages)
 - `frontend-old`: local-only legacy Web archive, removed from Git tracking and ignored; historical source remains in Git history
 - `backend`: Rust, Axum, and SQLx (default backend; no ORM)
-- `backend-old`: retired Java / Spring Boot implementation, retained as historical source
+- `backend-old`: local-only Java / Spring Boot archive, removed from Git tracking and ignored; historical source remains in Git history
 - `apps/ios`: native Swift / SwiftUI iOS app; legacy React Native `mobile/` is local-only
 - Database: PostgreSQL with PostGIS; Redis for sessions, caching, and rate limiting
 
@@ -57,7 +57,7 @@ This project is open source under the [MIT License](./LICENSE).
 
 ## Clone and initialize
 
-This monorepo contains `backend`, `frontend` and `apps/ios`. `backend-old` holds legacy Java; `frontend-old/` and `mobile/` are local archives excluded from Git.
+This monorepo contains `backend`, `frontend` and `apps/ios`. `backend-old/`, `frontend-old/` and `mobile/` are local archives excluded from Git.
 
 ### 1. Prerequisites and source code
 

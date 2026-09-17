@@ -2,16 +2,15 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useMap } from 'react-leaflet'
 import L from 'leaflet'
 import type { Marker } from '@/shared/api/markers'
-import pin from '@/assets/figma/map-place.svg'
 import positionPin from '@/assets/figma/map-position.svg'
 import mobilePositionPin from '@/assets/figma/mobile-position.svg'
 import { clusterPlaces } from './clusters'
 import { mapView, type MapFocus, type MapPadding, type MapView } from './viewport'
 import type { LatLng } from './coords'
 import { useDeviceHeading } from './useDeviceHeading'
+import { locationTargetIcon, placeIcons } from './placeIcons'
 import './map-places.css'
 
-const placeIcon = L.icon({ iconUrl: pin, iconSize: [27, 43], iconAnchor: [13.5, 39] })
 const locationIcon = L.divIcon({
     className: 'map-location-marker',
     iconSize: [24, 24],
@@ -198,7 +197,7 @@ export function MapPlaces({
                         upsert(
                             `place-${marker.id}`,
                             point,
-                            placeIcon,
+                            placeIcons[marker.category],
                             marker.title,
                             () => onSelect?.(marker, `map-place-${marker.id}`),
                             0,
@@ -209,13 +208,20 @@ export function MapPlaces({
                 upsert(
                     `place-${selected.id}`,
                     selected,
-                    placeIcon,
+                    placeIcons[selected.category],
                     selected.title,
                     () => onSelect?.(selected, `map-place-${selected.id}`),
                     1000,
                 )
             if (sharedTarget) {
-                upsert('shared-location', sharedTarget, placeIcon, sharedTarget.title, null, 1000)
+                upsert(
+                    'shared-location',
+                    sharedTarget,
+                    locationTargetIcon,
+                    sharedTarget.title,
+                    null,
+                    1000,
+                )
                 const item = registry.current.get('shared-location')!
                 const label = document.createElement('span')
                 label.textContent = sharedTarget.title

@@ -42,7 +42,8 @@ it('selects a language in place, then closes Settings and keeps the choice in me
         expect(screen.queryByRole('heading', { name: '语言' })).not.toBeInTheDocument(),
     )
     expect(screen.queryByRole('heading', { name: '设置' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: '语言' }))
+    fireEvent.click(screen.getByRole('button', { name: '设置' }))
+    fireEvent.click(screen.getByRole('button', { name: '选择语言 简体中文' }))
     expect(screen.getByRole('radio', { name: '简体中文' })).toHaveAttribute('aria-checked', 'true')
     expect(localStorage.getItem('lycoris.language')).toBe(before)
 })

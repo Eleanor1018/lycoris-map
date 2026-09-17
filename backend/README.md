@@ -1,6 +1,6 @@
 # Lycoris 默认后端（Rust）
 
-仓库与本地开发默认使用本目录；HTTP 默认 `127.0.0.1:8080`。旧 `backend-old/` Java 实现已退出默认开发流程，保留供现有线上服务与回退参考。本次只切换仓库和本地，线上 API 保持 Java。
+仓库、本地开发及生产均使用本目录的 Rust 实现；本地 HTTP 默认 `127.0.0.1:8080`，生产 API 为 `https://api.lycoris-map.com`。旧 `backend-old/` Java 实现已停用，取消 Git 跟踪并加入忽略；已有本地文件保留，新克隆可从历史提交提取。部署与停用记录见 [生产部署说明](deploy/production/README.md)。
 
 Lycoris Rust 后端采用 Axum + SQLx + PostgreSQL + Redis。阶段 0 至 5 已通过本地验收，
 实现全部 **43 个既有 API 契约模板**：公开点位、认证与用户、头像、点位写入、收藏、译文与
@@ -12,9 +12,8 @@ TCP 验收 **64/64**、覆盖 **43/43** 个接口模板。阶段 4 已实现已�
 `--check-baseline`/`--adopt-baseline` 基线接管与数据库超时/密码并发运行配置；阶段 5 已实现
 `0002_spatial` 生成列/GiST 部分索引与 `nearby:v2` PostGIS 候选查询，并已在重构分支 Linux 发布
 容器跑通全套门禁（fmt / 离线全 targets / clippy / 全部 cargo test）与运行验证。空间迁移后的原
-Java JAR 真实 HTTP 读写与回退、Web/Android 查询复查也已通过。生产切换不在本阶段范围内。
-详细证据与差异见 `docs/rust-migration/execution.md`（仅本地）。生产仍由 `backend-old/` 的
-Spring Boot 服务承担。
+Java JAR 真实 HTTP 读写与回退、Web/Android 查询复查也已通过。以上为生产切换前的阶段验收记录。
+详细证据与差异见 `docs/rust-migration/execution.md`（仅本地）。生产现已切换到 Rust，旧 Java 服务和旧数据库服务均已停用。
 
 设计依据：`docs/rust-migration/auth-design.md`、`docs/rust-migration/api-contract.md`。
 本轮保留 Cookie + 账号 + 密码 + 管理员二次验证体验，最终认证重设计另案。

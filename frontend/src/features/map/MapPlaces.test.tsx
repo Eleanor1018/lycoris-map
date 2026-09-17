@@ -42,6 +42,32 @@ it('keeps the real map and point DOM while title/isActive change with the same i
     view.rerender(f.tree({ markers: [] }))
     expect(view.container.querySelector('#map-place-1')).toBeNull()
 })
+it('updates category colors in place and retains them for selected or detail-only markers', () => {
+    const f = fixture()
+    const categories = [
+        'accessible_toilet',
+        'baby_room',
+        'friendly_clinic',
+        'self_definition',
+    ] as const
+    const view = render(f.tree({ markers: [syntheticPlace()] }))
+    const map = f.map()
+    const pin = view.container.querySelector<HTMLImageElement>('#map-place-1')!
+    const sources = new Set<string>()
+    for (const category of categories) {
+        const place = syntheticPlace({ category })
+        view.rerender(f.tree({ markers: [place] }))
+        const source = pin.src
+        sources.add(source)
+        view.rerender(f.tree({ markers: [place], selected: place }))
+        expect(pin.src).toBe(source)
+        view.rerender(f.tree({ selected: place }))
+        expect(view.container.querySelector('#map-place-1')).toBe(pin)
+        expect(pin.src).toBe(source)
+        expect(f.map()).toBe(map)
+    }
+    expect(sources.size).toBe(categories.length)
+})
 it('preserves user zoom when layout padding changes, keeping selection in the uncovered area', () => {
     const f = fixture(),
         selected = syntheticPlace()

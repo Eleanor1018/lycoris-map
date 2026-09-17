@@ -48,7 +48,7 @@
 - frontend：Web v2 新工程，React 19 + TypeScript 7 + Vite 8 + Tailwind 4（正式 Web，部署到 Cloudflare Pages）
 - frontend-old：旧 Web 本地归档，已取消 Git 跟踪并加入 `.gitignore`；历史版本仍可从 Git 提取
 - backend：Rust + Axum + SQLx（默认后端；无 ORM）
-- backend-old：已停用的 Java / Spring Boot 实现，仅保留历史源码参考
+- backend-old：旧 Java / Spring Boot 本地归档，已取消 Git 跟踪并忽略；历史源码仍可从 Git 提取
 - apps/ios：原生 Swift / SwiftUI iOS 应用；mobile 为仅本地保留的旧 React Native 应用
 - 数据库：PostgreSQL + PostGIS；Redis 用于会话、缓存与限流
 
@@ -58,7 +58,7 @@
 
 ## 克隆与初始化
 
-本仓库已采用单仓库（Monorepo）结构，`backend` / `frontend` 在同一仓库中，`backend-old` 为旧 Java 实现，`frontend-old/` 和 `mobile/` 仅保留本地并由 Git 忽略；`apps/ios/` 为原生 iOS 工程。
+本仓库已采用单仓库（Monorepo）结构，`backend` / `frontend` 在同一仓库中，`backend-old/`、`frontend-old/` 和 `mobile/` 仅保留本地并由 Git 忽略；`apps/ios/` 为原生 iOS 工程。
 
 ### 1. 准备环境并获取代码
 

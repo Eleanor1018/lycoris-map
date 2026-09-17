@@ -24,9 +24,11 @@ export function MobileSheet({
     openDetails,
     close,
     height,
+    halfHeight,
     fullHeight,
     onDetailHeight,
     onMenuHeight,
+    onNearbyHeight,
     contribution,
     browse,
     selectPlace,
@@ -46,9 +48,11 @@ export function MobileSheet({
     openDetails: (focusId: string) => void
     close: () => void
     height: number
+    halfHeight: number
     fullHeight: number
     onDetailHeight: (height: number) => void
     onMenuHeight: (height: number) => void
+    onNearbyHeight: (height: number) => void
     contribution?: Omit<ContributionFormProps, 'mobile'> | undefined
     browse?: PlaceBrowse | undefined
     selectPlace?: ((place: Marker, focusId: string) => void) | undefined
@@ -73,19 +77,29 @@ export function MobileSheet({
         )
         const scroll = content?.parentElement
         if (!content || !scroll) return
+        const nearby = mainMenu ? content.querySelector<HTMLElement>('.nearby-cards') : null
         const measure = () => {
-            const natural = content.getBoundingClientRect().height
+            const bounds = content.getBoundingClientRect()
+            const natural = bounds.height
             if (!natural) return
             const safeArea = parseFloat(getComputedStyle(scroll).paddingBottom) || 0
             const onHeight = liveDetail ? onDetailHeight : onMenuHeight
-            onHeight(Math.max(liveDetail ? 158 : 320, Math.ceil(natural + safeArea)))
+            onHeight(Math.max(liveDetail ? 158 : 326, Math.ceil(natural + safeArea)))
+            const cards = nearby?.getBoundingClientRect()
+            if (cards?.height) {
+                // The middle stop shows every nearby card and the same bottom
+                // inset as the full menu, including the device's safe area.
+                const inset = parseFloat(getComputedStyle(content).paddingBottom) || 22
+                onNearbyHeight(Math.ceil(cards.bottom - bounds.top + inset + safeArea))
+            }
         }
         measure()
         const observer = new ResizeObserver(measure)
         observer.observe(content)
         observer.observe(scroll)
+        if (nearby) observer.observe(nearby)
         return () => observer.disconnect()
-    }, [liveDetail, mainMenu, onDetailHeight, onMenuHeight])
+    }, [liveDetail, mainMenu, onDetailHeight, onMenuHeight, onNearbyHeight])
     useEffect(() => {
         const element = sheet.current,
             viewport = window.visualViewport
@@ -129,6 +143,7 @@ export function MobileSheet({
         sheet,
         snap,
         height,
+        halfHeight,
         maxHeight: fullHeight,
         expandedPanel,
         close,

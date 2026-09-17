@@ -1,5 +1,27 @@
 # Content-sized mobile menu and settings polish — 2026-09-17
 
+## Default nearby menu update
+
+Branch: `chore/production-cutover`; pending merge to `main` for production.
+
+The initial phone menu stays at the middle stop with Search and all three
+nearby categories visible. Its height now follows the bottom of the nearby
+cards plus 22px and the device safe area, rather than the fixed 320px height.
+The resting height and drag snap share this measurement. Pulling down still
+collapses the menu; pulling up reveals the remaining sections at their natural
+height. Explicit snap URLs, search results and secondary panels retain their
+existing behavior.
+
+All 288 frontend tests, strict TypeScript and the production build passed.
+Regression coverage checks initial nearby visibility, content resizing,
+viewport caps, keyboard stops and dragging through the measured middle stop.
+Chrome Computer Use on the local fixture preview verified the default Chinese
+menu at 320×667 and 375×812, touch-emulated collapse/expansion, and keyboard
+return to the middle stop. Physical-device touch and safe-area insets were not
+verified on hardware.
+
+## Earlier full-menu release
+
 Branch: `deploy/lycoris-map-com`.
 Status: deployed to lycoris-map.com on 2026-09-17 in production release
 `e0c442e4-8654-4728-86f8-70c7786c1bec`; see `deploy/cloudflare/README.md`.

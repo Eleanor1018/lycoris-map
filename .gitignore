@@ -12,3 +12,6 @@ ping
 
 # Legacy Web retained locally; frontend/ is the production Web app
 /frontend-old/
+
+# Legacy Java backend retained locally; backend/ is the production Rust API
+/backend-old/

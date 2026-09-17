@@ -20,6 +20,7 @@ export function useSheetDrag({
     sheet,
     snap,
     height,
+    halfHeight = 320,
     maxHeight = Infinity,
     resetKey,
     expandedPanel,
@@ -29,6 +30,7 @@ export function useSheetDrag({
     sheet: RefObject<HTMLElement | null>
     snap: Snap
     height: number
+    halfHeight?: number
     maxHeight?: number
     resetKey: string
     expandedPanel: boolean
@@ -137,7 +139,7 @@ export function useSheetDrag({
             y,
             height: visibleHeight,
             min: expandedPanel ? 0 : Math.min(158, limit),
-            half: Math.min(320, limit),
+            half: Math.min(halfHeight, limit),
             max: expandedPanel ? Math.min(height, limit) : limit,
             handle: Boolean(target.closest('.sheet-handle')),
             scrolled,
