@@ -9,6 +9,7 @@ struct NativeMapView: UIViewRepresentable {
   var places: [PlacePresentation] = []
   var focus: MapFocus? = nil
   var showsUserLocation = false
+  var isActive = true
   var animated = true
   var isSelectingLocation = false
   var selectedLocation: GeoPoint?
@@ -20,8 +21,11 @@ struct NativeMapView: UIViewRepresentable {
   func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
   func makeUIView(context: Context) -> MKMapView {
-    let map = MKMapView(frame: .zero)
+    let map = HeadingMapView(frame: .zero)
     map.delegate = context.coordinator
+    map.onGeometryChange = { [weak coordinator = context.coordinator] map in
+      coordinator?.updateHeading(on: map)
+    }
     map.preferredConfiguration = appearance.configuration()
     context.coordinator.appearance = appearance
     map.showsCompass = false
@@ -77,6 +81,7 @@ struct NativeMapView: UIViewRepresentable {
     Self.updateMargins(
       UIEdgeInsets(top: topInset, left: 10, bottom: bottomInset, right: 10), on: map)
     map.showsUserLocation = showsUserLocation
+    coordinator.updateHeading(on: map)
     let existing = Dictionary(
       uniqueKeysWithValues: map.annotations.compactMap { annotation -> (String, PlaceAnnotation)? in
         guard let pin = annotation as? PlaceAnnotation else { return nil }
@@ -108,6 +113,27 @@ struct NativeMapView: UIViewRepresentable {
     }
   }
 
+  static func dismantleUIView(_ map: MKMapView, coordinator: Coordinator) {
+    (map as? HeadingMapView)?.onGeometryChange = nil
+    coordinator.headingProvider.stop()
+    map.delegate = nil
+  }
+
+  /// Use this map's window orientation, including iPad windows and rotation lock.
+  final class HeadingMapView: MKMapView {
+    var onGeometryChange: ((MKMapView) -> Void)?
+
+    override func layoutSubviews() {
+      super.layoutSubviews()
+      onGeometryChange?(self)
+    }
+
+    override func didMoveToWindow() {
+      super.didMoveToWindow()
+      onGeometryChange?(self)
+    }
+  }
+
   final class PlaceAnnotation: NSObject, MKAnnotation {
     var place: PlacePresentation
     @objc dynamic var coordinate: CLLocationCoordinate2D
@@ -131,7 +157,47 @@ struct NativeMapView: UIViewRepresentable {
     var placementTap: UITapGestureRecognizer?
     var placementDoubleTap: UITapGestureRecognizer?
     private var locationAnnotation: LocationAnnotation?
-    init(parent: NativeMapView) { self.parent = parent }
+    let headingProvider = UserHeadingProvider()
+    private weak var map: MKMapView?
+    init(parent: NativeMapView) {
+      self.parent = parent
+      super.init()
+      headingProvider.onChange = { [weak self] in
+        guard let self, let map = self.map else { return }
+        self.updateHeadingView(on: map, animated: self.parent.animated)
+      }
+    }
+
+    func updateHeading(on map: MKMapView) {
+      self.map = map
+      headingProvider.update(
+        enabled: parent.showsUserLocation && parent.isActive && map.window != nil,
+        orientation: map.window?.windowScene?.effectiveGeometry.interfaceOrientation ?? .portrait)
+      updateHeadingView(on: map, animated: false)
+    }
+
+    private func updateHeadingView(on map: MKMapView, animated: Bool) {
+      guard let view = map.view(for: map.userLocation) as? DirectionalUserLocationView else {
+        return
+      }
+      let hasFix = map.userLocation.location.map { $0.horizontalAccuracy >= 0 } ?? false
+      view.update(
+        heading: parent.showsUserLocation && parent.isActive && hasFix
+          ? headingProvider.heading : nil,
+        mapHeading: map.camera.heading, animated: animated)
+    }
+
+    func mapViewDidChangeVisibleRegion(_ mapView: MKMapView) {
+      updateHeadingView(on: mapView, animated: false)
+    }
+
+    func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
+      updateHeadingView(on: mapView, animated: false)
+    }
+
+    func mapView(_ mapView: MKMapView, didAdd views: [MKAnnotationView]) {
+      updateHeadingView(on: mapView, animated: false)
+    }
 
     @objc func pickLocation(_ gesture: UITapGestureRecognizer) {
       guard gesture.state == .ended, let map = gesture.view as? MKMapView else { return }
@@ -212,6 +278,14 @@ struct NativeMapView: UIViewRepresentable {
     }
 
     func mapView(_ mapView: MKMapView, viewFor annotation: any MKAnnotation) -> MKAnnotationView? {
+      if annotation is MKUserLocation {
+        let view =
+          mapView.dequeueReusableAnnotationView(withIdentifier: "user-location")
+          as? DirectionalUserLocationView
+          ?? DirectionalUserLocationView(annotation: annotation, reuseIdentifier: "user-location")
+        view.annotation = annotation
+        return view
+      }
       if annotation is LocationAnnotation {
         let view =
           mapView.dequeueReusableAnnotationView(withIdentifier: "selected-location")

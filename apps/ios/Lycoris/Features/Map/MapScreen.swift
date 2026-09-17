@@ -98,7 +98,7 @@ struct MapScreen: View {
           appearance: preferences.mapAppearance,
           places: mapPlaces, focus: store.focus,
           showsUserLocation: !store.isPreview && location.hasRequestedLocation
-            && location.isAuthorized, animated: !reduceMotion,
+            && location.isAuthorized, isActive: scenePhase == .active, animated: !reduceMotion,
           isSelectingLocation: selectingLocation, selectedLocation: pickedLocation,
           onPickLocation: pickLocation,
           onViewport: { store.viewportChanged($0) },
