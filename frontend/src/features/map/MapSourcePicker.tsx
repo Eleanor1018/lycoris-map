@@ -5,13 +5,12 @@ import { useUi } from '@/shared/i18n/ui'
 import { DesignButton, IconButton } from '@/shared/ui/design-primitives'
 import osmPreview from '@/assets/map-sources/osm.webp'
 import tiandituPreview from '@/assets/map-sources/tianditu.webp'
-import googlePreview from '@/assets/map-sources/google.webp'
+import { isMapSourceAvailable, mapSourceNames } from './mapSources'
 import './map-source-picker.css'
 
 const sources = [
-    { id: 'osm', label: 'OSM', preview: osmPreview, available: true },
-    { id: 'tianditu', label: '天地图', preview: tiandituPreview, available: false },
-    { id: 'google', label: 'Google Maps', preview: googlePreview, available: false },
+    { id: 'osm', preview: osmPreview },
+    { id: 'tianditu', preview: tiandituPreview },
 ] as const
 
 export function MapSourceOptions({ onSelect }: { onSelect?: (() => void) | undefined }) {
@@ -27,23 +26,23 @@ export function MapSourceOptions({ onSelect }: { onSelect?: (() => void) | undef
                         className="map-source-card"
                         role="radio"
                         aria-checked={preferences.source === source.id}
-                        aria-label={source.label}
+                        aria-label={mapSourceNames[source.id]}
                         aria-describedby={
-                            !source.available ? `${id}-${source.id}-status` : undefined
+                            !isMapSourceAvailable(source.id)
+                                ? `${id}-${source.id}-status`
+                                : undefined
                         }
-                        disabled={!source.available}
+                        disabled={!isMapSourceAvailable(source.id)}
                         onClick={() => {
-                            // Other providers remain previews until their API access is configured.
-                            if (source.id !== 'osm') return
-                            update({ source: 'osm' })
+                            update({ source: source.id })
                             onSelect?.()
                         }}
                     >
                         <span className="map-source-preview">
                             <img src={source.preview} alt="" width={160} height={160} />
                         </span>
-                        <span className="map-source-name">{source.label}</span>
-                        {!source.available && (
+                        <span className="map-source-name">{mapSourceNames[source.id]}</span>
+                        {!isMapSourceAvailable(source.id) && (
                             <span className="map-source-status" id={`${id}-${source.id}-status`}>
                                 {ui.text('Not available yet')}
                             </span>
@@ -59,10 +58,6 @@ export function MapSourceOptions({ onSelect }: { onSelect?: (() => void) | undef
                 {' · '}
                 <a href="https://map.tianditu.gov.cn/" target="_blank" rel="noreferrer">
                     天地图
-                </a>
-                {' · '}
-                <a href="https://maps.google.com/" target="_blank" rel="noreferrer">
-                    Google
                 </a>
             </p>
         </div>

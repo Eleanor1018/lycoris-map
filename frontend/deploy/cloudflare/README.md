@@ -34,10 +34,26 @@ Source files, `.env`, fixtures, private credentials and server data are excluded
 The same command can be run locally after `pnpm install --frozen-lockfile`.
 
 Production's historical `VITE_API_BASE_URL` setting is now `/api`; the new
-client always uses same-origin routes and does not read that variable. Legacy
-map-key variables are not consumed by the new frontend. Do not add keys or
-private data to the client bundle. Preview read requests use the same backend;
-preview domains are not added to the production write-origin allowlist.
+client always uses same-origin routes and does not read that variable.
+
+Set `VITE_TIANDITU_API_KEY` to the Tianditu **browser-side** key in both
+production and preview build variables. Local development uses the ignored
+`frontend/.env.local` (see `.env.example`). Vite embeds this public browser key
+in the client bundle; never use a server-side credential here or commit an
+actual key. A changed build variable requires a new build. Without this variable,
+Tianditu is disabled and saved Tianditu selections fall back to OSM. With it,
+the picker offers OSM (default) and Tianditu, persisting the chosen source.
+Tianditu uses HTTPS `vec_w` plus `cva_w` WMTS tiles directly from its provider;
+no map proxy or backend change is needed. Other legacy map-key variables are
+unused. Preview read requests use the same backend; preview domains are not
+added to the production write-origin allowlist.
+
+On 2026-09-17, the production Tianditu variable was verified against the supplied
+browser key and the same variable was added to Preview. Real browser checks
+confirmed both Tianditu layers load on mobile and desktop, preserve the pins
+and camera when switching to/from OSM, and restore the selected source after
+a reload. The 292 frontend tests, three proxy tests and strict production build
+passed. No actual key is stored in this repository.
 
 The former Direct Upload project `lycoris-map-web` and its deployment history
 are retained for recovery, without the production custom-domain binding.

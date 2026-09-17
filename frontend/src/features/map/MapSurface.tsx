@@ -3,6 +3,8 @@ import { useEffect, type RefCallback } from 'react'
 import { MapContainer, TileLayer, useMap } from 'react-leaflet'
 import L, { type Map as LeafletMap } from 'leaflet'
 import { MapPlaces, type MapPlacesProps } from './MapPlaces'
+import { usePreferences } from '@/features/preferences/PreferencesProvider'
+import { tiandituTileUrl } from './mapSources'
 const CENTER: [number, number] = [31.2304, 121.4737]
 export function MapSurface({
     onMap,
@@ -24,16 +26,45 @@ export function MapSurface({
             className="product-map"
             attributionControl
         >
-            <TileLayer
-                url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution={
-                    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                }
-            />
+            <BaseMapLayers />
             <MapLifecycle />
             <MapPick onPick={onPick} />
             {places && <MapPlaces {...places} />}
         </MapContainer>
+    )
+}
+function BaseMapLayers() {
+    const { preferences } = usePreferences()
+    if (preferences.source === 'tianditu')
+        return (
+            <>
+                <TileLayer
+                    key="tianditu-base"
+                    url={tiandituTileUrl('vec')}
+                    subdomains="01234567"
+                    minNativeZoom={1}
+                    maxNativeZoom={18}
+                    maxZoom={19}
+                    zIndex={1}
+                    attribution='&copy; <a href="https://www.tianditu.gov.cn/">天地图</a>'
+                />
+                <TileLayer
+                    key="tianditu-labels"
+                    url={tiandituTileUrl('cva')}
+                    subdomains="01234567"
+                    minNativeZoom={1}
+                    maxNativeZoom={18}
+                    maxZoom={19}
+                    zIndex={2}
+                />
+            </>
+        )
+    return (
+        <TileLayer
+            key="osm"
+            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        />
     )
 }
 function MapPick({

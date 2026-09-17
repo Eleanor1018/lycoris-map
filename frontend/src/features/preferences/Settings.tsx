@@ -8,6 +8,7 @@ import { FigmaIcon } from '@/shared/ui/figma-icon'
 import type { Panel } from '@/layouts/types'
 import { rangeLabel, searchCategories, usePreferences } from './PreferencesProvider'
 import { MapSourceOptions } from '@/features/map/MapSourcePicker'
+import { mapSourceNames } from '@/features/map/mapSources'
 import './settings.css'
 
 export const settingsTitles = {
@@ -112,7 +113,7 @@ export function SettingsRows({ mobile = false }: { mobile?: boolean }) {
     )
     const range = row('range', 'Searching Range', rangeLabel(preferences.radius))
     const category = row('category', 'Searching Type', categoryNames[preferences.category])
-    const source = row('source', 'Map Source', 'OSM')
+    const source = row('source', 'Map Source', mapSourceNames[preferences.source])
     return (
         <div className={mobile ? 'mobile-settings' : 'settings-cards'}>
             {language}

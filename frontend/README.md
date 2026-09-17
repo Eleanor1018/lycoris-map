@@ -22,6 +22,11 @@ pnpm test:unit
 
 本工程不含 ESLint 或 lint 脚本；类型边界由 TypeScript 7 strict 负责。
 
+底图默认 OSM；天地图使用浏览器端 Key。复制 `.env.example` 为 `.env.local`，
+填写 `VITE_TIANDITU_API_KEY` 后重启开发服务或重新构建，即可在图层菜单和设置中切换。
+该值会出现在浏览器请求中，实际 Key 不提交 Git。Cloudflare 的 Production、Preview
+构建变量使用同名配置。未配置时保留 OSM，天地图选项禁用。
+
 ## 目录
 
 ```text
@@ -46,7 +51,7 @@ src/
 
 ## 页面与设计验收
 
-正常入口 `/`（兼容 `/maps`）使用真实 OSM 瓦片，不放入 Figma 的样本账号、距离、地点、照片或模拟点。面板使用 `?panel=search|bookmarks|languages|settings|contribute|contribute-form|details`；手机吸附高度使用 `?snap=collapsed|half|full`。关闭面板和浏览器返回/前进保留已有 query、hash 和搜索草稿，切换屏宽不重新创建地图。
+正常入口 `/`（兼容 `/maps`）默认使用真实 OSM 瓦片，也可切换已配置的天地图，不放入 Figma 的样本账号、距离、地点、照片或模拟点。面板使用 `?panel=search|bookmarks|languages|settings|contribute|contribute-form|details`；手机吸附高度使用 `?snap=collapsed|half|full`。关闭面板和浏览器返回/前进保留已有 query、hash 和搜索草稿，切换屏宽不重新创建地图。
 
 | 仅开发环境的路径                    | 用途                                                                                                            |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------- |

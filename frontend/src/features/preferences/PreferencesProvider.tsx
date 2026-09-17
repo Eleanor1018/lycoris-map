@@ -1,10 +1,11 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { resolveBrowserStorage } from '@/shared/i18n'
+import { isMapSourceAvailable, type MapSource } from '@/features/map/mapSources'
 
 export const PREFERENCES_KEY = 'lycoris.map-preferences'
 export const searchCategories = ['accessible_toilet', 'baby_room', 'friendly_clinic'] as const
 export type SearchCategory = (typeof searchCategories)[number]
-export type Preferences = { radius: number; category: SearchCategory; source: 'osm' }
+export type Preferences = { radius: number; category: SearchCategory; source: MapSource }
 export const defaultPreferences: Preferences = {
     radius: 1000,
     category: 'accessible_toilet',
@@ -28,7 +29,10 @@ export function parsePreferences(raw: string | null): Preferences {
                 'category' in value && searchCategories.some((c) => c === value.category)
                     ? (value.category as SearchCategory)
                     : 'accessible_toilet',
-            source: 'osm',
+            source:
+                'source' in value && value.source === 'tianditu' && isMapSourceAvailable('tianditu')
+                    ? 'tianditu'
+                    : 'osm',
         }
     } catch {
         return defaultPreferences

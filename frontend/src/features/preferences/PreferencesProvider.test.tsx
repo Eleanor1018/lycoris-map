@@ -9,7 +9,10 @@ import {
 } from './PreferencesProvider'
 import { SettingsContent } from './Settings'
 import { localize } from '@/shared/i18n/ui'
-afterEach(() => localStorage.clear())
+afterEach(() => {
+    localStorage.clear()
+    vi.unstubAllEnvs()
+})
 it('validates untrusted settings and arbitrary status messages', () => {
     for (const value of [
         null,
@@ -59,4 +62,13 @@ it('keeps settings usable when storage writes fail', () => {
     fireEvent.submit(range.closest('form')!)
     expect(screen.getByRole('status')).toHaveTextContent('2500')
     fail.mockRestore()
+})
+
+it('restores only supported, configured map sources', () => {
+    vi.stubEnv('VITE_TIANDITU_API_KEY', 'browser-test-key')
+    expect(parsePreferences('{"source":"tianditu"}').source).toBe('tianditu')
+    for (const source of ['google', 'constructor', '', null, 1])
+        expect(parsePreferences(JSON.stringify({ source })).source).toBe('osm')
+    vi.stubEnv('VITE_TIANDITU_API_KEY', '  ')
+    expect(parsePreferences('{"source":"tianditu"}').source).toBe('osm')
 })
