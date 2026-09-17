@@ -144,7 +144,7 @@ it('reveals the original direction fan only for a compass reading without replac
     expect(dot.querySelector('img')!.style.transform).toContain('-73.113')
     expect(view.container.querySelector('#map-place-1')).toBe(pin)
     act(() => vi.advanceTimersByTime(10_020))
-    expect(dot).not.toHaveClass('has-heading')
+    expect(dot).toHaveClass('has-heading')
     view.unmount()
     vi.useRealTimers()
 })

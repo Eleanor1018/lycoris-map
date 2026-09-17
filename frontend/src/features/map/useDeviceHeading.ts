@@ -27,14 +27,16 @@ export function compassHeading(event: CompassEvent, screenAngle = 0): number | n
     return null
 }
 
-export function requestDeviceHeading() {
+export async function requestDeviceHeading(): Promise<'granted' | 'denied' | 'prompt'> {
     const sensor = globalThis.DeviceOrientationEvent as PermissionOrientation | undefined
-    if (!sensor?.requestPermission) return
+    if (!sensor?.requestPermission) return 'granted'
     // Unsupported/denied sensors simply keep the undirected location dot.
     try {
-        void sensor.requestPermission(true).catch(() => {})
+        return (await sensor.requestPermission(true)) === 'granted' ? 'granted' : 'denied'
     } catch {
-        /* unavailable */
+        // iOS rejects an initial prompt without user activation. A prior grant
+        // can succeed immediately; otherwise retry from the first map gesture.
+        return 'prompt'
     }
 }
 
@@ -42,11 +44,9 @@ export function useDeviceHeading(enabled: boolean) {
     const [heading, setHeading] = useState<number | null>(null)
     useEffect(() => {
         setHeading(null)
-        if (!enabled) return
         let frame = 0
         let reading: number | null = null
         let latest: CompassEvent | null = null
-        let expiry: ReturnType<typeof setTimeout> | undefined
         const publish = () => {
             frame = 0
             setHeading((previous) => {
@@ -64,6 +64,7 @@ export function useDeviceHeading(enabled: boolean) {
             if (!frame) frame = requestAnimationFrame(publish)
         }
         const receive = (event: DeviceOrientationEvent) => {
+            if (document.hidden) return
             // Relative events from the same browser must not erase absolute ones.
             if (
                 !event.absolute &&
@@ -72,11 +73,8 @@ export function useDeviceHeading(enabled: boolean) {
             )
                 return
             latest = event
-            clearTimeout(expiry)
-            expiry = setTimeout(() => {
-                latest = null
-                update()
-            }, 10_000)
+            // Some devices emit only when their orientation changes. A still
+            // phone's valid compass reading must not disappear after 10 seconds.
             update()
         }
         const visibility = () => {
@@ -92,12 +90,47 @@ export function useDeviceHeading(enabled: boolean) {
         document.addEventListener('visibilitychange', visibility)
         return () => {
             cancelAnimationFrame(frame)
-            clearTimeout(expiry)
             window.removeEventListener('deviceorientation', receive)
             window.removeEventListener('deviceorientationabsolute', receive as EventListener)
             window.removeEventListener('orientationchange', update)
             screen.orientation?.removeEventListener('change', update)
             document.removeEventListener('visibilitychange', visibility)
+        }
+    }, [])
+    useEffect(() => {
+        if (!enabled) return
+        const sensor = globalThis.DeviceOrientationEvent as PermissionOrientation | undefined
+        if (!sensor?.requestPermission) return
+        let disposed = false
+        let requesting = false
+        const remove = () => {
+            document.removeEventListener('pointerup', activate, true)
+            document.removeEventListener('keydown', activate, true)
+        }
+        const activate = (event: Event) => {
+            if (
+                requesting ||
+                !(event.target instanceof Element) ||
+                !event.target.closest('.product-map') ||
+                (event instanceof KeyboardEvent && !['Enter', ' '].includes(event.key))
+            )
+                return
+            requesting = true
+            void requestDeviceHeading().then((permission) => {
+                requesting = false
+                if (permission !== 'prompt') remove()
+            })
+        }
+        // This also restores previously granted access on a fresh visit.
+        void requestDeviceHeading().then((permission) => {
+            if (!disposed && permission === 'prompt') {
+                document.addEventListener('pointerup', activate, true)
+                document.addEventListener('keydown', activate, true)
+            }
+        })
+        return () => {
+            disposed = true
+            remove()
         }
     }, [enabled])
     return enabled ? heading : null
