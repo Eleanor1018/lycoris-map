@@ -33,7 +33,8 @@ import XCTest
     app.buttons["settings.done"].tap()
     XCTAssertEqual(app.buttons["settings.range"].label, "搜索范围")
     app.buttons["settings.range"].tap()
-    app.buttons["settings.radius.2500"].tap()
+    setRadius("2500", in: app)
+    app.buttons["settings.keyboard-done"].tap()
     attach(app, "i6-native-range-zh")
     app.buttons["settings.done"].tap()
     XCTAssertEqual(app.buttons["settings.range"].value as? String, "2.5km")
@@ -42,6 +43,16 @@ import XCTest
     expand(app)
     XCTAssertEqual(app.buttons["settings.range"].label, "搜索范围")
     XCTAssertEqual(app.buttons["settings.range"].value as? String, "2.5km")
+    app.buttons["settings.range"].tap()
+    XCTAssertEqual(app.textFields["settings.radius.custom"].value as? String, "2500")
+    setRadius("50001", in: app)
+    app.buttons["settings.done"].tap()
+    XCTAssertEqual(app.buttons["settings.range"].value as? String, "2.5km")
+    app.buttons["settings.range"].tap()
+    setRadius("", in: app)
+    app.buttons["settings.keyboard-done"].tap()
+    XCTAssertEqual(app.textFields["settings.radius.custom"].value as? String, "2500")
+    app.buttons["settings.done"].tap()
     attach(app, "i6-settings-persisted-zh")
     app.buttons["settings.source"].tap()
     XCTAssertTrue(app.staticTexts["Apple 地图"].exists)
@@ -52,9 +63,27 @@ import XCTest
     app.buttons["settings.done"].tap()
     XCTAssertEqual(app.buttons["settings.range"].label, "Searching Range")
     app.buttons["settings.range"].tap()
-    app.buttons["settings.radius.1000"].tap()
-    app.buttons["settings.done"].tap()
+    setRadius("1000", in: app)
+    // Pull the sheet down while editing, without Apply or either Done action.
+    app.navigationBars["Searching Range"].coordinate(
+      withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)
+    )
+    .press(
+      forDuration: 0.1,
+      thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)))
+    XCTAssertTrue(app.buttons["settings.done"].waitForNonExistence(timeout: 5))
+    XCTAssertEqual(app.buttons["settings.range"].value as? String, "1km")
     attach(app, "i6-settings-en")
+  }
+
+  private func setRadius(_ value: String, in app: XCUIApplication) {
+    let field = app.textFields["settings.radius.custom"]
+    XCTAssertTrue(field.waitForExistence(timeout: 5))
+    field.tap()
+    if let current = field.value as? String, current != field.placeholderValue, !current.isEmpty {
+      field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
+    }
+    if !value.isEmpty { field.typeText(value) }
   }
 
   func testLargeTextSettingsAndVoiceKeyboardFallback() {

@@ -29,30 +29,16 @@ struct SettingsSheet: View {
           }.pickerStyle(.inline)
         case .range:
           Section {
-            ForEach([1000, 2500], id: \.self) { value in
-              Button {
-                preferences.setRadius(value)
-                radius = String(value)
-                editingRadius = false
-              } label: {
-                HStack {
-                  Text(AppPreferences.radiusLabel(value))
-                  Spacer()
-                  if preferences.radius == value { Image(systemName: "checkmark") }
-                }.foregroundStyle(.primary)
-              }.accessibilityIdentifier("settings.radius.\(value)")
-                .accessibilityAddTraits(preferences.radius == value ? .isSelected : [])
+            HStack {
+              TextField("Distance in meters", text: $radius).keyboardType(.numberPad)
+                .focused($editingRadius).accessibilityIdentifier("settings.radius.custom")
+                .accessibilityLabel("Distance in meters")
+              Text(verbatim: "m").foregroundStyle(.secondary).accessibilityHidden(true)
             }
-          }
-          Section {
-            TextField("Distance in meters", text: $radius).keyboardType(.numberPad)
-              .focused($editingRadius).accessibilityIdentifier("settings.radius.custom")
-            Button("Apply") {
-              if let value = Int(radius), preferences.setRadius(value) { editingRadius = false }
-            }.disabled(Int(radius).map(AppPreferences.validRadius) != true)
-              .accessibilityIdentifier("settings.radius.apply")
           } footer: {
-            Text("Enter a distance from 1 to 50,000 meters.")
+            if editingRadius && Int(radius).map(AppPreferences.validRadius) != true {
+              Text("Enter a distance from 1 to 50,000 meters.")
+            }
           }
         case .source:
           Section {
@@ -81,16 +67,37 @@ struct SettingsSheet: View {
       .scrollDismissesKeyboard(.interactively)
       .toolbar {
         ToolbarItem(placement: .confirmationAction) {
-          Button("Done") { dismiss() }.accessibilityIdentifier("settings.done")
+          Button("Done") {
+            commitRadius()
+            dismiss()
+          }.accessibilityIdentifier("settings.done")
         }
         ToolbarItemGroup(placement: .keyboard) {
           Spacer()
-          Button("Done") { editingRadius = false }
+          Button("Done") {
+            commitRadius()
+            editingRadius = false
+          }.accessibilityIdentifier("settings.keyboard-done")
         }
       }
       .onAppear { radius = String(preferences.radius) }
+      .onChange(of: editingRadius) { _, editing in
+        if !editing { commitRadius() }
+      }
+      .onDisappear { commitRadius() }
     }
     .presentationDragIndicator(.visible)
+  }
+
+  private func commitRadius() {
+    guard destination == .range else { return }
+    if let value = Int(radius.trimmingCharacters(in: .whitespacesAndNewlines)),
+      value != preferences.radius
+    {
+      preferences.setRadius(value)
+    }
+    // Empty or out-of-range edits leave the last saved value intact.
+    radius = String(preferences.radius)
   }
 
   private var title: String {
