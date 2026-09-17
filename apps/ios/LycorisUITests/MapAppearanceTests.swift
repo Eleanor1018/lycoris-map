@@ -1,6 +1,6 @@
 import XCTest
 
-@MainActor final class MapAppearanceTests: XCTestCase {
+@MainActor final class MapAppearanceTests: LocalBackendTestCase {
   override func setUp() { continueAfterFailure = false }
 
   func testMapStylePersistsAndCardDismissesBackToMap() {

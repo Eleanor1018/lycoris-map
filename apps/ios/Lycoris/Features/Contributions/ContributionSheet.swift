@@ -35,6 +35,8 @@ struct ContributionSheet: View {
               if draft.original == nil && draft.editable {
                 Button("Choose location", action: onPickLocation)
                   .accessibilityIdentifier("contribution.location")
+                  .accessibilityValue(
+                    String(format: "%.5f, %.5f", draft.point.latitude, draft.point.longitude))
               }
             }
             .disabled(store.isWorking)

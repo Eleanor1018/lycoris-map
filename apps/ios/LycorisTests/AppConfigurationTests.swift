@@ -3,11 +3,16 @@ import Testing
 @testable import Lycoris
 
 struct AppConfigurationTests {
-  @Test func bundledDebugConfigurationContainsItsServiceAddress() throws {
-    #expect(try AppConfiguration.bundled().apiBaseURL != nil)
+  @Test func bundledConfigurationUsesTheSelectedEnvironment() throws {
+    #if LYCORIS_LOCAL_TESTS
+      #expect(try AppConfiguration.bundled().apiBaseURL?.absoluteString == "http://127.0.0.1:8080")
+    #else
+      #expect(
+        try AppConfiguration.bundled().apiBaseURL?.absoluteString == "https://api.lycoris-map.com")
+    #endif
   }
 
-  @Test func missingReleaseAddressIsNotReplacedWithDevelopmentHost() throws {
+  @Test func missingAddressIsNotReplacedWithDevelopmentHost() throws {
     let configuration = try AppConfiguration(serviceURL: "", allowsHTTP: false)
     #expect(configuration.apiBaseURL == nil)
   }

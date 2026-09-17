@@ -3,7 +3,7 @@ import XCTest
 /// Only the loopback synthetic Rust stack is eligible for these write tests.
 /// A dedicated random fixture account is reused from the test runner's private container.
 @MainActor
-final class AccountFlowTests: XCTestCase {
+final class AccountFlowTests: LocalBackendTestCase {
   private struct Fixture: Codable {
     let username: String
     let email: String

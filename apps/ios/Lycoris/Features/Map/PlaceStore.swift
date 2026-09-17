@@ -208,6 +208,10 @@ final class PlaceStore {
 
   func acceptsLocation(_ token: UUID) -> Bool { token == locationGeneration }
 
+  func focusMap(on point: GeoPoint) {
+    focus = MapFocus(point: point)
+  }
+
   func locate(_ point: GeoPoint, token: UUID) {
     guard acceptsLocation(token) else { return }
     userLocation = point

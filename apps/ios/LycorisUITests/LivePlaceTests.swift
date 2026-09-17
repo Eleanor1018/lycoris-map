@@ -4,7 +4,7 @@ import XCTest
 /// Read-only acceptance against the existing local synthetic Rust stack.
 /// Skips when that explicitly identified fixture stack is unavailable.
 @MainActor
-final class LivePlaceTests: XCTestCase {
+final class LivePlaceTests: LocalBackendTestCase {
   override func setUp() { continueAfterFailure = false }
 
   private func launch() async throws -> XCUIApplication {

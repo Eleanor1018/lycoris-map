@@ -31,7 +31,7 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
   CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- build
 
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
-  -project Lycoris.xcodeproj -scheme Lycoris \
+  -project Lycoris.xcodeproj -scheme Lycoris -configuration Test \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   -derivedDataPath /tmp/lycoris-ios-build \
   CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- test
@@ -41,15 +41,17 @@ Simulator builds do not need a signing team, but must keep local ad-hoc signing 
 
 ## Service address
 
-Debug defaults to `http://127.0.0.1:8080`, the local Rust backend from the simulator. Release deliberately has no service address until the new HTTPS endpoint is supplied; `AppConfiguration` represents that as unconfigured, never silently using the development host.
+Normal Xcode Run (Debug) and Release use `https://api.lycoris-map.com`. The shared address is in `Config/Base.xcconfig`; the same HTTPS service works from the simulator and a physical iPhone. API calls and `/uploads` media use this origin. An unconfigured address still produces an unavailable state, and Release rejects HTTP.
 
-For a physical iPhone, create ignored `Config/Local.xcconfig` with the Mac's reachable development address:
+Xcode Test uses the separate **Test** build configuration with the fixed synthetic backend `http://127.0.0.1:8080`. It does not include `Local.xcconfig`. This keeps the installed test app, including cold deep-link launches, on the same backend as fixture preflights. UI suites skip outside Test, so overriding a test run with `-configuration Debug` cannot send fixture registrations/contributions to the live service. Use `-configuration Test` for CLI fixture tests.
+
+To deliberately run a Debug app against a local development backend, create ignored `Config/Local.xcconfig`. For the simulator:
 
 ```xcconfig
-LYCORIS_API_BASE_URL = http:/$()/your-mac.local:8080
+LYCORIS_API_BASE_URL = http:/$()/127.0.0.1:8080
 ```
 
-The `$()` escape preserves the double slash in an xcconfig URL. The phone and Mac must have a reachable network path. The existing synthetic Docker stack binds only to loopback, so changing this URL alone does not make it reachable from a phone. Network exposure and device signing are separate setup steps. Local-network permission may be requested by iOS. Only Debug has a local-network ATS exception. Do not put credentials in configuration URLs. Public reads use a separate cookie-free URLSession. Release without a configured service displays an unavailable state and can still browse the base map.
+The `$()` escape preserves the double slash in an xcconfig URL. Remove the override to return to the live service. A physical phone cannot reach the Mac through `127.0.0.1`; local-device development needs a reachable Mac address and a deliberate listener setup. The synthetic Docker stack currently binds only to loopback. Debug/Test have a local-network ATS exception; Release uses the standard HTTPS policy. Public reads remain cookie-free, and account cookies/drafts stay scoped to their service origin. Connection validation is recorded in `docs/service-connection.md`.
 
 ## Structure and design
 
@@ -81,7 +83,7 @@ For a manual simulator review, use `-lycoris-test-center` followed by `31.2304,1
 
 Search debounces for 300 ms and viewport reads for 250 ms. Cancellation plus generation checks prevent late responses from replacing a newer state. Nearby keeps its captured origin while the map pans. A fresh location fix may update that origin only while its original action is still active. A 404 removes the old pin and reloads the other public results; image errors retain the textual detail. Search results and annotations are not silently truncated.
 
-The new public Lycoris domain is still unconfigured. I6 uses the registered `lycoris://maps?markerId=<Int64>` scheme for installed-app sharing, with fresh access checks when opening. It has no uninstalled-app fallback or Universal Links yet. Real-world historical-coordinate alignment, physical-device permissions and route correctness remain device acceptance work.
+The API domain is configured; shared HTTPS links and Universal Links are a separate feature. I6 uses the registered `lycoris://maps?markerId=<Int64>` scheme for installed-app sharing, with fresh access checks when opening. It has no uninstalled-app fallback yet. Real-world historical-coordinate alignment, physical-device permissions and route correctness remain device acceptance work.
 
 ## I4 account behavior
 
@@ -97,7 +99,7 @@ Keychain references: [Apple access class](https://developer.apple.com/documentat
 
 ## I5 contribution behavior
 
-The pen opens login if needed, then location selection on the existing MapKit instance. Move the map under the center target and confirm. A native NavigationStack/Form contains the Figma contribution fields: title, three categories, description, optional opening/closing times and one optional photo. Native DatePicker and PhotosPicker provide input. There is no public/private control. An existing place opens an editor from its detail action; its coordinates and visibility are preserved.
+The pen opens login if needed, then location selection on the existing MapKit instance. Tap the map to place a native pin; tap again to adjust it. Panning, pinching and double-tap zoom preserve the selected coordinate. “Use this location” stays disabled until a location is selected and opens the contribution form without submitting it. When VoiceOver is active, “Select map center” provides a nonspatial alternative. Reopening selection centers the map on the saved draft location; Cancel discards only the tentative selection and keeps the saved fields and coordinates. A native NavigationStack/Form contains the Figma contribution fields: title, three categories, description, optional opening/closing times and one optional photo. Native DatePicker and PhotosPicker provide input. There is no public/private control. An existing place opens an editor from its detail action; its coordinates and visibility are preserved.
 
 Closing the form keeps its single local draft. Tap the pen to return to saved work. Draft JSON and the final orientation-correct, 2048px JPEG are written atomically in Application Support with iOS file protection and excluded from backups. The upload hashes those saved bytes; resumed requests never re-encode the photo. File/receipt validation rejects missing, corrupt or mismatched checkpoints. Explicit discard clears local work; it cannot retract an already submitted proposal.
 

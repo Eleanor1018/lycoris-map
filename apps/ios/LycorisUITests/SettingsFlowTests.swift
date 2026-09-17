@@ -1,6 +1,6 @@
 import XCTest
 
-@MainActor final class SettingsFlowTests: XCTestCase {
+@MainActor final class SettingsFlowTests: LocalBackendTestCase {
   override func setUp() { continueAfterFailure = false }
 
   private func launch(largeText: Bool = false, englishOverride: Bool = false) -> XCUIApplication {
