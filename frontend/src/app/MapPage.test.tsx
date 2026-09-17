@@ -559,13 +559,16 @@ it('closes a directly opened Nearby by dragging, without leaving the app', async
 it('fits the open primary menu to changing content and caps it to the viewport', () => {
     vi.stubGlobal('innerHeight', 844)
     let contentHeight = 580
+    let nearbyHeight = 144
     const bounds = HTMLElement.prototype.getBoundingClientRect
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
         this: HTMLElement,
     ) {
         return this.classList.contains('mobile-search-content')
             ? new DOMRect(0, 0, 375, contentHeight)
-            : bounds.call(this)
+            : this.classList.contains('nearby-cards')
+              ? new DOMRect(11, 160, 353, nearbyHeight)
+              : bounds.call(this)
     })
     const observed = new Map<Element, ResizeObserverCallback>()
     vi.stubGlobal(
@@ -587,9 +590,17 @@ it('fits the open primary menu to changing content and caps it to the viewport',
             }
         },
     )
-    const { container } = app('/?lang=en&snap=full', true)
+    const { container } = app('/?lang=en', true)
     const root = document.getElementById('map-shell')!
     const content = container.querySelector('.mobile-search-content')!
+    const nearby = container.querySelector('.nearby-cards')!
+    expect(root).toHaveAttribute('data-snap', 'half')
+    expect(root.style.getPropertyValue('--sheet-height')).toBe('326px')
+    for (const name of ['Accessible Toilets', 'Nursing Rooms', 'Medical Institutions'])
+        expect(screen.getByRole('button', { name })).toBeInTheDocument()
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Change panel height (half)' }), {
+        key: 'ArrowUp',
+    })
     expect(root.style.getPropertyValue('--sheet-height')).toBe('580px')
     contentHeight = 1200
     act(() => observed.get(content)!([], {} as ResizeObserver))
@@ -603,5 +614,16 @@ it('fits the open primary menu to changing content and caps it to the viewport',
     fireEvent.keyDown(screen.getByRole('button', { name: 'Change panel height (full)' }), {
         key: 'ArrowDown',
     })
-    expect(root.style.getPropertyValue('--sheet-height')).toBe('320px')
+    expect(root.style.getPropertyValue('--sheet-height')).toBe('326px')
+    nearbyHeight = 184
+    act(() => observed.get(nearby)!([], {} as ResizeObserver))
+    expect(root.style.getPropertyValue('--sheet-height')).toBe('366px')
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Change panel height (half)' }), {
+        key: 'ArrowDown',
+    })
+    expect(root.style.getPropertyValue('--sheet-height')).toBe('158px')
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Change panel height (collapsed)' }), {
+        key: 'ArrowUp',
+    })
+    expect(root.style.getPropertyValue('--sheet-height')).toBe('366px')
 })

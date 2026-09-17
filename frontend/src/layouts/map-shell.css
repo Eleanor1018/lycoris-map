@@ -808,7 +808,7 @@
     --sheet-height: min(158px, calc(100dvh - 46px));
 }
 .map-shell[data-mobile='true'][data-snap='half'] {
-    --sheet-height: min(320px, calc(100dvh - 46px));
+    --sheet-height: min(326px, calc(100dvh - 46px));
 }
 .map-shell[data-mobile='true'][data-snap='full'] {
     --sheet-height: calc(100dvh - 46px);

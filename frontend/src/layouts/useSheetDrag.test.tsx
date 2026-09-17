@@ -21,20 +21,23 @@ function Harness({
     expanded = false,
     route = 'search',
     maxHeight = 754,
+    halfHeight = 320,
 }: {
     initial?: Snap
     expanded?: boolean
     route?: string
     maxHeight?: number
+    halfHeight?: number
 }) {
     const sheet = useRef<HTMLElement>(null)
     const [snap, setSnap] = useState<Snap>(initial)
-    const height = { collapsed: 158, half: 320, full: maxHeight }[snap]
+    const height = { collapsed: 158, half: halfHeight, full: maxHeight }[snap]
     rendered()
     useSheetDrag({
         sheet,
         snap,
         height,
+        halfHeight,
         maxHeight,
         resetKey: route,
         expandedPanel: expanded,
@@ -354,4 +357,27 @@ it('stops an upward drag at the measured menu height and settles there', () => {
     touch(title, 'move', 490)
     touch(title, 'end', 490)
     expect(screen.getByTestId('sheet')).toHaveAttribute('data-snap', 'half')
+})
+
+it('uses the content-sized middle stop when expanding and collapsing', () => {
+    render(<Harness halfHeight={380} maxHeight={600} />)
+    const title = screen.getByRole('heading')
+    const sheet = screen.getByTestId('sheet')
+    touch(title, 'start', 700)
+    touch(title, 'move', 478)
+    touch(title, 'end', 478)
+    expect(sheet).toHaveAttribute('data-snap', 'half')
+    expect(screen.getByTestId('viewport').style.getPropertyValue('--sheet-height')).toBe('380px')
+    touch(title, 'start', 478)
+    touch(title, 'move', 258)
+    touch(title, 'end', 258)
+    expect(sheet).toHaveAttribute('data-snap', 'full')
+    touch(title, 'start', 258)
+    touch(title, 'move', 478)
+    touch(title, 'end', 478)
+    expect(sheet).toHaveAttribute('data-snap', 'half')
+    touch(title, 'start', 478)
+    touch(title, 'move', 700)
+    touch(title, 'end', 700)
+    expect(sheet).toHaveAttribute('data-snap', 'collapsed')
 })
