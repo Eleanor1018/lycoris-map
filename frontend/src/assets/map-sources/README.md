@@ -10,12 +10,10 @@ appearance; they are not tiles or a substitute for their map APIs.
 - `tianditu.webp`: public Shanghai city map from <https://map.tianditu.gov.cn/>,
   after searching for 上海人民广场. The source credits 自然资源部 & NavInfo,
   GS（2025）1508号.
-- `google.webp`: public Shanghai city map from
-  <https://www.google.com/maps/@31.2304,121.4737,15z?hl=en>.
-  Source attribution: Google, Map data ©2026.
 
 The picker displays linked provider attribution underneath the thumbnails.
 Full browser screenshots remain outside the repository; only public map crops
 are bundled. No account details, browser chrome or real user location appear
-in the thumbnails. Tianditu and Google Maps are preview-only until their API
-access is configured; OSM remains the only selectable/default base map.
+in the thumbnails. OSM is the default base map. Tianditu becomes selectable
+when `VITE_TIANDITU_API_KEY` is configured and uses its vector and Chinese
+annotation WMTS layers. Google Maps is not offered in the source picker.

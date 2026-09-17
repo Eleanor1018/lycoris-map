@@ -13,6 +13,7 @@ afterEach(() => {
     clients.splice(0).forEach((client) => client.clear())
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
+    vi.unstubAllEnvs()
 })
 function Route() {
     const route = useLocation()
@@ -419,39 +420,77 @@ it.each([
     expect(container.querySelector('.leaflet-container')).toBe(map)
 })
 it.each([false, true])(
-    'chooses the available map source in place without changing the map or route (mobile=%s)',
+    'switches both map layers without changing the camera, pins or route (mobile=%s)',
     async (mobile) => {
+        vi.stubEnv('VITE_TIANDITU_API_KEY', 'browser-test-key')
         const url = '/?lang=en&snap=collapsed'
         const { container } = app(url, mobile)
-        const map = container.querySelector('.leaflet-container')
+        const map = container.querySelector<HTMLElement>('.leaflet-container')!
+        const camera = { ...map.dataset }
+        await waitFor(() => expect(map.querySelector('.leaflet-marker-icon')).toBeInTheDocument())
+        const marker = map.querySelector('.leaflet-marker-icon')
         const trigger = screen.getByRole('button', { name: 'Map source' })
         fireEvent.click(trigger)
         const popup = screen.getByRole('dialog', { name: 'Map Source' })
         const osm = within(popup).getByRole('radio', { name: 'OSM' })
         expect(osm).toBeChecked()
         expect(osm).toHaveFocus()
-        for (const name of ['天地图', 'Google Maps']) {
-            const unavailable = within(popup).getByRole('radio', { name })
-            expect(unavailable).toBeDisabled()
-            expect(unavailable).toHaveAccessibleDescription('Not available yet')
-            fireEvent.click(unavailable)
-            expect(osm).toBeChecked()
-        }
-        fireEvent.click(osm)
+        expect(within(popup).getAllByRole('radio')).toHaveLength(2)
+        expect(within(popup).queryByRole('radio', { name: 'Google Maps' })).not.toBeInTheDocument()
+        fireEvent.click(within(popup).getByRole('radio', { name: '天地图' }))
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
         expect(trigger).toHaveFocus()
         expect(screen.getByTestId('route')).toHaveTextContent(url)
         expect(container.querySelector('.leaflet-container')).toBe(map)
+        expect({ ...map.dataset }).toEqual(camera)
+        expect(map.querySelector('.leaflet-marker-icon')).toBe(marker)
+        expect(map.querySelector('img[src*="/vec_w/wmts?"]')).toBeInTheDocument()
+        expect(map.querySelector('img[src*="/cva_w/wmts?"]')).toBeInTheDocument()
+        expect(map.querySelector('img[src*="tile.openstreetmap.org"]')).not.toBeInTheDocument()
+        expect(within(map).getByRole('link', { name: '天地图' })).toBeInTheDocument()
         expect(JSON.parse(localStorage.getItem('lycoris.map-preferences')!)).toMatchObject({
-            source: 'osm',
+            source: 'tianditu',
         })
         fireEvent.click(trigger)
-        fireEvent.keyDown(screen.getByRole('radio', { name: 'OSM' }), { key: 'Escape' })
+        const selected = screen.getByRole('radio', { name: '天地图' })
+        expect(selected).toBeChecked()
+        expect(selected).toHaveFocus()
+        fireEvent.keyDown(selected, { key: 'Escape' })
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
         expect(trigger).toHaveFocus()
-        expect(screen.getByTestId('route')).toHaveTextContent(url)
+        fireEvent.click(trigger)
+        fireEvent.click(screen.getByRole('radio', { name: 'OSM' }))
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+        expect(map.querySelector('img[src*="tile.openstreetmap.org"]')).toBeInTheDocument()
+        expect(map.querySelector('img[src*="tianditu.gov.cn"]')).not.toBeInTheDocument()
+        expect(within(map).queryByRole('link', { name: '天地图' })).not.toBeInTheDocument()
+        expect({ ...map.dataset }).toEqual(camera)
     },
 )
+it('keeps unconfigured Tianditu unavailable and uses OSM for a saved Tianditu preference', () => {
+    vi.stubEnv('VITE_TIANDITU_API_KEY', '')
+    localStorage.setItem('lycoris.map-preferences', '{"source":"tianditu"}')
+    const { container } = app('/?lang=en')
+    fireEvent.click(screen.getByRole('button', { name: 'Map source' }))
+    const unavailable = screen.getByRole('radio', { name: '天地图' })
+    expect(unavailable).toBeDisabled()
+    expect(unavailable).toHaveAccessibleDescription('Not available yet')
+    fireEvent.click(unavailable)
+    expect(screen.getByRole('radio', { name: 'OSM' })).toBeChecked()
+    expect(container.querySelector('img[src*="tianditu.gov.cn"]')).not.toBeInTheDocument()
+})
+it('restores Tianditu on reload and reflects source changes in Settings', async () => {
+    vi.stubEnv('VITE_TIANDITU_API_KEY', 'browser-test-key')
+    localStorage.setItem('lycoris.map-preferences', '{"source":"tianditu"}')
+    const { container } = app('/?lang=en&panel=settings')
+    expect(container.querySelector('img[src*="/vec_w/wmts?"]')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Map Source 天地图' }))
+    expect(screen.getByRole('radio', { name: '天地图' })).toBeChecked()
+    fireEvent.click(screen.getByRole('radio', { name: 'OSM' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Map Source OSM' })).toBeInTheDocument()
+    expect(container.querySelector('img[src*="tianditu.gov.cn"]')).not.toBeInTheDocument()
+})
 it('closes phone Nearby back to the default half menu without remounting the map', async () => {
     const { container } = app('/?lang=en', true)
     const map = container.querySelector('.leaflet-container')
