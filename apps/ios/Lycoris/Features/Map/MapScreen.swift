@@ -78,7 +78,7 @@ struct MapScreen: View {
           * (dynamicTypeSize.isAccessibilitySize ? 3 : 2) + 24,
         detailHeight: selectedPlace == nil
           ? nil
-          : 208 + (selectedPlace?.hasPhoto == true ? (geometry.size.width - 50) * 198 / 353 : 0)
+          : 208 + (selectedPlace?.hasPhoto == true ? (geometry.size.width - 30) * 198 / 353 : 0)
             + (selectedPlace?.distanceReference != nil ? 30 : 0)
             + max(geometry.safeAreaInsets.bottom, 29),
         collapsedHeaderHeight: max(44, searchHeight) + 28

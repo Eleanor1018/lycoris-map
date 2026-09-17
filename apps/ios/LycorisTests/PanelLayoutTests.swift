@@ -17,7 +17,7 @@ struct PanelLayoutTests {
     #expect(layout.top(for: .nearby) == 598)
     #expect(layout.top(for: .expanded) == 70)
     #expect(layout.horizontalInset(at: 774) == 25)
-    #expect(layout.horizontalInset(at: 598) == 10)
+    #expect(layout.horizontalInset(at: 598) == 0)
     #expect(layout.horizontalInset(at: 70) == 0)
     #expect(layout.bottomCornerRadius(at: 70) == 0)
     #expect(layout.height(at: 70) + 70 == 874)
@@ -27,12 +27,12 @@ struct PanelLayoutTests {
   @Test func draggingKeepsThePanelAndItsBottomGapContinuous() {
     let layout = layout()
     let middle = (layout.collapsedTop + layout.nearbyTop) / 2
-    #expect(layout.horizontalInset(at: middle) == 17.5)
+    #expect(layout.horizontalInset(at: middle) == 12.5)
     #expect(layout.bottomGap(at: middle) == 17)
     #expect(layout.height(at: middle) + middle + layout.bottomGap(at: middle) == 874)
     let expanding = (layout.expandedTop + layout.nearbyTop) / 2
-    #expect(layout.horizontalInset(at: expanding) == 5)
-    #expect(layout.bottomCornerRadius(at: expanding) == 13)
+    #expect(layout.horizontalInset(at: expanding) == 0)
+    #expect(layout.bottomCornerRadius(at: expanding) == 0)
   }
 
   @Test func gestureBoundsAndProjectedLandingCannotLeaveTheViewport() {

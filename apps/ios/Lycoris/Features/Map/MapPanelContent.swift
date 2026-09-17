@@ -53,6 +53,7 @@ struct MapPanelContent: View {
         } header: {
           Text("Settings").font(.title3.weight(.semibold)).textCase(nil)
             .accessibilityAddTraits(.isHeader)
+            .listRowInsets(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 6))
         }
       }
     }

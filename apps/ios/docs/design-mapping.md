@@ -79,6 +79,12 @@ The collapsed search row now has equal 14pt space above and below it. A separate
 
 Verified with the 6 PanelLayout tests and 3 map interaction UI flows, including keyboard scrolling and preserving search text after collapse. Computer Use on iPhone 17 Pro confirmed the visual balance, dragged directly from the compact grabber to Expanded, and returned to Collapsed. Log: `/tmp/lycoris-ios-collapsed-spacing2.log`.
 
+## Nearby width and heading alignment refinement (2026-09-17)
+
+The user's next refinement extends the edge-attached surface to Nearby. Horizontal inset and bottom corner radius now interpolate from 25pt/26pt at Collapsed to zero at Nearby and stay zero through Expanded; the top corners remain rounded. The wider category cards use their existing typography and internal padding. Settings explicitly uses the same 6pt header inset inside the List's 17pt content margin as Find Nearby and Bookmarks. Native setting rows retain their separate 16pt internal inset and 44pt standard height. Detail photo height now uses the full-width panel's actual 15pt photo margins on each side.
+
+Verified with 6 existing PanelLayout tests, keyboard/drag interaction and bookmark/detail presentation flows on iPhone 17. The exported Nearby and Expanded simulator screenshots confirm the edge-attached panel and aligned section headings. Xcode Run built the updated normal Debug app on iPhone 17 Pro. Logs: `/tmp/lycoris-nearby-edge.log`, `/tmp/lycoris-nearby-detail.log`.
+
 ## Map style card (2026-09-17)
 
 The user requested Apple Maps' expanding map-style card from the existing map icon, then narrowed the choices to Explore and Satellite. Computer Use inspected the iOS 26.5 Apple Maps card: a compact bottom sheet, thumbnail choices, selection outline and trailing close button. Lycoris uses native NavigationStack, Button, sheet detents/material and the system zoom transition from the icon. Accessibility text switches to a scrollable single column with medium/large detents.

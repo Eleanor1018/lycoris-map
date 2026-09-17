@@ -69,7 +69,7 @@ The `$()` escape preserves the double slash in an xcconfig URL. Remove the overr
 - `LycorisUITests`: keyboard/drag, design previews, public browsing and isolated synthetic account acceptance flows.
 - `docs`: design references, gaps and acceptance evidence.
 
-The system sheet was prototyped first. On iOS 26.5 its largest detent becomes edge-to-edge; the design keeps 10 points on both sides. `PanelLayout` therefore owns only the custom container's geometry. SwiftUI controls, MapKit and system materials remain native. The map is not conditionally removed or keyed by panel state.
+`PanelLayout` owns the floating collapsed container and its continuous transition to edge-to-edge Nearby and Expanded states, following the user's latest iOS refinements. Section headings share the same leading alignment. SwiftUI controls, MapKit and system materials remain native. The map is not conditionally removed or keyed by panel state.
 
 `NativeMapView` is a small `MKMapView` bridge. Public layout margins place attribution above the panel's lowest resting position. It stays fixed while the panel moves, as recommended by [Apple's Maps guidance](https://developer.apple.com/design/human-interface-guidelines/maps/); expanded panels temporarily cover it. When device geometry or text size changes those margins, MapKit coordinate conversions preserve the geographic point under the screen center, camera distance and heading. I1 uses a flat map (pitch gestures disabled); rotation, pan and zoom remain native.
 
