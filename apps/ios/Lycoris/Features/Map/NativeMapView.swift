@@ -10,6 +10,9 @@ struct NativeMapView: UIViewRepresentable {
   var focus: MapFocus? = nil
   var showsUserLocation = false
   var animated = true
+  var isSelectingLocation = false
+  var selectedLocation: GeoPoint?
+  var onPickLocation: (GeoPoint) -> Void = { _ in }
   var onViewport: (MapViewport) -> Void = { _ in }
   var onSelect: (PlacePresentation) -> Void = { _ in }
   var onScreenCenter: (GeoPoint) -> Void = { _ in }
@@ -23,6 +26,24 @@ struct NativeMapView: UIViewRepresentable {
     context.coordinator.appearance = appearance
     map.showsCompass = false
     map.isPitchEnabled = false
+    let tap = UITapGestureRecognizer(
+      target: context.coordinator, action: #selector(Coordinator.pickLocation(_:)))
+    tap.delegate = context.coordinator
+    tap.cancelsTouchesInView = false
+    tap.isEnabled = isSelectingLocation
+    // MapKit's zoom recognizer isn't necessarily a UITapGestureRecognizer.
+    // Observe double taps ourselves so the single tap always waits for them.
+    let doubleTap = UITapGestureRecognizer()
+    doubleTap.numberOfTapsRequired = 2
+    doubleTap.cancelsTouchesInView = false
+    doubleTap.delaysTouchesEnded = false
+    doubleTap.delegate = context.coordinator
+    doubleTap.isEnabled = isSelectingLocation
+    tap.require(toFail: doubleTap)
+    context.coordinator.placementTap = tap
+    context.coordinator.placementDoubleTap = doubleTap
+    map.addGestureRecognizer(doubleTap)
+    map.addGestureRecognizer(tap)
     map.layoutMargins = UIEdgeInsets(top: topInset, left: 10, bottom: bottomInset, right: 10)
     var center = CLLocationCoordinate2D(latitude: 40.766, longitude: -74.077)
     #if DEBUG
@@ -46,6 +67,9 @@ struct NativeMapView: UIViewRepresentable {
   func updateUIView(_ map: MKMapView, context: Context) {
     let coordinator = context.coordinator
     coordinator.parent = self
+    coordinator.placementTap?.isEnabled = isSelectingLocation
+    coordinator.placementDoubleTap?.isEnabled = isSelectingLocation
+    coordinator.updateSelectedLocation(on: map)
     if coordinator.appearance != appearance {
       map.preferredConfiguration = appearance.configuration()
       coordinator.appearance = appearance
@@ -65,6 +89,8 @@ struct NativeMapView: UIViewRepresentable {
       if let pin = existing[place.id] {
         pin.place = place
         map.view(for: pin)?.accessibilityLabel = place.title
+        map.view(for: pin)?.isEnabled = !isSelectingLocation
+        map.view(for: pin)?.isAccessibilityElement = !isSelectingLocation
         if pin.coordinate.latitude != point.latitude || pin.coordinate.longitude != point.longitude
         {
           pin.coordinate = point.coordinate
@@ -92,12 +118,77 @@ struct NativeMapView: UIViewRepresentable {
     }
   }
 
-  final class Coordinator: NSObject, MKMapViewDelegate {
+  final class LocationAnnotation: NSObject, MKAnnotation {
+    @objc dynamic var coordinate: CLLocationCoordinate2D
+    init(point: GeoPoint) { coordinate = point.coordinate }
+  }
+
+  final class Coordinator: NSObject, MKMapViewDelegate, UIGestureRecognizerDelegate {
     var parent: NativeMapView
     var focusID: UUID?
     var appearance: MapAppearance?
     var lastViewport: MapViewport?
+    var placementTap: UITapGestureRecognizer?
+    var placementDoubleTap: UITapGestureRecognizer?
+    private var locationAnnotation: LocationAnnotation?
     init(parent: NativeMapView) { self.parent = parent }
+
+    @objc func pickLocation(_ gesture: UITapGestureRecognizer) {
+      guard gesture.state == .ended, let map = gesture.view as? MKMapView else { return }
+      pickLocation(at: gesture.location(in: map), on: map)
+    }
+
+    func pickLocation(at position: CGPoint, on map: MKMapView) {
+      guard parent.isSelectingLocation, map.bounds.contains(position) else { return }
+      let coordinate = map.convert(position, toCoordinateFrom: map)
+      guard let point = GeoPoint(latitude: coordinate.latitude, longitude: coordinate.longitude)
+      else { return }
+      parent.onPickLocation(point)
+    }
+
+    func gestureRecognizer(
+      _ gestureRecognizer: UIGestureRecognizer,
+      shouldRequireFailureOf otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+      // A double tap zooms; it must finish before a single tap can place a pin.
+      gestureRecognizer === placementTap
+        && ((otherGestureRecognizer as? UITapGestureRecognizer)?.numberOfTapsRequired ?? 0) > 1
+    }
+
+    func gestureRecognizer(
+      _ gestureRecognizer: UIGestureRecognizer,
+      shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+    ) -> Bool {
+      // This observer must not consume MapKit's native zoom gesture.
+      if gestureRecognizer === placementDoubleTap { return true }
+      guard gestureRecognizer === placementTap,
+        let other = otherGestureRecognizer as? UITapGestureRecognizer
+      else { return false }
+      // MapKit can also recognize the tap, including over an existing annotation.
+      return other.numberOfTapsRequired == 1 && other.numberOfTouchesRequired == 1
+    }
+
+    func updateSelectedLocation(on map: MKMapView) {
+      guard parent.isSelectingLocation, let point = parent.selectedLocation else {
+        if let locationAnnotation { map.removeAnnotation(locationAnnotation) }
+        locationAnnotation = nil
+        return
+      }
+      if let locationAnnotation {
+        if locationAnnotation.coordinate.latitude != point.latitude
+          || locationAnnotation.coordinate.longitude != point.longitude
+        {
+          locationAnnotation.coordinate = point.coordinate
+        }
+      } else {
+        let pin = LocationAnnotation(point: point)
+        locationAnnotation = pin
+        map.addAnnotation(pin)
+      }
+      if let locationAnnotation, let view = map.view(for: locationAnnotation) {
+        view.accessibilityLabel = String(appLocalized: "Selected location")
+      }
+    }
 
     func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
       publishViewport(mapView)
@@ -121,6 +212,19 @@ struct NativeMapView: UIViewRepresentable {
     }
 
     func mapView(_ mapView: MKMapView, viewFor annotation: any MKAnnotation) -> MKAnnotationView? {
+      if annotation is LocationAnnotation {
+        let view =
+          mapView.dequeueReusableAnnotationView(withIdentifier: "selected-location")
+          as? MKMarkerAnnotationView
+          ?? MKMarkerAnnotationView(annotation: annotation, reuseIdentifier: "selected-location")
+        view.annotation = annotation
+        view.canShowCallout = false
+        view.displayPriority = .required
+        view.zPriority = .max
+        view.accessibilityLabel = String(appLocalized: "Selected location")
+        view.accessibilityIdentifier = "contribution.location-pin"
+        return view
+      }
       guard let pin = annotation as? PlaceAnnotation else { return nil }
       let view =
         mapView.dequeueReusableAnnotationView(withIdentifier: "place")
@@ -130,12 +234,14 @@ struct NativeMapView: UIViewRepresentable {
       view.centerOffset = CGPoint(x: 0, y: -21.5)
       view.accessibilityLabel = pin.place.title
       view.accessibilityIdentifier = "map.pin.\(pin.place.id)"
+      view.isEnabled = !parent.isSelectingLocation
+      view.isAccessibilityElement = !parent.isSelectingLocation
       return view
     }
 
     func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
       guard let pin = view.annotation as? PlaceAnnotation else { return }
-      parent.onSelect(pin.place)
+      if !parent.isSelectingLocation { parent.onSelect(pin.place) }
       mapView.deselectAnnotation(pin, animated: false)
     }
   }

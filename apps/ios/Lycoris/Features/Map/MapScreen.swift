@@ -16,6 +16,8 @@ struct MapScreen: View {
   @State private var account = AccountStore()
   @State private var contribution = ContributionStore()
   @State private var selectingLocation = false
+  @State private var pickedLocation: GeoPoint?
+  @State private var locationPickFeedback = 0
   @State private var screenCenter: GeoPoint?
   @State private var contributionIntent: ContributionIntent?
   @State private var queuedContribution: ContributionIntent?
@@ -48,6 +50,7 @@ struct MapScreen: View {
   @State private var keyboardHeight: CGFloat = 0
   @FocusState private var isSearchFocused: Bool
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
   @ScaledMetric(relativeTo: .subheadline) private var searchHeight: CGFloat = 38
   @ScaledMetric(relativeTo: .body) private var cardHeight: CGFloat = 66
   @ScaledMetric(relativeTo: .title3) private var titleHeight: CGFloat = 24
@@ -96,6 +99,8 @@ struct MapScreen: View {
           places: mapPlaces, focus: store.focus,
           showsUserLocation: !store.isPreview && location.hasRequestedLocation
             && location.isAuthorized, animated: !reduceMotion,
+          isSelectingLocation: selectingLocation, selectedLocation: pickedLocation,
+          onPickLocation: pickLocation,
           onViewport: { store.viewportChanged($0) },
           onSelect: { if !selectingLocation { selectPlace($0) } },
           onScreenCenter: { screenCenter = $0 }
@@ -145,29 +150,39 @@ struct MapScreen: View {
           .accessibilityHidden(selectingLocation)
 
         if selectingLocation {
-          Image(systemName: "scope").font(.largeTitle).foregroundStyle(.tint)
-            .position(x: layout.viewport.width / 2, y: layout.viewport.height / 2)
-            .allowsHitTesting(false).accessibilityHidden(true)
           VStack {
             HStack {
-              Button("Cancel", systemImage: "xmark") {
+              Button("Cancel") {
                 selectingLocation = false
+                pickedLocation = nil
                 if contribution.draft?.editable == true { modal = .contribution }
               }
-              .buttonStyle(.glass).labelStyle(.iconOnly)
+              .buttonStyle(.glass).controlSize(.large)
               .accessibilityIdentifier("contribution.cancel-location")
               Spacer()
               Button("Current location", systemImage: "location", action: locate)
-                .buttonStyle(.glass).labelStyle(.iconOnly)
+                .buttonStyle(.glass).controlSize(.large).labelStyle(.iconOnly)
             }
             Spacer()
             VStack(spacing: 12) {
-              Text("Move the map to choose a location.")
+              Text(
+                pickedLocation == nil
+                  ? "Tap the map to choose a location." : "Tap again to adjust the location."
+              )
+              .multilineTextAlignment(.center)
+              if voiceOverEnabled {
+                Button("Select map center") {
+                  if let screenCenter { pickLocation(screenCenter) }
+                }
+                .disabled(screenCenter == nil)
+              }
               Button("Use this location") { confirmLocation() }
-                .buttonStyle(.borderedProminent).disabled(screenCenter == nil)
+                .buttonStyle(.borderedProminent).controlSize(.large)
+                .disabled(pickedLocation == nil)
                 .accessibilityIdentifier("contribution.confirm-location")
                 .accessibilityValue(
-                  screenCenter.map { String(format: "%.5f, %.5f", $0.latitude, $0.longitude) } ?? ""
+                  pickedLocation.map { String(format: "%.5f, %.5f", $0.latitude, $0.longitude) }
+                    ?? ""
                 )
             }
             .padding().frame(maxWidth: .infinity).background(
@@ -182,6 +197,7 @@ struct MapScreen: View {
       .offset(y: -geometry.safeAreaInsets.top)
     }
     .ignoresSafeArea(.keyboard)
+    .sensoryFeedback(.selection, trigger: locationPickFeedback)
     .alert("Not available yet", isPresented: $showsUnavailableAction) {
       Button("OK", role: .cancel) {}
     }
@@ -216,7 +232,7 @@ struct MapScreen: View {
           beginContribution(intent)
         } else if chooseLocationAfterDismiss {
           chooseLocationAfterDismiss = false
-          selectingLocation = true
+          enterLocationSelection(at: contribution.draft?.point)
         }
       }
     ) { item in
@@ -318,11 +334,21 @@ struct MapScreen: View {
       if account.user == nil {
         editLoadTask?.cancel()
         selectingLocation = false
+        pickedLocation = nil
+        chooseLocationAfterDismiss = false
         if case .contribution = modal { modal = nil }
       }
     }
     .onChange(of: account.user?.publicId) { old, new in
-      if old != nil, old != new, case .link = modal { modal = nil }
+      if old != nil, old != new {
+        editLoadTask?.cancel()
+        selectingLocation = false
+        pickedLocation = nil
+        chooseLocationAfterDismiss = false
+        queuedContribution = nil
+        if case .contribution = modal { modal = nil }
+        if case .link = modal { modal = nil }
+      }
     }
     .onChange(of: account.detailState) { _, state in
       if state == .failed(.unavailable), let id = account.selectedMarker?.id {
@@ -648,8 +674,7 @@ struct MapScreen: View {
     }
     switch intent {
     case .create:
-      movePanel(to: .collapsed)
-      selectingLocation = true
+      enterLocationSelection()
     case .edit(let id):
       editLoadTask = Task {
         do {
@@ -665,12 +690,27 @@ struct MapScreen: View {
     }
   }
 
+  private func enterLocationSelection(at point: GeoPoint? = nil) {
+    guard account.user != nil else { return }
+    movePanel(to: .collapsed)
+    pickedLocation = point
+    if let point { store.focusMap(on: point) }
+    selectingLocation = true
+  }
+
+  private func pickLocation(_ point: GeoPoint) {
+    guard selectingLocation else { return }
+    pickedLocation = point
+    locationPickFeedback += 1
+  }
+
   private func confirmLocation() {
-    guard let point = screenCenter else { return }
+    guard selectingLocation, let point = pickedLocation else { return }
     do {
       try contribution.begin(at: point)
       try contribution.move(to: point)
       selectingLocation = false
+      pickedLocation = nil
       modal = .contribution
     } catch {
       contributionError = String(appLocalized: "Could not save the contribution on this device.")

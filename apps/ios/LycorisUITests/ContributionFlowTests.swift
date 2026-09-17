@@ -25,11 +25,35 @@ import XCTest
     app.secureTextFields["auth.password"].typeText("\n")
     declinePasswordSave(app)
     let useLocation = app.buttons["contribution.confirm-location"]
-    guard await ready(useLocation) else {
+    guard useLocation.waitForExistence(timeout: 10) else {
       XCTFail("Login must continue to native location selection")
       return
     }
+    XCTAssertFalse(useLocation.isEnabled, "The map center must not silently become the location")
+    let first = app.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.35))
+    let second = app.coordinate(withNormalizedOffset: CGVector(dx: 0.65, dy: 0.5))
+    first.press(forDuration: 0.05, thenDragTo: second)
+    XCTAssertFalse(useLocation.isEnabled, "Panning must not select a location")
+    first.tap()
+    await assertReady(useLocation)
+    let initialPoint = try XCTUnwrap(useLocation.value as? String)
+    first.press(forDuration: 0.05, thenDragTo: second)
+    XCTAssertEqual(useLocation.value as? String, initialPoint, "Pan must preserve the pin")
+    second.doubleTap()
+    XCTAssertEqual(useLocation.value as? String, initialPoint, "Double tap only zooms")
+    app.maps.firstMatch.pinch(withScale: 1.5, velocity: 1)
+    XCTAssertEqual(useLocation.value as? String, initialPoint, "Pinch only zooms")
+    second.tap()
+    await assertCoordinateChanges(useLocation, from: initialPoint)
     attach(app, "i5-map-selection")
+    // Cancel before confirming must not create a draft.
+    app.buttons["contribution.cancel-location"].tap()
+    app.buttons["map.contribute"].tap()
+    XCTAssertTrue(useLocation.waitForExistence(timeout: 5))
+    XCTAssertFalse(useLocation.isEnabled)
+    first.tap()
+    await assertReady(useLocation)
+    let confirmedPoint = try XCTUnwrap(useLocation.value as? String)
     useLocation.tap()
     guard app.textFields["contribution.title"].waitForExistence(timeout: 5) else {
       XCTFail("Native contribution form missing")
@@ -38,6 +62,27 @@ import XCTest
     let title = "I5 Native \(UUID().uuidString.prefix(8))"
     fill(app.textFields["contribution.title"], title)
     app.textFields["contribution.title"].typeText("\n")
+    let chooseLocation = app.buttons["contribution.location"]
+    XCTAssertEqual(chooseLocation.value as? String, confirmedPoint)
+    chooseLocation.tap()
+    await assertReady(useLocation)
+    XCTAssertEqual(useLocation.value as? String, confirmedPoint)
+    second.tap()
+    await assertCoordinateChanges(useLocation, from: confirmedPoint)
+    app.buttons["contribution.cancel-location"].tap()
+    XCTAssertTrue(chooseLocation.waitForExistence(timeout: 5))
+    XCTAssertEqual(
+      chooseLocation.value as? String, confirmedPoint, "Cancel preserves saved location")
+    XCTAssertEqual(app.textFields["contribution.title"].value as? String, title)
+    chooseLocation.tap()
+    await assertReady(useLocation)
+    second.tap()
+    await assertCoordinateChanges(useLocation, from: confirmedPoint)
+    let updatedPoint = try XCTUnwrap(useLocation.value as? String)
+    useLocation.tap()
+    XCTAssertTrue(chooseLocation.waitForExistence(timeout: 5))
+    XCTAssertEqual(chooseLocation.value as? String, updatedPoint)
+    XCTAssertEqual(app.textFields["contribution.title"].value as? String, title)
     let picker = app.buttons["contribution.photo"]
     for _ in 0..<6 {
       if picker.isHittable { break }
@@ -83,6 +128,7 @@ import XCTest
       return
     }
     XCTAssertEqual(app.textFields["contribution.title"].value as? String, title)
+    XCTAssertEqual(chooseLocation.value as? String, updatedPoint)
     let submit = app.buttons["contribution.submit"]
     guard await ready(submit) else {
       XCTFail("Restored draft cannot submit")
@@ -139,7 +185,7 @@ import XCTest
     let app = XCUIApplication()
     app.launchArguments = [
       "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-lycoris-test-center",
-      "31.2304,121.4737",
+      "31.2304,121.4737", "-lycoris.language", "en",
     ]
     app.launch()
     XCTAssertTrue(app.buttons["map.panel.handle"].waitForExistence(timeout: 10))
@@ -152,6 +198,18 @@ import XCTest
           predicate: NSPredicate(format: "exists == true AND hittable == true AND enabled == true"),
           object: element)
       ], timeout: 10) == .completed
+  }
+  private func assertReady(_ element: XCUIElement) async {
+    let isReady = await ready(element)
+    XCTAssertTrue(isReady)
+  }
+  private func assertCoordinateChanges(_ element: XCUIElement, from previous: String) async {
+    let result = await XCTWaiter.fulfillment(
+      of: [
+        XCTNSPredicateExpectation(
+          predicate: NSPredicate(format: "value != %@", previous), object: element)
+      ], timeout: 5)
+    XCTAssertEqual(result, .completed)
   }
   private func fill(_ element: XCUIElement, _ value: String) {
     element.tap()
