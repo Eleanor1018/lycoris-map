@@ -573,19 +573,50 @@ export function MapShell({
                     />
                 </div>
             )}
-            {browse && (browse.location.error || browse.location.pending) && (
-                <p className="map-location-status" role="status">
-                    {ui.message(
-                        browse.location.pending ? 'Finding your location…' : browse.location.error,
-                    )}
-                </p>
-            )}
-            {browse?.mode === 'map' && browse.state.error && (
-                <div className="map-read-status" role="status">
-                    {ui.message(browse.state.error)}{' '}
-                    <DesignButton onClick={browse.state.retry}>{ui.text('Try again')}</DesignButton>
-                </div>
-            )}
+            <div className="map-notices">
+                {browse && (browse.location.error || browse.location.pending) && (
+                    <MapNotice
+                        key={browse.location.pending ? 'locating' : browse.location.error}
+                        message={
+                            browse.location.pending
+                                ? 'Finding your location…'
+                                : browse.location.error!
+                        }
+                    />
+                )}
+                {browse?.mode === 'map' && browse.state.error && (
+                    <MapNotice
+                        key={`places:${browse.state.error}`}
+                        message={browse.state.error}
+                        onRetry={browse.state.retry}
+                    />
+                )}
+            </div>
         </main>
+    )
+}
+
+function MapNotice({ message, onRetry }: { message: string; onRetry?: () => void }) {
+    const ui = useUi()
+    const [dismissed, setDismissed] = useState(false)
+    if (dismissed) return null
+    return (
+        <div className="map-notice" role="status">
+            <div className="map-notice-content">
+                {ui.message(message)}
+                {onRetry && (
+                    <DesignButton className="map-notice-retry" onClick={onRetry}>
+                        {ui.text('Try again')}
+                    </DesignButton>
+                )}
+            </div>
+            <IconButton
+                className="map-notice-close"
+                icon="close"
+                size={16}
+                label="Dismiss notification"
+                onClick={() => setDismissed(true)}
+            />
+        </div>
     )
 }

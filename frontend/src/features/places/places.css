@@ -210,25 +210,48 @@
     font: 400 15px/20px var(--ui-font-body);
     margin: 12px 0 0;
 }
-.map-location-status,
-.map-read-status {
+.map-notices {
     position: absolute;
     z-index: 10;
     top: 16px;
     left: 576px;
     right: 80px;
+    display: grid;
+    gap: 8px;
+    pointer-events: none;
+}
+.map-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin: 0;
-    padding: 12px 16px;
+    padding: 4px 4px 4px 16px;
     border-radius: 22px;
     background: var(--ui-nav-surface);
     color: var(--ui-brand-deep);
     font: 400 15px/20px var(--ui-font-body);
+    pointer-events: auto;
 }
-.map-read-status button {
+.map-notice-content {
+    flex: 1;
+    min-width: 0;
+    padding-block: 8px;
+    overflow-wrap: anywhere;
+}
+.map-notice-retry {
+    margin-inline-start: 8px;
     text-decoration: underline;
 }
-.map-shell[data-mobile='true'] .map-location-status,
-.map-shell[data-mobile='true'] .map-read-status {
+.map-notice-close {
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+}
+.map-notice-close:hover {
+    background: var(--ui-selected);
+}
+.map-shell[data-mobile='true'] .map-notices {
     left: 16px;
     right: 64px;
     top: 8px;
