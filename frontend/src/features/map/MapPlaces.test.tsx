@@ -70,6 +70,28 @@ it('updates category colors in place and retains them for selected or detail-onl
     }
     expect(sources.size).toBe(categories.length)
 })
+it.each(['baby_room', 'friendly_clinic'] as const)(
+    'keeps a %s pin above a coincident legacy other pin at every zoom',
+    (category) => {
+        const f = fixture()
+        const typed = syntheticPlace({ id: 133, category })
+        const legacy = syntheticPlace({ id: 132, category: 'self_definition' })
+        const view = render(f.tree({ markers: [typed, legacy] }))
+        const pin = view.container.querySelector<HTMLImageElement>('#map-place-133')!
+        const other = view.container.querySelector<HTMLImageElement>('#map-place-132')!
+        const source = pin.src
+        for (let zoom = 19; zoom >= 0; zoom--) {
+            act(() => f.map().setView(typed, zoom, { animate: false }))
+            expect(view.container.querySelector('#map-place-133')).toBe(pin)
+            expect(pin.src).toBe(source)
+            expect(pin.src).not.toBe(other.src)
+            expect(Number(pin.style.zIndex)).toBeGreaterThan(Number(other.style.zIndex))
+        }
+        // Explicitly opening the legacy record still honestly uses its category.
+        view.rerender(f.tree({ markers: [typed, legacy], selected: legacy }))
+        expect(Number(other.style.zIndex)).toBeGreaterThan(Number(pin.style.zIndex))
+    },
+)
 it('preserves user zoom when layout padding changes, keeping selection in the uncovered area', () => {
     const f = fixture(),
         selected = syntheticPlace()
