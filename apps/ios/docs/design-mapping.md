@@ -85,6 +85,8 @@ The user's next refinement extends the edge-attached surface to Nearby. Horizont
 
 Verified with 6 existing PanelLayout tests, keyboard/drag interaction and bookmark/detail presentation flows on iPhone 17. The exported Nearby and Expanded simulator screenshots confirm the edge-attached panel and aligned section headings. Xcode Run built the updated normal Debug app on iPhone 17 Pro. Logs: `/tmp/lycoris-nearby-edge.log`, `/tmp/lycoris-nearby-detail.log`.
 
+The subsequent heading fix moves Find Nearby into the native Section header, outside the transparent grouped row's corner mask. It retains the 6pt leading inset, primary title styling and 8pt gap above the category cards. English Nearby and Chinese Expanded screenshots confirm complete glyphs with unchanged card width; keyboard/drag and language/radius flows passed in `/tmp/lycoris-nearby-heading.log`.
+
 ## Map style card (2026-09-17)
 
 The user requested Apple Maps' expanding map-style card from the existing map icon, then narrowed the choices to Explore and Satellite. Computer Use inspected the iOS 26.5 Apple Maps card: a compact bottom sheet, thumbnail choices, selection outline and trailing close button. Lycoris uses native NavigationStack, Button, sheet detents/material and the system zoom transition from the icon. Accessibility text switches to a scrollable single column with medium/large detents.
