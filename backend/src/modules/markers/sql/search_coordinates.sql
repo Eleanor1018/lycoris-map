@@ -2,10 +2,11 @@ SELECT
     id, version, lat, lng, category, title, description, source_language,
     is_public, username, user_public_id, client_request_id, is_active,
     open_time_start, open_time_end, review_status, last_edited_by,
-    last_edited_by_public_id, last_edited_by_owner, mark_image, created_at, updated_at
+    last_edited_by_public_id, last_edited_by_owner, mark_image, deactivated, created_at, updated_at
 FROM map_markers
 WHERE is_public = true
   AND review_status = 'APPROVED'
+  AND deactivated = false
   AND abs(lat - $1) <= $3
   AND abs(lng - $2) <= $3
 ORDER BY id ASC

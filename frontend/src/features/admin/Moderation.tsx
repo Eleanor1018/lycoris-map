@@ -84,15 +84,15 @@ export function Moderation({ all }: { all: boolean }) {
                         disabled={work.busy}
                         onClick={() =>
                             work.confirm({
-                                label: ui.message('Clean missing images'),
+                                label: ui.message('Clear missing image references'),
                                 detail: ui.message(
-                                    'This removes references to missing image files.',
+                                    'This clears image addresses only when the server file is missing. It does not delete places or image files.',
                                 ),
                                 action: api.cleanupImages,
                             })
                         }
                     >
-                        {ui.message('Clean missing images')}
+                        {ui.message('Clear missing image references')}
                     </DesignButton>
                 )}
             </div>
@@ -266,6 +266,9 @@ function ReviewCard({
                         <p>
                             {ui.message('Review status')}:{' '}
                             {ui.message(entry.item.reviewStatus.toLowerCase())}
+                            {all && (
+                                <> · {ui.message(entry.item.deactivated ? 'Disabled' : 'Active')}</>
+                            )}
                         </p>
                     )}
                 </>
@@ -276,6 +279,7 @@ function ReviewCard({
                 <DesignButton
                     disabled={
                         work.busy ||
+                        (entry.kind === 'markers' && !!entry.item.deactivated) ||
                         (entry.kind === 'edits' &&
                             (!current.data || current.isError || current.isFetching))
                     }
@@ -283,27 +287,44 @@ function ReviewCard({
                 >
                     {ui.message('Approve')}
                 </DesignButton>
-                <DesignButton disabled={work.busy} onClick={() => decide('reject')}>
+                <DesignButton
+                    disabled={work.busy || (entry.kind === 'markers' && !!entry.item.deactivated)}
+                    onClick={() => decide('reject')}
+                >
                     {ui.message('Reject')}
                 </DesignButton>
                 {all && entry.kind === 'markers' && (
                     <>
-                        <DesignButton disabled={work.busy} onClick={() => edit(entry.item)}>
+                        <DesignButton
+                            disabled={work.busy || !!entry.item.deactivated}
+                            onClick={() => edit(entry.item)}
+                        >
                             {ui.message('Edit')}
                         </DesignButton>
                         <DesignButton
-                            disabled={work.busy}
+                            disabled={work.busy || entry.item.deactivated === undefined}
                             onClick={() =>
                                 work.confirm({
-                                    label: `${ui.message('Delete')} · ${title} #${item.id}`,
+                                    label: `${ui.message(entry.item.deactivated ? 'Restore' : 'Disable')} · ${title} #${item.id}`,
                                     detail: ui.message(
-                                        'This action permanently deletes the place.',
+                                        entry.item.deactivated
+                                            ? 'Restore this place with its previous visibility and review status?'
+                                            : 'This hides the place from the map. All data is kept and can be restored.',
                                     ),
-                                    action: (signal) => api.deleteMarker(item.id, signal),
+                                    action: (signal) =>
+                                        entry.item.deactivated
+                                            ? api.restoreMarker(item.id, signal)
+                                            : api.deactivateMarker(item.id, signal),
                                 })
                             }
                         >
-                            {ui.message('Delete')}
+                            {ui.message(
+                                entry.item.deactivated === undefined
+                                    ? 'Server update required'
+                                    : entry.item.deactivated
+                                      ? 'Restore'
+                                      : 'Disable',
+                            )}
                         </DesignButton>
                     </>
                 )}

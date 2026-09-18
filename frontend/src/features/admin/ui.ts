@@ -25,7 +25,6 @@ const messages = {
     'Verification failed. Check the passcode and try again.': '验证失败，请检查管理密码后重试。',
     Approve: '通过',
     Reject: '拒绝',
-    Delete: '删除',
     Edit: '编辑',
     Cancel: '取消',
     Confirm: '确认',
@@ -46,12 +45,16 @@ const messages = {
     'The outcome could not be confirmed. Refresh and inspect the item before trying again.':
         '无法确认操作结果，请刷新并检查条目后再决定是否重试。',
     'The request failed. Refresh and try again.': '请求失败，请刷新后重试。',
-    'This action permanently deletes the place.': '这会永久删除该点位。',
+    'This hides the place from the map. All data is kept and can be restored.':
+        '停用后地图将不再显示该点位，全部数据保留，可随时恢复。',
+    'Restore this place with its previous visibility and review status?':
+        '恢复此点位？原有公开范围和审核状态将保持不变。',
     'This disables the account and invalidates its sessions.': '这会停用账号并使其登录会话失效。',
     'This resets the password to the server-configured default and invalidates existing sessions.':
         '这会将密码重置为服务器配置的默认值，并使现有登录会话失效。',
-    'Clean missing images': '清理失效图片',
-    'This removes references to missing image files.': '这会移除指向不存在图片的引用。',
+    'Clear missing image references': '清理失效图片引用',
+    'This clears image addresses only when the server file is missing. It does not delete places or image files.':
+        '仅在服务器图片文件不存在时清空对应图片地址，不删除点位或图片文件。',
     'Proposed changes': '提议的修改',
     'Current place': '当前点位',
     'Submitted by': '提交者',
@@ -62,6 +65,7 @@ const messages = {
     'Edit approved content': '修改并通过内容',
     'Review status': '审核状态',
     'Image unavailable.': '图片暂不可用。',
+    'Server update required': '等待服务器更新',
     'Checking access…': '正在确认权限…',
 } as const
 export function useAdminUi() {

@@ -42,7 +42,7 @@ it('splits date-line requests without filtering historical categories and dedupl
     await waitFor(() => expect(result.current.results).toHaveLength(1))
     expect(reads.readViewport).toHaveBeenCalledTimes(2)
     expect(reads.readViewport).toHaveBeenCalledWith(
-        { minLat: -10, maxLat: 10, minLng: 170, maxLng: 180, categories: [] },
+        expect.objectContaining({ minLng: 159, maxLng: 180, categories: [] }),
         'zh',
         expect.any(AbortSignal),
     )
@@ -173,4 +173,59 @@ it('keeps a nearby search anchored while panning and cancels a superseded catego
     expect(signal.aborted).toBe(true)
     await act(async () => finishOld([syntheticPlace({ title: 'Old nearby' })]))
     expect(result.current.results[0]?.title).toBe('Newest nearby')
+})
+
+it('reuses a buffered region for small pans and one zoom step, then refreshes across its boundary', async () => {
+    const { result } = renderHook(() => usePlaceBrowse('en', null), { wrapper: wrapper() })
+    const view = (south: number, west: number, size = 1, zoom = 14) =>
+        mapView(
+            south,
+            south + size,
+            west,
+            west + size,
+            { lat: south + size / 2, lng: west + size / 2 },
+            zoom,
+        )
+    act(() => result.current.onView(view(31, 121)))
+    await waitFor(() => expect(result.current.results).toHaveLength(1))
+    expect(reads.readViewport).toHaveBeenCalledTimes(1)
+    act(() => result.current.onView(view(31.2, 121.2)))
+    await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 300))
+    })
+    expect(reads.readViewport).toHaveBeenCalledTimes(1)
+    act(() => result.current.onView(view(31.25, 121.25, 0.5, 15)))
+    await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 300))
+    })
+    expect(reads.readViewport).toHaveBeenCalledTimes(1)
+    act(() => result.current.onView(view(31.6, 121.6)))
+    await waitFor(() => expect(reads.readViewport).toHaveBeenCalledTimes(2))
+    act(() => result.current.onView(view(31.75, 121.75, 0.25, 16)))
+    await waitFor(() => expect(reads.readViewport).toHaveBeenCalledTimes(3))
+})
+it('retains loaded pins while fetching a new region and ignores superseded responses', async () => {
+    let finishOld!: (value: ReturnType<typeof syntheticPlace>[]) => void
+    const { result } = renderHook(() => usePlaceBrowse('en', null), { wrapper: wrapper() })
+    act(() => result.current.onView(mapView(31, 32, 121, 122, { lat: 31.5, lng: 121.5 }, 14)))
+    await waitFor(() => expect(result.current.results).toHaveLength(1))
+    const original = result.current.markers[0]
+    vi.mocked(reads.readViewport).mockImplementationOnce(
+        () =>
+            new Promise((resolve) => {
+                finishOld = resolve
+            }),
+    )
+    act(() => result.current.onView(mapView(33, 34, 123, 124, { lat: 33.5, lng: 123.5 }, 14)))
+    await waitFor(() => expect(reads.readViewport).toHaveBeenCalledTimes(2))
+    expect(result.current.markers[0]).toBe(original)
+    const signal = vi.mocked(reads.readViewport).mock.calls[1]![2]
+    vi.mocked(reads.readViewport).mockResolvedValue([
+        syntheticPlace({ id: 2, title: 'New region' }),
+    ])
+    act(() => result.current.onView(mapView(35, 36, 125, 126, { lat: 35.5, lng: 125.5 }, 14)))
+    await waitFor(() => expect(result.current.markers[0]?.id).toBe(2))
+    expect(signal.aborted).toBe(true)
+    await act(async () => finishOld([syntheticPlace({ title: 'Stale region' })]))
+    expect(result.current.markers[0]?.title).toBe('New region')
 })

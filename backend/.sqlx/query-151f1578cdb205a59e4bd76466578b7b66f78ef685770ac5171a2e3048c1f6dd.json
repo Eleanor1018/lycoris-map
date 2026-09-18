@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT f.marker_id\nFROM marker_favorites f\nJOIN map_markers m ON m.id = f.marker_id\nWHERE f.user_public_id = $1 AND m.deactivated = false\nORDER BY f.id ASC\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "marker_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "marker_favorites",
+            "name": "marker_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "151f1578cdb205a59e4bd76466578b7b66f78ef685770ac5171a2e3048c1f6dd"
+}

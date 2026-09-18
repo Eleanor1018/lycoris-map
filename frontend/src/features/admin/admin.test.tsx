@@ -206,3 +206,41 @@ it('cancels confirmation with Escape and restores its trigger focus', async () =
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(api.moderate).not.toHaveBeenCalled()
 })
+
+it('disables and restores a place with confirmation while preventing edits to disabled places', async () => {
+    let marker = syntheticPlace({ title: 'Recoverable place', deactivated: false })
+    vi.mocked(api.readMarkers).mockImplementation(async () => [marker])
+    const disable = vi.spyOn(api, 'deactivateMarker').mockImplementation(async () => {
+        marker = { ...marker, deactivated: true }
+    })
+    const restore = vi.spyOn(api, 'restoreMarker').mockImplementation(async () => {
+        marker = { ...marker, deactivated: false }
+    })
+    mount('/admin/all')
+    fireEvent.click(await screen.findByRole('button', { name: 'Disable' }))
+    expect(disable).not.toHaveBeenCalled()
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('All data is kept')
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    await screen.findByRole('button', { name: 'Restore' })
+    expect(disable).toHaveBeenCalledWith(marker.id, expect.any(AbortSignal))
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Restore' }))
+    expect(screen.getByRole('alertdialog')).toHaveTextContent(
+        'previous visibility and review status',
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }))
+    await screen.findByRole('button', { name: 'Disable' })
+    expect(restore).toHaveBeenCalledWith(marker.id, expect.any(AbortSignal))
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeEnabled()
+})
+
+it('does not send a supposedly recoverable deletion to an older backend', async () => {
+    const disable = vi.spyOn(api, 'deactivateMarker')
+    mount('/admin/all')
+    const waiting = await screen.findByRole('button', { name: 'Server update required' })
+    expect(waiting).toBeDisabled()
+    fireEvent.click(waiting)
+    expect(disable).not.toHaveBeenCalled()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+})

@@ -200,7 +200,10 @@ export function MapPlaces({
                             placeIcons[marker.category],
                             marker.title,
                             () => onSelect?.(marker, `map-place-${marker.id}`),
-                            0,
+                            // Legacy duplicates can share a coordinate but disagree
+                            // on category. Keep an explicitly classified place above
+                            // an "other" pin without changing either record's color.
+                            marker.category === 'self_definition' ? 0 : 10,
                         )
                 }
             }

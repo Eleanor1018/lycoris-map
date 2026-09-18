@@ -5,6 +5,8 @@ import type { Map as LeafletMap } from 'leaflet'
 import { syntheticPlace } from '@/features/dev/placeFixtures'
 import { MapSurface } from './MapSurface'
 import type { MapPlacesProps } from './MapPlaces'
+import { mapView } from './viewport'
+import { viewportWindow } from './viewportWindow'
 afterEach(cleanup)
 function fixture() {
     let map: LeafletMap | null = null
@@ -68,6 +70,28 @@ it('updates category colors in place and retains them for selected or detail-onl
     }
     expect(sources.size).toBe(categories.length)
 })
+it.each(['baby_room', 'friendly_clinic'] as const)(
+    'keeps a %s pin above a coincident legacy other pin at every zoom',
+    (category) => {
+        const f = fixture()
+        const typed = syntheticPlace({ id: 133, category })
+        const legacy = syntheticPlace({ id: 132, category: 'self_definition' })
+        const view = render(f.tree({ markers: [typed, legacy] }))
+        const pin = view.container.querySelector<HTMLImageElement>('#map-place-133')!
+        const other = view.container.querySelector<HTMLImageElement>('#map-place-132')!
+        const source = pin.src
+        for (let zoom = 19; zoom >= 0; zoom--) {
+            act(() => f.map().setView(typed, zoom, { animate: false }))
+            expect(view.container.querySelector('#map-place-133')).toBe(pin)
+            expect(pin.src).toBe(source)
+            expect(pin.src).not.toBe(other.src)
+            expect(Number(pin.style.zIndex)).toBeGreaterThan(Number(other.style.zIndex))
+        }
+        // Explicitly opening the legacy record still honestly uses its category.
+        view.rerender(f.tree({ markers: [typed, legacy], selected: legacy }))
+        expect(Number(other.style.zIndex)).toBeGreaterThan(Number(pin.style.zIndex))
+    },
+)
 it('preserves user zoom when layout padding changes, keeping selection in the uncovered area', () => {
     const f = fixture(),
         selected = syntheticPlace()
@@ -144,7 +168,28 @@ it('reveals the original direction fan only for a compass reading without replac
     expect(dot.querySelector('img')!.style.transform).toContain('-73.113')
     expect(view.container.querySelector('#map-place-1')).toBe(pin)
     act(() => vi.advanceTimersByTime(10_020))
-    expect(dot).not.toHaveClass('has-heading')
+    expect(dot).toHaveClass('has-heading')
     view.unmount()
     vi.useRealTimers()
+})
+
+it('reuses the fetched window across a real Leaflet 15-to-14 zoom at Dandong latitude', () => {
+    const f = fixture()
+    render(f.tree({}))
+    const map = f.map()
+    const snapshot = () => {
+        const b = map.getBounds()
+        return mapView(
+            b.getSouth(),
+            b.getNorth(),
+            b.getWest(),
+            b.getEast(),
+            map.getCenter(),
+            map.getZoom(),
+        )
+    }
+    act(() => map.setView([40.109309, 124.359705], 15, { animate: false }))
+    const first = viewportWindow(null, snapshot())
+    act(() => map.setZoom(14, { animate: false }))
+    expect(viewportWindow(first, snapshot())).toBe(first)
 })

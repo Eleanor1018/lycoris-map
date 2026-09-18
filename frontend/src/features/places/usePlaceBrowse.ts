@@ -14,6 +14,7 @@ import { useSession } from '@/features/auth/SessionProvider'
 import { readAccountPlace } from '@/shared/api/privatePlaces'
 import type { LatLng } from '@/features/map/coords'
 import type { MapFocus, MapView } from '@/features/map/viewport'
+import { viewportWindow, type ViewportWindow } from '@/features/map/viewportWindow'
 import { usePreferences } from '@/features/preferences/PreferencesProvider'
 import { useLocationFix } from '@/features/map/useLocationFix'
 
@@ -57,7 +58,11 @@ export function usePlaceBrowse(
     const session = useSession()
     const scope = reads === defaultReads ? session.scope : null
     const [view, setView] = useState<MapView | null>(null)
-    const viewport = useDebounced(view, 250)
+    const settledView = useDebounced(view, 250)
+    const [viewport, setViewport] = useState<ViewportWindow | null>(null)
+    useEffect(() => {
+        if (settledView) setViewport((previous) => viewportWindow(previous, settledView))
+    }, [settledView])
     const [search, setSearchState] = useState(initialSearch)
     const [nearby, setNearby] = useState<{
         point: LatLng
@@ -108,10 +113,20 @@ export function usePlaceBrowse(
         setClusterIds(null)
         setNearby({ point, category, located: location.position !== null })
     }
-    const mapQuery = useQuery({
+    const mapQuery = useQuery<Marker[]>({
         ...readOptions,
-        queryKey: [...publicKeys.markers(), 'viewport-set', language, viewport?.bounds ?? null],
+        queryKey: [
+            ...publicKeys.markers(),
+            'viewport-set',
+            language,
+            viewport?.scale ?? null,
+            viewport?.bounds ?? null,
+        ],
         enabled: viewport !== null,
+        // Keep existing pins during a region update, but never show an old
+        // language's DTOs while loading another language.
+        placeholderData: (previous, query) =>
+            query?.queryKey[3] === language ? previous : undefined,
         queryFn: async ({ signal }) => {
             const batches = await Promise.all(
                 viewport!.bounds.map((bounds) =>

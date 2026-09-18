@@ -609,6 +609,9 @@ impl MediaService {
             if viewer.role.eq_ignore_ascii_case("ADMIN") {
                 return Ok(true);
             }
+            if marker.deactivated {
+                continue;
+            }
             let Some(public_id) = viewer.public_id else {
                 continue;
             };

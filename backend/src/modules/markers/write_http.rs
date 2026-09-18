@@ -55,6 +55,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/admin/markers/all", get(admin_all))
         .route("/api/admin/markers/{id}/approve", post(admin_approve))
         .route("/api/admin/markers/{id}/reject", post(admin_reject))
+        .route("/api/admin/markers/{id}/restore", post(admin_restore))
         .route(
             "/api/admin/markers/{id}",
             patch(admin_update).delete(admin_delete),
@@ -407,6 +408,22 @@ async fn admin_delete(
     match state
         .markers_write
         .admin_delete_marker(&actor_of(&admin.0), id)
+        .await
+    {
+        Ok(()) => empty_ok(),
+        Err(error) => write_error(error),
+    }
+}
+
+/// POST /api/admin/markers/{id}/restore: restore without approving or changing visibility.
+async fn admin_restore(
+    State(state): State<AppState>,
+    admin: VerifiedAdmin,
+    Path(id): Path<i64>,
+) -> Response {
+    match state
+        .markers_write
+        .admin_restore_marker(&actor_of(&admin.0), id)
         .await
     {
         Ok(()) => empty_ok(),

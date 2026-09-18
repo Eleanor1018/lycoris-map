@@ -125,8 +125,15 @@ export async function editMarker(value: number, text: MarkerText, signal: AbortS
         }),
     )
 }
-export async function deleteMarker(value: number, signal: AbortSignal) {
+export async function deactivateMarker(value: number, signal: AbortSignal) {
     await request(`${prefix}/${id.parse(value)}`, { method: 'DELETE', signal, cache: 'no-store' })
+}
+export async function restoreMarker(value: number, signal: AbortSignal) {
+    await request(`${prefix}/${id.parse(value)}/restore`, {
+        method: 'POST',
+        signal,
+        cache: 'no-store',
+    })
 }
 export async function cleanupImages(signal: AbortSignal) {
     return z

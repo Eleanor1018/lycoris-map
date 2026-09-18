@@ -1148,3 +1148,123 @@ async fn cleanup_invalidates_cache_for_committed_clears_when_later_db_fails() {
         "已提交的清理必须触发缓存失效：{generation_before:?} -> {generation_after:?}"
     );
 }
+
+#[tokio::test]
+async fn soft_deletion_preserves_images_and_proposals_but_revokes_public_and_owner_access() {
+    use lycoris_backend::modules::markers::write::MarkerWriteService;
+    use lycoris_backend::modules::markers::write_model::Actor;
+    let (_temp, pool) = TempDatabase::create_migrated().await;
+    let dir = TempDir::new().unwrap();
+    let store = ImageStore::with_default_concurrency(dir.path()).unwrap();
+    let root = store.root().to_path_buf();
+    let redis = connect_redis().await;
+    let service = media_service(pool.clone(), store, redis.clone());
+    let write = MarkerWriteService::new(
+        pool.clone(),
+        MarkerCache::new(redis, true, unique_cache_namespace()),
+    );
+    let admin = viewer(Some("admin"), "ADMIN", false);
+    let owner = viewer(Some("owner"), "USER", false);
+    let actor = Actor::new("admin", "admin", true);
+    write_media(&root, "markers", "retained.png", &rgba_png(2, 2));
+    write_media(&root, "markers", "proposal.png", &rgba_png(2, 2));
+    let marker = insert_marker(
+        &pool,
+        "retained",
+        true,
+        "APPROVED",
+        "owner",
+        Some("/uploads/markers/retained.png"),
+        0,
+    )
+    .await;
+    let proposal = insert_proposal(
+        &pool,
+        marker,
+        "retained",
+        "owner",
+        Some("owner"),
+        "/uploads/markers/proposal.png",
+        "PENDING",
+    )
+    .await;
+    assert!(
+        service
+            .open_uploads("markers", "retained.png", None)
+            .await
+            .is_ok()
+    );
+    write.admin_delete_marker(&actor, marker).await.unwrap();
+    for filename in ["retained.png", "proposal.png"] {
+        for candidate in [None, Some(&owner)] {
+            assert!(matches!(
+                service.open_uploads("markers", filename, candidate).await,
+                Err(MediaServiceError::NotFound(_))
+            ));
+        }
+        assert!(
+            service
+                .open_uploads("markers", filename, Some(&admin))
+                .await
+                .is_ok()
+        );
+        assert!(root.join("markers").join(filename).is_file());
+    }
+    assert!(
+        service
+            .list_pending_images(&admin)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        service
+            .approve_image_proposal(proposal, &admin, "admin")
+            .await
+            .is_err()
+    );
+    assert_eq!(proposal_state(&pool, proposal).await.0, "PENDING");
+    assert_eq!(
+        marker_image_state(&pool, marker).await.1.as_deref(),
+        Some("/uploads/markers/retained.png")
+    );
+    // Cleanup must not change even a missing archived reference.
+    let archived_missing = insert_marker(
+        &pool,
+        "missing",
+        true,
+        "APPROVED",
+        "owner",
+        Some("/uploads/markers/missing.png"),
+        0,
+    )
+    .await;
+    write
+        .admin_delete_marker(&actor, archived_missing)
+        .await
+        .unwrap();
+    assert_eq!(
+        service
+            .cleanup_missing_images(&admin)
+            .await
+            .unwrap()
+            .cleared,
+        0
+    );
+    assert_eq!(
+        marker_image_state(&pool, archived_missing)
+            .await
+            .1
+            .as_deref(),
+        Some("/uploads/markers/missing.png")
+    );
+    write.admin_restore_marker(&actor, marker).await.unwrap();
+    assert!(
+        service
+            .open_uploads("markers", "retained.png", None)
+            .await
+            .is_ok()
+    );
+    assert_eq!(service.list_pending_images(&admin).await.unwrap().len(), 1);
+    pool.close().await;
+}

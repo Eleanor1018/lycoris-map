@@ -2,7 +2,8 @@
 
 Linux production deployment on the designated Tencent Lighthouse server,
 43.155.130.105. The app and Caddy use the host network; PostgreSQL and Redis only
-publish loopback ports. Only HTTP/HTTPS should be opened in the cloud firewall.
+publish loopback ports. Application traffic uses HTTP/HTTPS; SSH retains the
+existing management port 22 and firewall policy.
 The app runs as UID 10001 with a read-only root and persistent uploads.
 
 Run Compose as root from this directory. Keep all actual configuration under
@@ -109,3 +110,43 @@ the new server has accepted production writes since the September 16 cutover.
 After stopping the old stack, `https://lycoris-map.com/health/ready` still
 returned PostgreSQL and Redis healthy. The new backend on `43.155.130.105`
 was not restarted or modified during retirement.
+
+## SSH and soft-delete release — 2026-09-17
+
+The owner's Mac now connects with `ssh lycoris-prod` as `ubuntu`, using its
+existing Ed25519 key. The host key was independently checked in the authenticated
+Tencent console and pinned locally with strict checking. This network currently
+requires the Mac's HTTP CONNECT proxy on `127.0.0.1:7897`; keep it running when
+using SSH. Direct port 22 timed out during verification. The private key stays
+on the Mac. No root key, account password, SSH daemon or firewall change was
+made. The existing `ubuntu` sudo configuration is used for administration.
+
+Backend commit `999474be28b50bfef410ae5c474e70bbf9543701` was built through SSH
+as `lycoris-backend:999474b`, using one Cargo job and the server's Docker build
+cache. The incremental release compilation took approximately 2 minutes 25
+seconds. The exact commit was archived under `/opt/lycoris/releases/999474b`,
+without replacing the existing server checkout or regenerating credentials.
+
+Before migration, a full PostgreSQL custom dump was validated with
+`pg_restore --list`. The dump, checksum, configuration copies and before/after
+table fingerprints are retained under the root-only directory
+`/opt/lycoris/backups/soft-delete-20260917T102254Z`. Migration 4 adds the
+independent `deactivated` flag; only the app container was recreated. The
+production Compose `.env` now pins the new image. Private `app.env` is unchanged.
+
+All six business-table fingerprints match after excluding only the new field.
+The public API still returns 360 markers, now with `deactivated: false`;
+PostgreSQL and Redis readiness pass through `https://lycoris-map.com`.
+The 264 uploaded files remain present. No real point was disabled or restored
+as a deployment test, and missing-image cleanup was not executed.
+
+Administrative and owner deletion now deactivates the record while retaining
+favorites, translations, proposals and media. Restoration requires verified
+administrator access. The corresponding frontend at commit `5e60527` passed
+Cloudflare's build and is available on the branch preview; production frontend
+`main` remains `fa78532` pending the owner's PR merge. The backend applies the
+safe deletion semantics even to the older frontend's DELETE requests.
+
+Do not restart the pre-migration binary as a simple rollback: its migration
+validation does not recognize migration 4. Prefer a compatible corrective
+release. Restoring a database snapshot requires reconciling subsequent writes.

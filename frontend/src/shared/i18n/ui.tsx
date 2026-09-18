@@ -98,6 +98,7 @@ export const uiMessages = {
     'Search Bookmarks': '搜索收藏',
     'Lycoris Maps': 'Lycoris Maps',
     'Close panel': '关闭面板',
+    'Dismiss notification': '关闭提示',
     'Close details': '关闭详情',
     'Close nearby': '关闭附近列表',
     'Close bookmarks': '关闭收藏',

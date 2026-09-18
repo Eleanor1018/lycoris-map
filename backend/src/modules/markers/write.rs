@@ -8,7 +8,7 @@
 //! - 创建幂等只在 `client_request_id` 命中既有唯一约束时读回原点位，绝不把任意数据库错误
 //!   当成幂等命中；
 //! - 收藏先对点位取 `FOR KEY SHARE` 再插收藏，避免与删除点位交错产生孤立收藏；
-//! - 删除在同一个事务内 `FOR UPDATE` 锁点位、删收藏、删译文、删点位，历史提案留存；
+//! - 停用在同一个事务内 `FOR UPDATE` 锁点位并推进版本，点位和全部关联数据留存；
 //! - 编辑审核固定顺序：先 `FOR UPDATE` 锁提案、检查 `PENDING`、再 `FOR UPDATE` 锁点位、核对
 //!   `base_marker_version`，然后更新点位/译文/提案；两管理员竞争由行锁保证只有一人成功；
 //! - 原文与译文编辑共用同一 `marker.version`，任何文本变化都推进版本并以行锁串行；
@@ -208,7 +208,7 @@ impl MarkerWriteService {
         Ok(())
     }
 
-    /// `DELETE /api/markers/{id}`：仅属主可删，同事务锁点位、删收藏/译文/点位，历史提案留存。
+    /// `DELETE /api/markers/{id}`：仅属主可停用；保留点位、收藏、译文和历史提案。
     pub async fn delete_owned_marker(
         &self,
         actor: &Actor,
@@ -226,7 +226,7 @@ impl MarkerWriteService {
         if marker.user_public_id.as_deref() != Some(actor.public_id.as_str()) {
             return Err(WriteError::Forbidden);
         }
-        delete_marker_cascade(&mut tx, marker_id).await?;
+        set_deactivated(&mut tx, marker_id, true).await?;
         tx.commit().await.map_err(|error| log_db_error(&error))?;
         self.invalidate_after_commit().await;
         Ok(())
@@ -412,6 +412,11 @@ impl MarkerWriteService {
                 MSG_RELATED_MARKER_NOT_FOUND.to_string(),
             ));
         };
+        if marker.deactivated {
+            return Err(WriteError::NotFound(
+                MSG_RELATED_MARKER_NOT_FOUND.to_string(),
+            ));
+        }
         if proposal.base_marker_version.is_none()
             || proposal.base_marker_version != Some(marker.version)
         {
@@ -546,7 +551,7 @@ impl MarkerWriteService {
         Ok(updated)
     }
 
-    /// `DELETE /api/admin/markers/{id}`：管理员删除，级联清理收藏与译文。
+    /// `DELETE /api/admin/markers/{id}`：管理员停用；保留全部数据并使公开缓存失效。
     pub async fn admin_delete_marker(
         &self,
         actor: &Actor,
@@ -562,7 +567,28 @@ impl MarkerWriteService {
         if marker.is_none() {
             return Err(WriteError::NotFound(MSG_MARKER_NOT_FOUND.to_string()));
         }
-        delete_marker_cascade(&mut tx, marker_id).await?;
+        set_deactivated(&mut tx, marker_id, true).await?;
+        tx.commit().await.map_err(|error| log_db_error(&error))?;
+        self.invalidate_after_commit().await;
+        Ok(())
+    }
+
+    /// Restore only the deactivation flag; preserve the previous visibility/review state.
+    pub async fn admin_restore_marker(
+        &self,
+        actor: &Actor,
+        marker_id: i64,
+    ) -> Result<(), WriteError> {
+        ensure_admin(actor)?;
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|error| log_db_error(&error))?;
+        if lock_marker(&mut tx, marker_id).await?.is_none() {
+            return Err(WriteError::NotFound(MSG_MARKER_NOT_FOUND.to_string()));
+        }
+        set_deactivated(&mut tx, marker_id, false).await?;
         tx.commit().await.map_err(|error| log_db_error(&error))?;
         self.invalidate_after_commit().await;
         Ok(())
@@ -1022,28 +1048,19 @@ async fn update_proposal_status(
     Ok(())
 }
 
-async fn delete_marker_cascade(
+async fn set_deactivated(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     marker_id: i64,
+    deactivated: bool,
 ) -> Result<(), WriteError> {
     sqlx::query_file!(
-        "src/modules/markers/sql/delete_favorites_by_marker.sql",
+        "src/modules/markers/sql/set_deactivated.sql",
         marker_id,
+        deactivated
     )
     .execute(&mut **tx)
     .await
     .map_err(|error| log_db_error(&error))?;
-    sqlx::query_file!(
-        "src/modules/markers/sql/delete_translations_by_marker.sql",
-        marker_id,
-    )
-    .execute(&mut **tx)
-    .await
-    .map_err(|error| log_db_error(&error))?;
-    sqlx::query_file!("src/modules/markers/sql/delete_marker.sql", marker_id)
-        .execute(&mut **tx)
-        .await
-        .map_err(|error| log_db_error(&error))?;
     Ok(())
 }
 
