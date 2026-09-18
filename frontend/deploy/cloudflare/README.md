@@ -71,8 +71,74 @@ Pages serves the SPA, including `/admin/*` deep links. Only `/api`, `/uploads`
 and `/health` routes invoke the Worker, forwarding to
 `https://api.lycoris-map.com` with original paths and queries. It preserves
 browser Origin and authentication, streams bodies, does not follow upstream
-redirects, and marks proxied responses private and uncacheable. The fixed
+redirects, and marks browser-facing responses private and uncacheable. The fixed
 backend origin is server-side and is not embedded in the browser bundle.
+
+## Private R2 media and thumbnails
+
+The Rust image route supports `?variant=thumb` (fits within 640 × 640) and
+`?variant=detail` (1280 × 1280), keeping aspect ratio, orientation and transparency
+without upscaling. Omitting the variant preserves the original. Processing is
+bounded by the existing image semaphore and memory/dimension limits. Renditions
+are stored under the private upload root's `.renditions-v1`; never expose that
+directory through Caddy. No database migration or URL replacement is needed.
+
+Set a Pages **R2 binding** named `MEDIA_BUCKET` to a private Standard bucket:
+`lycoris-media-prod` for Production and a separate `lycoris-media-preview` for
+Preview. Do not enable an R2 public URL, custom public domain or CORS access.
+Never bind the production bucket to arbitrary branch builds. No S3 token or
+new credential is required on the Rust server or in frontend build variables.
+Cloudflare requires an R2 subscription before buckets can be created; the
+account owner must approve any subscription/payment terms.
+
+For each image GET/HEAD, the Pages Worker first makes an **uncached HEAD** to
+the existing Rust route with the viewer's Cookie/Origin. Rust rechecks current
+database visibility, validates the source and returns a SHA-256 ETag and object
+key. Only then may the Worker read the edge cache or private R2. An authorization
+failure or origin outage does not fall back to cached bytes. Changing a place
+to private, deactivating it or ending an authorized session takes effect on
+subsequent image requests without waiting for a cache purge. Previously downloaded
+bytes cannot be recalled from a viewer's device.
+
+On an R2 miss, the Worker requests the image from Rust with `If-Match`, streams
+it to the viewer, and copies it to R2 with SHA-256 validation. It separately
+caches the immutable content at the serving edge for 24 hours. Browser responses
+remain `private, no-store`, and internal cache responses contain no session
+cookies. Original and derived files remain on the server for backup/fallback;
+R2 is the distribution copy, not the sole source of truth in this release.
+Uploads and resumable upload sessions retain their existing transaction/recovery
+behavior. Neither disabling a marker nor cache expiry physically deletes an R2
+object. Files over 16 MiB use the existing streamed origin path to bound Worker
+clone buffering; new thumbnails are much smaller. If R2 is unavailable, an
+authorized origin image remains readable. Still-image Range requests use the
+complete representation with HTTP 200, never a partially cached object.
+
+Deployment order: ship the Rust release, create/bind the two private buckets,
+then rebuild the Git preview. Without the binding, the Worker safely retains
+the old proxy path. Check the preview using synthetic data and public reads;
+the owner then merges the frontend PR to publish through the existing main
+workflow. Verify `X-Lycoris-Media-Source: origin`, then `edge`/`r2`, and confirm
+R2 object checksums/counts in the console. A read response alone does not prove
+its asynchronous R2 copy succeeded.
+
+Public originals/renditions can be warmed incrementally after binding:
+
+```sh
+python3 deploy/cloudflare/warm-media.py \
+  --site https://lycoris-map.com \
+  --report /private/path/lycoris-media-warm.json
+```
+
+The script reads the current public marker list, checks SHA-256 on every
+download and checkpoints progress. It sends no account cookies and never grants
+public access to pending, private or disabled media; those images are copied
+only on an authorized read. A record becoming private during warming produces
+a reported 404. Keep reports outside Git. This is incremental distribution
+warming, not a complete backup of every uploaded file. Retain existing verified
+database/media backups separately.
+
+References: [R2 bindings/API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/),
+[Cache API](https://developers.cloudflare.com/workers/runtime-apis/cache/).
 
 ## Git deployment and domain cutover — 2026-09-17
 

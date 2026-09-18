@@ -198,8 +198,9 @@ it('copies only a public place link, uses a destination-only navigation URL and 
     vi.stubGlobal('navigator', { clipboard: { writeText } })
     await screen.findByRole('heading', { name: 'Synthetic place 1' })
     const photo = document.querySelector<HTMLImageElement>('.place-photo img')!
-    expect(photo).toHaveAttribute('src', '/uploads/markers/synthetic.webp')
+    expect(photo).toHaveAttribute('src', '/uploads/markers/synthetic.webp?variant=detail')
     fireEvent.error(photo)
+    fireEvent.error(document.querySelector<HTMLImageElement>('.place-photo img')!)
     expect(document.querySelector('.place-photo')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Share' }))
     expect(await screen.findByText('Link copied.')).toBeInTheDocument()
@@ -313,8 +314,9 @@ it('shares the selected Nearby item, uses its destination and hides a failed ima
     expect(await within(item).findByText('Link copied.')).toBeInTheDocument()
     expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/maps?markerId=2&lang=en`)
     const photo = item.querySelector('.place-photo img')!
-    expect(photo).toHaveAttribute('src', '/uploads/markers/synthetic.webp')
+    expect(photo).toHaveAttribute('src', '/uploads/markers/synthetic.webp?variant=thumb')
     fireEvent.error(photo)
+    fireEvent.error(item.querySelector<HTMLImageElement>('.place-photo img')!)
     expect(item.querySelector('.place-photo')).toBeNull()
     expect(within(item).getByRole('link', { name: /^Navigate to/ })).toHaveAttribute(
         'rel',

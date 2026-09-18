@@ -88,7 +88,9 @@ function NearbyPlace({ place, browse, onSelect, mobile }: Props & { place: Marke
                 )}
                 <span>{openingHours(place, browse.language)}</span>
             </span>
-            {image && <PlacePhoto className="place-photo" src={image} loading="lazy" />}
+            {image && (
+                <PlacePhoto className="place-photo" src={image} loading="lazy" variant="thumb" />
+            )}
             {place.description && (
                 <p className="place-description" lang={place.contentLanguage}>
                     {place.description}

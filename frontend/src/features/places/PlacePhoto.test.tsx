@@ -23,6 +23,8 @@ it('removes a broken photo and starts loading again for a different URL', () => 
         <PlacePhoto src="/uploads/markers/one.jpg" className="place-photo" />,
     )
     fireEvent.error(container.querySelector('img')!)
+    expect(container.querySelector('img')).toHaveAttribute('src', '/uploads/markers/one.jpg')
+    fireEvent.error(container.querySelector('img')!)
     expect(container).toBeEmptyDOMElement()
     rerender(<PlacePhoto src="/uploads/markers/two.jpg" className="place-photo" />)
     expect(container.firstChild).toHaveAttribute('data-state', 'loading')
@@ -50,4 +52,21 @@ it('reveals a cached image even when its load event preceded mounting', () => {
         <PlacePhoto src="/uploads/markers/cached.jpg" className="place-photo" />,
     )
     expect(container.firstChild).toHaveAttribute('data-state', 'loaded')
+})
+
+it('uses a compact rendition for nearby and a larger rendition for details without rewriting external images', () => {
+    const { container, rerender } = render(
+        <PlacePhoto src="/uploads/markers/one.jpg" className="place-photo" variant="thumb" />,
+    )
+    expect(container.querySelector('img')).toHaveAttribute(
+        'src',
+        '/uploads/markers/one.jpg?variant=thumb',
+    )
+    rerender(<PlacePhoto src="/uploads/markers/one.jpg" className="place-photo" />)
+    expect(container.querySelector('img')).toHaveAttribute(
+        'src',
+        '/uploads/markers/one.jpg?variant=detail',
+    )
+    rerender(<PlacePhoto src="https://example.com/image.jpg" className="place-photo" />)
+    expect(container.querySelector('img')).toHaveAttribute('src', 'https://example.com/image.jpg')
 })

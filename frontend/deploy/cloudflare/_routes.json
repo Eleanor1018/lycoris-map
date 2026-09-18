@@ -1,5 +1,13 @@
 {
     "version": 1,
-    "include": ["/api", "/api/*", "/uploads", "/uploads/*", "/health", "/health/*"],
+    "include": [
+        "/api",
+        "/api/*",
+        "/uploads",
+        "/uploads/*",
+        "/health",
+        "/health/*",
+        "/__lycoris_media_cache/*"
+    ],
     "exclude": []
 }
