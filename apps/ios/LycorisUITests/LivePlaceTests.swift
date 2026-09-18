@@ -7,7 +7,8 @@ import XCTest
 final class LivePlaceTests: LocalBackendTestCase {
   override func setUp() { continueAfterFailure = false }
 
-  private func launch() async throws -> XCUIApplication {
+  private func launch(resetLocation: Bool = false, allowLocation: Bool = false,
+    initialCenter: String = "31.2304,121.4737") async throws -> XCUIApplication {
     do {
       let (data, response) = try await URLSession.shared.data(
         from: URL(string: "http://127.0.0.1:8080/api/markers/1?lang=en")!)
@@ -18,11 +19,19 @@ final class LivePlaceTests: LocalBackendTestCase {
       }
     } catch { throw XCTSkip("Local synthetic Rust fixture is not available: \(error)") }
     let app = XCUIApplication()
+    if resetLocation { app.resetAuthorizationStatus(for: .location) }
     app.launchArguments = [
       "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-lycoris-test-center",
-      "31.2304,121.4737",
+      initialCenter,
     ]
     app.launch()
+    let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+    let permission = springboard.buttons.matching(NSPredicate(
+      format: "label IN %@", allowLocation
+        ? ["Allow While Using App", "使用App时允许", "使用 App 时允许"]
+        : ["Don’t Allow", "Don't Allow", "不允许"])).firstMatch
+    if resetLocation { XCTAssertTrue(permission.waitForExistence(timeout: 8)) }
+    if permission.waitForExistence(timeout: 1) { permission.tap() }
     XCTAssertTrue(app.buttons["map.panel.handle"].waitForExistence(timeout: 10))
     return app
   }
@@ -61,18 +70,9 @@ final class LivePlaceTests: LocalBackendTestCase {
   }
 
   func testRadarAndEveryCategoryUseNearbyWithDeniedLocation() async throws {
-    let app = try await launch()
-    app.resetAuthorizationStatus(for: .location)
-    app.terminate()
-    app.launch()
+    let app = try await launch(resetLocation: true)
+    XCTAssertFalse(app.alerts["Location unavailable"].exists)
     app.buttons["map.nearby"].tap()
-    let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-    let deny = springboard.buttons.matching(
-      NSPredicate(
-        format: "label IN %@", ["Don’t Allow", "Don't Allow", "不允许"])
-    ).firstMatch
-    XCTAssertTrue(deny.waitForExistence(timeout: 8), springboard.debugDescription)
-    deny.tap()
     XCTAssertTrue(app.staticTexts["Around map center"].waitForExistence(timeout: 10))
     XCTAssertTrue(app.buttons["place.row.1"].waitForExistence(timeout: 10))
     attach(app, name: "i3-nearby-radar-map-center")
@@ -97,17 +97,12 @@ final class LivePlaceTests: LocalBackendTestCase {
     defer { XCUIDevice.shared.location = previousLocation }
     XCUIDevice.shared.location = XCUILocation(
       location: CLLocation(latitude: 31.2304, longitude: 121.4737))
-    let app = try await launch()
-    app.resetAuthorizationStatus(for: .location)
-    app.terminate()
-    app.launch()
+    let app = try await launch(resetLocation: true, allowLocation: true,
+      initialCenter: "40.766,-74.077")
+    // A fresh launch must locate and load the Shanghai pin before any map action.
+    XCTAssertTrue(app.descendants(matching: .any)["map.pin.1"].waitForExistence(timeout: 20))
+    attach(app, name: "startup-location-before-any-map-action")
     app.buttons["map.nearby"].tap()
-    let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-    let allow = springboard.buttons.matching(
-      NSPredicate(format: "label IN %@", ["使用App时允许", "Allow While Using App"])
-    ).firstMatch
-    XCTAssertTrue(allow.waitForExistence(timeout: 8))
-    allow.tap()
     XCTAssertTrue(app.staticTexts["Around your location"].waitForExistence(timeout: 15))
     let row = app.buttons["place.row.1"]
     XCTAssertTrue(row.waitForExistence(timeout: 10))

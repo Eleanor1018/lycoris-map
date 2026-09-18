@@ -70,6 +70,10 @@ struct AccountAPI: AccountServing {
     configuration.urlCache = nil
     configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
     configuration.timeoutIntervalForRequest = 20
+    // Startup map reads wait for a network grant; account writes fail promptly
+    // so an offline login cannot hold its nondismissable sheet through two waits.
+    configuration.waitsForConnectivity = false
+    configuration.timeoutIntervalForResource = 60
     if let storage = configuration.httpCookieStorage { cookieVault?.restore(into: storage) }
     self.session = session ?? URLSession(configuration: configuration)
   }

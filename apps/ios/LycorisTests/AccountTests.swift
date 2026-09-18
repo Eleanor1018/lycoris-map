@@ -6,6 +6,15 @@ import Testing
 
 @MainActor
 struct AccountTests {
+  @Test func networkDenialExplainsRecoveryAndDoesNotInventALogin() async {
+    let store = AccountStore(api: DisconnectedAccountAPI())
+    #expect(!(await store.authenticate(
+      username: "fixture", email: "", password: "fixture", register: false)))
+    #expect(store.user == nil && !store.isBusy)
+    #expect(store.message == String(appLocalized:
+      "No internet connection. Check your connection and allow Lycoris to use Wi-Fi or cellular data in Settings."))
+  }
+
   private func waitFor(_ condition: () async -> Bool) async throws {
     for _ in 0..<200 {
       if await condition() { return }
@@ -118,7 +127,7 @@ struct AccountTests {
     await api.failLogout()
     await store.logout()
     #expect(store.user?.publicId == "account-a")
-    #expect(store.message == String(localized: "Logout could not be confirmed. Please try again."))
+    #expect(store.message == String(appLocalized: "Logout could not be confirmed. Please try again."))
   }
 
   @Test func identityRecheckPreventsWriteAsAnotherAccount() async {
@@ -141,7 +150,7 @@ struct AccountTests {
     #expect(!store.isBookmarked(1))
     #expect(await store.changePassword(old: "old", new: "new1"))
     #expect(store.user == nil && store.bookmarks.isEmpty)
-    #expect(store.message == String(localized: "Password changed. Please log in again."))
+    #expect(store.message == String(appLocalized: "Password changed. Please log in again."))
   }
 
   @Test func passwordAndProfileLimitsMatchRustUnits() {
@@ -170,6 +179,13 @@ struct AccountTests {
     #expect(throws: AccountFailure(status: 400)) {
       try AvatarEncoder.jpeg(from: Data("invalid".utf8))
     }
+  }
+}
+
+private struct DisconnectedAccountAPI: AccountServing {
+  let baseURL = URL(string: "https://offline.example.test")
+  func send(_ request: AccountRequest) async throws -> Data {
+    throw URLError(.notConnectedToInternet)
   }
 }
 

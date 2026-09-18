@@ -5,6 +5,7 @@ struct MapScreen: View {
   @State private var preferences = AppPreferences()
   @Namespace private var appearanceTransition
   @State private var locationDenied = false
+  @State private var awaitsLocationAuthorization = false
   @State private var linkError = false
   @State private var focusKeyboardAfterDismiss = false
   @Environment(\.openURL) private var openURL
@@ -13,6 +14,7 @@ struct MapScreen: View {
   @State private var detent: MapPanelDetent
   @State private var store: PlaceStore
   @State private var location = LocationProvider()
+  @State private var connectivity = ConnectivityMonitor()
   @State private var account = AccountStore()
   @State private var contribution = ContributionStore()
   @State private var selectingLocation = false
@@ -307,11 +309,18 @@ struct MapScreen: View {
     .onChange(of: preferences.radius) { _, _ in applyPreferences() }
     .onChange(of: preferences.searchType) { _, _ in applyPreferences() }
     .onChange(of: location.isAuthorized) { _, authorized in
-      if !authorized { store.revokeLocation() }
+      if !authorized {
+        store.revokeLocation()
+        awaitsLocationAuthorization = location.hasRequestedLocation
+      } else {
+        requestStartupLocation()
+      }
     }
     .task {
       applyPreferences()
+      requestStartupLocation()
       if !store.isPreview {
+        connectivity.start()
         contribution.connect(account)
         await account.restore()
         contribution.synchronize()
@@ -323,10 +332,20 @@ struct MapScreen: View {
       if phase == .active {
         location.refreshAuthorization()
         if !location.isAuthorized { store.revokeLocation() }
+        requestStartupLocation()
+        store.retryFailedRequests()
         Task {
           await account.restore()
           contribution.synchronize()
         }
+      }
+    }
+    .onChange(of: connectivity.recoveryCount) { _, _ in
+      guard !store.isPreview, scenePhase == .active else { return }
+      store.networkDidRecover()
+      Task {
+        await account.networkDidRecover()
+        contribution.synchronize()
       }
     }
     .onChange(of: account.epoch) { _, _ in
@@ -363,7 +382,10 @@ struct MapScreen: View {
         store.closeResults()
       }
     }
-    .onDisappear { store.stop() }
+    .onDisappear {
+      store.stop()
+      connectivity.stop()
+    }
     .onChange(of: isSearchFocused) { _, focused in
       if focused { movePanel(to: .expanded) }
     }
@@ -558,16 +580,31 @@ struct MapScreen: View {
   }
 
   private func locate() {
+    requestLocation(showFailure: true)
+  }
+
+  private func requestStartupLocation() {
+    guard scenePhase == .active, !store.isPreview, !location.isRequesting else { return }
+    guard !location.hasRequestedLocation || (awaitsLocationAuthorization && location.isAuthorized)
+    else { return }
+    awaitsLocationAuthorization = false
+    requestLocation(showFailure: false)
+  }
+
+  private func requestLocation(showFailure: Bool) {
     guard !store.isPreview else {
       showsUnavailableAction = true
       return
     }
     let token = store.beginLocationRequest()
     location.request { result in
+      if case .failure(.denied) = result { awaitsLocationAuthorization = true }
       guard store.acceptsLocation(token) else { return }
+      if !showFailure && (modal != nil || selectingLocation || isSearchFocused) { return }
       switch result {
       case .success(let point): store.locate(point, token: token)
       case .failure(let failure):
+        guard showFailure else { return }
         locationDenied = failure == .denied
         showsLocationError = true
       }

@@ -1,7 +1,7 @@
 import MapKit
 import SwiftUI
 
-/// One persistent MapKit instance. Only explicit place/location selection moves its camera.
+/// One persistent MapKit instance. The initial fix and explicit selections move its camera.
 struct NativeMapView: UIViewRepresentable {
   let topInset: CGFloat
   let bottomInset: CGFloat
@@ -51,7 +51,7 @@ struct NativeMapView: UIViewRepresentable {
     map.layoutMargins = UIEdgeInsets(top: topInset, left: 10, bottom: bottomInset, right: 10)
     var center = CLLocationCoordinate2D(latitude: 40.766, longitude: -74.077)
     #if DEBUG
-      // Explicit simulator verification override; regular launches keep the design's camera.
+      // Explicit simulator verification override; a startup fix can replace this fallback.
       let arguments = ProcessInfo.processInfo.arguments
       if let index = arguments.firstIndex(of: "-lycoris-test-center"),
         arguments.indices.contains(index + 1)

@@ -106,6 +106,8 @@ struct MarkerAPI: MarkerServing {
       configuration.httpCookieStorage = nil
       configuration.urlCredentialStorage = nil
       configuration.timeoutIntervalForRequest = 15
+      configuration.waitsForConnectivity = true
+      configuration.timeoutIntervalForResource = 60
       self.session = URLSession(configuration: configuration)
     }
   }
