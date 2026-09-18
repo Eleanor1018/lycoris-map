@@ -39,6 +39,8 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
 
 Simulator builds do not need a signing team, but must keep local ad-hoc signing enabled for Keychain access; do not use `CODE_SIGNING_ALLOWED=NO` for account tests. A physical device requires the owner's Xcode signing team. The bundle ID is currently `com.lycoris.maps`; confirm release identity when preparing distribution.
 
+The app icon reuses the original flower artwork from `frontend-old/public/LycorisIcon.png`. `Resources/Assets.xcassets/AppIcon.appiconset` contains its 1024×1024 sRGB PNG, scaled from the 704×704 original and composited on white without an alpha channel. `Base.xcconfig` selects this asset for every build configuration; Xcode derives the smaller device icons. This is the existing artwork, not a newly generated design.
+
 ## Service address
 
 Normal Xcode Run (Debug) and Release use `https://api.lycoris-map.com`. The shared address is in `Config/Base.xcconfig`; the same HTTPS service works from the simulator and a physical iPhone. API calls and `/uploads` media use this origin. An unconfigured address still produces an unavailable state, and Release rejects HTTP.
