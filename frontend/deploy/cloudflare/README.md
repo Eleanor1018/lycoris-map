@@ -67,7 +67,7 @@ integration](https://developers.cloudflare.com/pages/get-started/direct-upload/)
 so the already-connected `lycoris-main` project is used instead. See the
 [build image version settings](https://developers.cloudflare.com/pages/configuration/build-image/).
 
-Pages serves the SPA, including `/admin/*` deep links. Only `/api`, `/uploads`
+Pages serves the SPA, including `/admin/*` deep links. `/api`, `/uploads`
 and `/health` routes invoke the Worker, forwarding to
 `https://api.lycoris-map.com` with original paths and queries. It preserves
 browser Origin and authentication, streams bodies, does not follow upstream
@@ -139,6 +139,33 @@ database/media backups separately.
 
 References: [R2 bindings/API](https://developers.cloudflare.com/r2/api/workers/workers-api-reference/),
 [Cache API](https://developers.cloudflare.com/workers/runtime-apis/cache/).
+
+### R2 and HTTPS rollout — 2026-09-18
+
+- The owner activated R2. Created private Standard buckets `lycoris-media-prod`
+  and `lycoris-media-preview` with an Asia-Pacific location hint; both keep public
+  access disabled. Pages Production and Preview bind `MEDIA_BUCKET` to their
+  respective bucket. Changes apply to the next deployment in each environment.
+- Backend image `lycoris-backend:9b5ac26` is deployed through SSH. Readiness,
+  PostgreSQL and Redis passed; all six business-table fingerprints and the
+  application credentials were unchanged. The verified rollback backup is
+  `/opt/lycoris/backups/r2-media-20260918T030819Z`. No new schema migration was needed.
+- Git preview `https://ddf3207e.lycoris-main.pages.dev` passed deployment checks.
+  A public sample returned `origin`, then `edge`; a separate request from the
+  server through Cloudflare ICN returned `r2`, with identical SHA-256 and length.
+  Two more public image URLs were warmed in all three variants with no errors.
+  Seven content-addressed objects were confirmed in the private preview bucket.
+- The 3,797,996-byte sample produces a 39,334-byte thumbnail and 133,098-byte
+  detail image. Rust validation passed 110 selected tests and Clippy; frontend
+  validation passed 304 tests, 10 Worker tests and the strict production build.
+- `lycoris-map.com` uses Full (strict), an active managed wildcard/apex certificate,
+  TLS 1.3, and minimum TLS 1.2. Enabled Always Use HTTPS. Public site/API requests
+  and direct-origin certificate validation passed; HTTP requests redirect to
+  HTTPS while preserving paths and queries. R2 is accessed by the Worker binding,
+  so no public bucket domain or separate image certificate is required.
+- Production frontend remains on Git main until the owner merges this branch.
+  Its next deployment activates the production R2 binding and thumbnail UI.
+  Original files remain on the server, with R2 populated on authorized reads.
 
 ## Git deployment and domain cutover — 2026-09-17
 
