@@ -41,6 +41,19 @@ Simulator builds do not need a signing team, but must keep local ad-hoc signing 
 
 The app icon reuses the original flower artwork from `frontend-old/public/LycorisIcon.png`. `Resources/Assets.xcassets/AppIcon.appiconset` contains its 1024×1024 sRGB PNG, scaled from the 704×704 original and composited on white without an alpha channel. `Base.xcconfig` selects this asset for every build configuration; Xcode derives the smaller device icons. This is the existing artwork, not a newly generated design.
 
+`Resources/PrivacyInfo.xcprivacy` declares the required-reason UserDefaults API with reason `CA92.1`: `AppPreferences` reads and writes this app's own language, search radius/category and map appearance preferences. The synchronized app folder includes this manifest in the app bundle. This declaration covers required-reason API use; App Store privacy disclosures still need to reflect the app and backend's actual data handling. See [Apple's approved reasons](https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api).
+
+### First TestFlight build
+
+1. Create or select the App Store Connect app record with bundle ID `com.lycoris.maps`. In Xcode, select the paid developer team and automatic signing for the Lycoris target.
+2. Select the **Lycoris** scheme and **Any iOS Device (arm64)**, then **Product → Archive**. The shared scheme archives Release, using the production HTTPS API. Simulator builds cannot be distributed through TestFlight.
+3. In **Window → Organizer → Archives**, select the archive and **Validate App**. After resolving validation errors, choose **Distribute App → TestFlight & App Store**. Keep automatic signing, symbol upload and build-number management enabled. This uploads a build; App Store publication remains a separate action.
+4. Wait for processing under the app's **TestFlight** tab, and resolve any export-compliance questions based on the app's actual encryption use. Create an internal testing group, add the processed build and your own eligible App Store Connect account, and install from its invitation using TestFlight on an iPhone running iOS 26 or later.
+
+Internal testing does not require the App Store product-page screenshots or preview video. External testing is a separate step involving TestFlight App Review. Increment the build number for subsequent uploads, or allow Xcode to manage it. Local unsigned Release compilation is not a signed archive, upload validation or a successful TestFlight installation.
+
+References: [Xcode distribution](https://developer.apple.com/documentation/xcode/distributing-your-app-for-beta-testing-and-releases), [internal testers](https://developer.apple.com/help/app-store-connect/test-a-beta-version/add-internal-testers).
+
 ## Service address
 
 Normal Xcode Run (Debug) and Release use `https://api.lycoris-map.com`. The shared address is in `Config/Base.xcconfig`; the same HTTPS service works from the simulator and a physical iPhone. API calls and `/uploads` media use this origin. An unconfigured address still produces an unavailable state, and Release rejects HTTP.
