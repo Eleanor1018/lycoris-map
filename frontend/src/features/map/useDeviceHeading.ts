@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 
 type CompassEvent = DeviceOrientationEvent & {
     webkitCompassHeading?: number
@@ -7,6 +7,7 @@ type CompassEvent = DeviceOrientationEvent & {
 type PermissionOrientation = typeof DeviceOrientationEvent & {
     requestPermission?: (absolute?: boolean) => Promise<string>
 }
+export type HeadingPermission = 'unsupported' | 'granted' | 'denied' | 'prompt'
 const normalize = (angle: number) => ((angle % 360) + 360) % 360
 
 /** North-referenced readings only: relative alpha is not a compass bearing. */
@@ -27,17 +28,136 @@ export function compassHeading(event: CompassEvent, screenAngle = 0): number | n
     return null
 }
 
-export async function requestDeviceHeading(): Promise<'granted' | 'denied' | 'prompt'> {
-    const sensor = globalThis.DeviceOrientationEvent as PermissionOrientation | undefined
-    if (!sensor?.requestPermission) return 'granted'
-    // Unsupported/denied sensors simply keep the undirected location dot.
-    try {
-        return (await sensor.requestPermission(true)) === 'granted' ? 'granted' : 'denied'
-    } catch {
-        // iOS rejects an initial prompt without user activation. A prior grant
-        // can succeed immediately; otherwise retry from the first map gesture.
-        return 'prompt'
+function permissionSensor(): PermissionOrientation | undefined {
+    return globalThis.DeviceOrientationEvent as PermissionOrientation | undefined
+}
+
+/**
+ * True only on touch devices whose browser gates orientation behind a user
+ * gesture (iOS/iPadOS Safari). `maxTouchPoints` includes iPad reporting a
+ * desktop UA, so width/UA sniffing is never used. Android Chrome exposes the
+ * sensor without `requestPermission`, so it is excluded and keeps reading.
+ */
+export function headingPermissionRequired(): boolean {
+    return (
+        typeof permissionSensor()?.requestPermission === 'function' &&
+        (navigator.maxTouchPoints ?? 0) > 0
+    )
+}
+
+/**
+ * One shared permission state per document. `requestPermission(true)` must be
+ * called directly from a real user activation (a click handler), so the
+ * promise is created synchronously by `enable` and in-flight prompts are
+ * de-duplicated so a second click cannot open a second dialog.
+ */
+class HeadingPermissionStore {
+    private permission: HeadingPermission = 'unsupported'
+    private listeners = new Set<() => void>()
+    private pending: Promise<HeadingPermission> | null = null
+    constructor() {
+        this.permission = headingPermissionRequired() ? 'prompt' : 'unsupported'
     }
+    subscribe = (listener: () => void) => {
+        this.listeners.add(listener)
+        return () => this.listeners.delete(listener)
+    }
+    getSnapshot = (): HeadingPermission => this.permission
+    private emit(permission: HeadingPermission) {
+        if (permission === this.permission) return
+        this.permission = permission
+        this.listeners.forEach((listener) => listener())
+    }
+    /**
+     * Restores a previously granted permission without user activation. This is
+     * best-effort: a previous grant succeeds; a rejection returns 'prompt' so
+     * the explicit Enable button stays available, and a denial from this silent
+     * path is downgraded to 'prompt' for the same reason.
+     */
+    restore = async (): Promise<HeadingPermission> => {
+        if (this.permission !== 'prompt' || this.pending) return this.permission
+        return this.enable(false)
+    }
+    /**
+     * Must be invoked synchronously inside a user activation handler.
+     * `explicit` distinguishes a real tap from the best-effort page-load probe,
+     * so only an answered prompt can surface a denial/settings message.
+     */
+    enable = (explicit = true): Promise<HeadingPermission> => {
+        const sensor = permissionSensor()
+        if (!headingPermissionRequired() || !sensor?.requestPermission) {
+            this.emit('unsupported')
+            return Promise.resolve('unsupported')
+        }
+        if (this.permission === 'granted') return Promise.resolve('granted')
+        if (this.pending) return this.pending
+        // requestPermission can throw synchronously on some WebKit builds; a
+        // throw here must not escape the click handler. Treat it as retryable.
+        let request: Promise<string>
+        try {
+            request = sensor.requestPermission(true)
+        } catch {
+            this.emit('prompt')
+            return Promise.resolve('prompt')
+        }
+        this.pending = request.then(
+            (result) => {
+                this.pending = null
+                if (result === 'granted') {
+                    this.emit('granted')
+                    return 'granted' as const
+                }
+                // A silent restore that returns denied never answered a real
+                // prompt, so it must not surface the settings message. Keep the
+                // Enable button available for one real tap.
+                if (!explicit) {
+                    this.emit('prompt')
+                    return 'prompt' as const
+                }
+                this.emit('denied')
+                return 'denied' as const
+            },
+            () => {
+                this.pending = null
+                // A rejected activation (or a silent restore) is not a denial.
+                // Keep prompting so the user can retry from the visible button.
+                this.emit('prompt')
+                return 'prompt' as const
+            },
+        )
+        return this.pending
+    }
+}
+let store: HeadingPermissionStore | null = null
+function headingStore(): HeadingPermissionStore {
+    return (store ??= new HeadingPermissionStore())
+}
+/** Test-only: re-evaluate the device and clear the shared permission state. */
+export function resetHeadingPermissionForTests(): void {
+    store = null
+}
+
+/** Best-effort silent restore; never claims a denial without a real prompt. */
+export function requestDeviceHeading(): Promise<HeadingPermission> {
+    return headingStore().restore()
+}
+/** Synchronous, gesture-safe enable used by the explicit button and Locate. */
+export function enableDeviceHeading(): Promise<HeadingPermission> {
+    return headingStore().enable(true)
+}
+export function useHeadingPermission(): HeadingPermission {
+    const current = headingStore()
+    const permission = useSyncExternalStore(
+        current.subscribe,
+        current.getSnapshot,
+        current.getSnapshot,
+    )
+    useEffect(() => {
+        // A fresh page visit cannot prompt without a gesture. Restore silently;
+        // a previous grant succeeds, an ungranted session stays in `prompt`.
+        if (headingPermissionRequired()) void current.restore()
+    }, [current])
+    return permission
 }
 
 export function useDeviceHeading(enabled: boolean) {
@@ -97,41 +217,5 @@ export function useDeviceHeading(enabled: boolean) {
             document.removeEventListener('visibilitychange', visibility)
         }
     }, [])
-    useEffect(() => {
-        if (!enabled) return
-        const sensor = globalThis.DeviceOrientationEvent as PermissionOrientation | undefined
-        if (!sensor?.requestPermission) return
-        let disposed = false
-        let requesting = false
-        const remove = () => {
-            document.removeEventListener('pointerup', activate, true)
-            document.removeEventListener('keydown', activate, true)
-        }
-        const activate = (event: Event) => {
-            if (
-                requesting ||
-                !(event.target instanceof Element) ||
-                !event.target.closest('.product-map') ||
-                (event instanceof KeyboardEvent && !['Enter', ' '].includes(event.key))
-            )
-                return
-            requesting = true
-            void requestDeviceHeading().then((permission) => {
-                requesting = false
-                if (permission !== 'prompt') remove()
-            })
-        }
-        // This also restores previously granted access on a fresh visit.
-        void requestDeviceHeading().then((permission) => {
-            if (!disposed && permission === 'prompt') {
-                document.addEventListener('pointerup', activate, true)
-                document.addEventListener('keydown', activate, true)
-            }
-        })
-        return () => {
-            disposed = true
-            remove()
-        }
-    }, [enabled])
     return enabled ? heading : null
 }

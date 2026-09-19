@@ -195,6 +195,48 @@
     height: 20px;
     flex: none;
 }
+/* Voice state is announced inline without widening the fixed search control. */
+.design-search.is-listening {
+    border-color: var(--ui-brand-blush);
+    box-shadow: 0 0 0 3px var(--ui-brand-blush);
+}
+.design-search .voice-search-status {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    padding: 4px 11px;
+    border-radius: 12px;
+    background: var(--ui-nav-surface);
+    color: var(--ui-brand-deep);
+    font: 400 12px/16px var(--ui-font-body);
+}
+.design-search .voice-search-error {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 4px 4px 11px;
+    border-radius: 12px;
+    background: var(--ui-nav-surface);
+    color: var(--ui-brand-deep);
+    font: 400 12px/16px var(--ui-font-body);
+    box-shadow: 0 4px 16px #00000014;
+}
+.design-search .voice-search-error > span {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.design-search .voice-search-dismiss {
+    flex: 0 0 28px;
+    width: 28px;
+    height: 28px;
+}
 .nearby-heading {
     position: absolute;
     top: 138px;

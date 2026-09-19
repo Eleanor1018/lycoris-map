@@ -192,7 +192,7 @@ it('renders a legacy shared coordinate target and gives markerId precedence over
         expect.objectContaining({ credentials: 'omit' }),
     )
 })
-it('copies only a public place link, uses a destination-only navigation URL and removes broken photos', async () => {
+it('copies only a public place link, offers navigation apps without auto-opening one, and removes broken photos', async () => {
     app('/maps?markerId=1&lang=en&lat=0&lng=0')
     const writeText = vi.fn(async () => {})
     vi.stubGlobal('navigator', { clipboard: { writeText } })
@@ -205,10 +205,36 @@ it('copies only a public place link, uses a destination-only navigation URL and 
     fireEvent.click(screen.getByRole('button', { name: 'Share' }))
     expect(await screen.findByText('Link copied.')).toBeInTheDocument()
     expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/maps?markerId=1&lang=en`)
-    expect(screen.getByRole('link', { name: /^Navigate to/ })).toHaveAttribute(
+    // The destination is not opened until the user explicitly chooses an app.
+    expect(screen.queryByRole('dialog', { name: 'Choose a navigation app' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Navigate' }))
+    const navigateTrigger = screen.getByRole('button', { name: 'Navigate' })
+    const chooser = screen.getByRole('dialog', { name: 'Choose a navigation app' })
+    const links = within(chooser).getAllByRole('link')
+    expect(links.map((link) => link.textContent)).toEqual([
+        'Apple Maps',
+        'Google Maps',
+        'Baidu Maps',
+    ])
+    expect(links[0]).toHaveAttribute(
+        'href',
+        'https://maps.apple.com/?daddr=31.2304%2C121.4737&dirflg=w',
+    )
+    expect(links[1]).toHaveAttribute(
         'href',
         'https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=31.2304%2C121.4737',
     )
+    expect(links[2]).toHaveAttribute(
+        'href',
+        'https://api.map.baidu.com/direction?origin=%E6%88%91%E7%9A%84%E4%BD%8D%E7%BD%AE&destination=latlng%3A31.2304%2C121.4737%7Cname%3ASynthetic+place+1&mode=walking&coord_type=wgs84&output=html&src=webapp.lycoris.maps',
+    )
+    for (const link of links) expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    // Escape closes the menu and returns focus to the trigger.
+    fireEvent.keyDown(chooser, { key: 'Escape' })
+    await waitFor(() =>
+        expect(screen.queryByRole('dialog', { name: 'Choose a navigation app' })).toBeNull(),
+    )
+    expect(navigateTrigger).toHaveAttribute('aria-expanded', 'false')
 })
 
 const nearbyCategories = [
@@ -240,7 +266,7 @@ it.each(
             }),
         ).toBe(true)
         expect(within(list).getAllByRole('button', { name: 'Share' })).toHaveLength(5)
-        expect(within(list).getAllByRole('link', { name: /^Navigate to/ })).toHaveLength(5)
+        expect(within(list).getAllByRole('button', { name: 'Navigate' })).toHaveLength(5)
         expect(screen.getByTestId('route')).toHaveTextContent(`nearbyCategory=${category}#retained`)
         fireEvent.click(
             screen.getByRole('button', { name: mobile ? 'Close nearby' : 'Close panel' }),
@@ -318,10 +344,17 @@ it('shares the selected Nearby item, uses its destination and hides a failed ima
     fireEvent.error(photo)
     fireEvent.error(item.querySelector<HTMLImageElement>('.place-photo img')!)
     expect(item.querySelector('.place-photo')).toBeNull()
-    expect(within(item).getByRole('link', { name: /^Navigate to/ })).toHaveAttribute(
-        'rel',
-        'noopener noreferrer',
+    const navigate = within(item).getByRole('button', { name: 'Navigate' })
+    fireEvent.click(navigate)
+    const chooser = screen.getByRole('dialog', { name: 'Choose a navigation app' })
+    expect(within(chooser).getAllByRole('link')).toHaveLength(3)
+    for (const link of within(chooser).getAllByRole('link'))
+        expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    fireEvent.keyDown(chooser, { key: 'Escape' })
+    await waitFor(() =>
+        expect(screen.queryByRole('dialog', { name: 'Choose a navigation app' })).toBeNull(),
     )
+    expect(navigate).toHaveFocus()
 })
 
 it('keeps End and the return target visible when measured Nearby cards exceed their estimated height', async () => {

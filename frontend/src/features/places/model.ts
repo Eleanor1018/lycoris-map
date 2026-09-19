@@ -62,3 +62,42 @@ export function navigationUrl(place: LatLng): string {
     url.searchParams.set('destination', `${place.lat},${place.lng}`)
     return url.href
 }
+
+export type NavigationApp = 'apple' | 'google' | 'baidu'
+export const navigationApps = ['apple', 'google', 'baidu'] as const
+
+/**
+ * Destination-only walking links for each navigation app. Latitude precedes
+ * longitude in every URL. No function includes the user's precise origin, and
+ * Baidu is told explicitly that the coordinates are WGS84. Apple Maps is the
+ * first offered option; Google is only ever a deliberate user choice.
+ */
+export function appleMapsUrl(place: LatLng): string {
+    assertLatLng(place)
+    const url = new URL('https://maps.apple.com/')
+    url.searchParams.set('daddr', `${place.lat},${place.lng}`)
+    url.searchParams.set('dirflg', 'w')
+    return url.href
+}
+
+export function googleMapsUrl(place: LatLng): string {
+    return navigationUrl(place)
+}
+
+export function baiduMapsUrl(place: LatLng & { title: string }): string {
+    assertLatLng(place)
+    const url = new URL('https://api.map.baidu.com/direction')
+    url.searchParams.set('origin', '我的位置')
+    url.searchParams.set('destination', `latlng:${place.lat},${place.lng}|name:${place.title}`)
+    url.searchParams.set('mode', 'walking')
+    url.searchParams.set('coord_type', 'wgs84')
+    url.searchParams.set('output', 'html')
+    url.searchParams.set('src', 'webapp.lycoris.maps')
+    return url.href
+}
+
+export function navigationAppUrl(app: NavigationApp, place: LatLng & { title: string }): string {
+    if (app === 'apple') return appleMapsUrl(place)
+    if (app === 'baidu') return baiduMapsUrl(place)
+    return googleMapsUrl(place)
+}

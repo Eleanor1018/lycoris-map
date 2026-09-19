@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router'
 import { MobileSheet } from './MobileSheet'
 import { useMobileLayout, useViewportHeight } from './useMobileLayout'
 import { MapSurface } from '@/features/map/MapSurface'
+import { HeadingPermission } from '@/features/map/HeadingPermission'
 import { MapSourcePicker } from '@/features/map/MapSourcePicker'
 import { FigmaIcon, type FigmaIconName } from '@/shared/ui/figma-icon'
 import { DesignButton, IconButton } from './primitives'
@@ -574,6 +575,7 @@ export function MapShell({
                 </div>
             )}
             <div className="map-notices">
+                {!sample && <HeadingPermission />}
                 {browse && (browse.location.error || browse.location.pending) && (
                     <MapNotice
                         key={browse.location.pending ? 'locating' : browse.location.error}

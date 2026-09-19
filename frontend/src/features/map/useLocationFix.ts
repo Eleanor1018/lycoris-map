@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { assertLatLng, type LatLng } from './coords'
-import { requestDeviceHeading } from './useDeviceHeading'
+import { enableDeviceHeading } from './useDeviceHeading'
 
 export function useLocationFix(onFound: (point: LatLng, automatic: boolean) => void) {
     const [position, setPosition] = useState<LatLng | null>(null)
@@ -77,9 +77,10 @@ export function useLocationFix(onFound: (point: LatLng, automatic: boolean) => v
         return () => clearTimeout(initialRequest.current)
     }, [requestLocation])
     const locate = useCallback(() => {
-        // iOS requires this separate sensor request in a user gesture. Geolocation
-        // itself is requested on entry, without waiting for this button.
-        requestDeviceHeading()
+        // iOS requires this separate sensor request in a user gesture. The
+        // heading store de-duplicates it, so a manual Locate never shows a
+        // second orientation prompt. Geolocation is requested without waiting.
+        void enableDeviceHeading()
         requestLocation(false)
     }, [requestLocation])
     return { position, pending, error, locate }

@@ -1,6 +1,6 @@
-import { act, cleanup, fireEvent, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { compassHeading, requestDeviceHeading, useDeviceHeading } from './useDeviceHeading'
+import { compassHeading, useDeviceHeading } from './useDeviceHeading'
 
 function orientation(values: Record<string, unknown>, type = 'deviceorientation') {
     return Object.assign(
@@ -18,6 +18,25 @@ afterEach(() => {
     vi.unstubAllGlobals()
 })
 
+/**
+ * The permission store is module-level state. Reset it so each test starts
+ * from a clean store with the sensor/touch profile it stubs.
+ */
+async function freshModule() {
+    vi.resetModules()
+    return import('./useDeviceHeading')
+}
+function touchDevice(sensor = true, requestPermission?: () => Promise<string>) {
+    vi.stubGlobal(
+        'DeviceOrientationEvent',
+        sensor ? { requestPermission: requestPermission ?? (async () => 'granted') } : {},
+    )
+    Object.defineProperty(navigator, 'maxTouchPoints', {
+        configurable: true,
+        get: () => 5,
+    })
+}
+
 it('uses north-referenced iOS/Android readings and compensates screen rotation', () => {
     expect(
         compassHeading(orientation({ webkitCompassHeading: 90, webkitCompassAccuracy: 5 })),
@@ -31,6 +50,7 @@ it('uses north-referenced iOS/Android readings and compensates screen rotation',
     ).toBeNull()
     expect(compassHeading(orientation({ webkitCompassHeading: NaN }))).toBeNull()
 })
+
 it('crosses north by the short arc and retains a stationary compass until hidden', () => {
     const { result, unmount } = renderHook(() => useDeviceHeading(true))
     function send(values: Record<string, unknown>) {
@@ -58,59 +78,135 @@ it('crosses north by the short arc and retains a stationary compass until hidden
     send({ absolute: true, alpha: 45 })
     expect(vi.getTimerCount()).toBe(0)
 })
-it('restores a previous iOS grant when the location first becomes available', async () => {
-    const requestPermission = vi.fn().mockResolvedValue('granted')
-    vi.stubGlobal('DeviceOrientationEvent', { requestPermission })
-    const { result, rerender } = renderHook(({ enabled }) => useDeviceHeading(enabled), {
-        initialProps: { enabled: false },
+
+it('reports unsupported when no touch device needs a gesture', async () => {
+    vi.stubGlobal('DeviceOrientationEvent', {})
+    Object.defineProperty(navigator, 'maxTouchPoints', {
+        configurable: true,
+        get: () => 0,
     })
+    const module = await freshModule()
+    expect(module.headingPermissionRequired()).toBe(false)
+    expect(await module.requestDeviceHeading()).toBe('unsupported')
+    expect(await module.enableDeviceHeading()).toBe('unsupported')
+})
+
+it('does not require a gesture on a touch browser reading absolute alpha without requestPermission', async () => {
+    // Android Chrome: touch points exist but no requestPermission API.
+    vi.stubGlobal('DeviceOrientationEvent', {})
+    Object.defineProperty(navigator, 'maxTouchPoints', {
+        configurable: true,
+        get: () => 5,
+    })
+    const module = await freshModule()
+    expect(module.headingPermissionRequired()).toBe(false)
+    const { result } = renderHook(() => module.useDeviceHeading(true))
+    act(() => {
+        window.dispatchEvent(orientation({ absolute: true, alpha: 270 }))
+        vi.advanceTimersByTime(20)
+    })
+    expect(result.current).toBe(90)
+})
+
+it('deduplicates a rapid double activation into one request and never re-prompts after grant', async () => {
+    touchDevice()
+    const { useHeadingPermission, enableDeviceHeading } = await freshModule()
+    let resolve!: (value: string) => void
+    const requestPermission = vi.fn(
+        () =>
+            new Promise<string>((r) => {
+                resolve = r
+            }),
+    )
+    vi.stubGlobal('DeviceOrientationEvent', { requestPermission })
+    const { result } = renderHook(() => useHeadingPermission())
+    expect(result.current).toBe('prompt')
+    let first!: Promise<string>
+    let second!: Promise<string>
+    act(() => {
+        first = enableDeviceHeading()
+        second = enableDeviceHeading()
+    })
+    expect(requestPermission).toHaveBeenCalledTimes(1)
+    expect(first).toBe(second)
+    await act(async () => {
+        resolve('granted')
+        await first
+    })
+    expect(result.current).toBe('granted')
+    await act(async () => {
+        await enableDeviceHeading()
+    })
+    expect(requestPermission).toHaveBeenCalledTimes(1)
+})
+
+it('keeps the prompt state when activation is rejected so the button can retry', async () => {
+    touchDevice()
+    const { useHeadingPermission, enableDeviceHeading } = await freshModule()
+    const requestPermission = vi
+        .fn()
+        .mockRejectedValueOnce(new DOMException('Needs user activation', 'NotAllowedError'))
+        .mockResolvedValueOnce('granted')
+    vi.stubGlobal('DeviceOrientationEvent', { requestPermission })
+    const { result } = renderHook(() => useHeadingPermission())
+    await act(async () => {
+        await enableDeviceHeading()
+    })
+    expect(result.current).toBe('prompt')
+    await act(async () => {
+        await enableDeviceHeading()
+    })
+    expect(result.current).toBe('granted')
+    expect(requestPermission).toHaveBeenCalledTimes(2)
+})
+
+it('turns a synchronous requestPermission throw into a retryable prompt', async () => {
+    touchDevice()
+    const { useHeadingPermission, enableDeviceHeading } = await freshModule()
+    const requestPermission = vi.fn(() => {
+        throw new DOMException('needs activation', 'NotAllowedError')
+    })
+    vi.stubGlobal('DeviceOrientationEvent', { requestPermission })
+    const { result } = renderHook(() => useHeadingPermission())
+    let outcome!: string
+    act(() => {
+        // The click handler must not see the throw escape.
+        outcome = ''
+        void enableDeviceHeading().then((value) => {
+            outcome = value
+        })
+    })
+    await act(async () => {})
+    expect(outcome).toBe('prompt')
+    expect(result.current).toBe('prompt')
+})
+
+it('restores a previous grant on mount without a gesture and then reads the compass', async () => {
+    touchDevice()
+    const module = await freshModule()
+    const requestPermission = vi.fn(async () => 'granted')
+    vi.stubGlobal('DeviceOrientationEvent', { requestPermission })
+    const { result } = renderHook(() => module.useDeviceHeading(true))
+    await act(async () => {})
     act(() => {
         window.dispatchEvent(orientation({ webkitCompassHeading: 90, webkitCompassAccuracy: 5 }))
         vi.advanceTimersByTime(20)
     })
-    expect(result.current).toBeNull()
-    await act(async () => rerender({ enabled: true }))
-    expect(requestPermission).toHaveBeenCalledWith(true)
     expect(result.current).toBe(90)
+    expect(module.headingPermissionRequired()).toBe(true)
+    expect(requestPermission.mock.calls.length).toBeLessThanOrEqual(1)
 })
-it('uses the first map gesture for a new iOS permission and does not repeatedly prompt', async () => {
-    const requestPermission = vi
-        .fn()
-        .mockRejectedValueOnce(new DOMException('Needs activation', 'NotAllowedError'))
-        .mockResolvedValue('granted')
+
+it('asks for an explicit grant only when enabled and never opens a second prompt', async () => {
+    touchDevice()
+    const module = await freshModule()
+    const requestPermission = vi.fn(async () => 'granted')
     vi.stubGlobal('DeviceOrientationEvent', { requestPermission })
-    const map = document.createElement('div')
-    map.className = 'product-map'
-    document.body.append(map)
-    const { result, unmount } = renderHook(() => useDeviceHeading(true))
+    renderHook(() => module.useHeadingPermission())
     await act(async () => {})
-    expect(requestPermission).toHaveBeenCalledTimes(1)
-    fireEvent.pointerUp(document.body)
-    expect(requestPermission).toHaveBeenCalledTimes(1)
-    await act(async () => fireEvent.pointerUp(map))
-    expect(requestPermission).toHaveBeenCalledTimes(2)
-    act(() => {
-        window.dispatchEvent(orientation({ webkitCompassHeading: 45, webkitCompassAccuracy: 5 }))
-        vi.advanceTimersByTime(20)
+    await act(async () => {
+        await module.enableDeviceHeading()
     })
-    expect(result.current).toBe(45)
-    fireEvent.pointerUp(map)
-    expect(requestPermission).toHaveBeenCalledTimes(2)
-    unmount()
-    map.remove()
-})
-it('tolerates denied permission and removes activation listeners on unmount', async () => {
-    const requestPermission = vi.fn().mockResolvedValue('denied')
-    vi.stubGlobal('DeviceOrientationEvent', { requestPermission })
-    expect(await requestDeviceHeading()).toBe('denied')
-    requestPermission.mockRejectedValue(new DOMException('Needs activation', 'NotAllowedError'))
-    const map = document.createElement('div')
-    map.className = 'product-map'
-    document.body.append(map)
-    const { unmount } = renderHook(() => useDeviceHeading(true))
-    await act(async () => {})
-    unmount()
-    fireEvent.pointerUp(map)
-    expect(requestPermission).toHaveBeenCalledTimes(2)
-    map.remove()
+    expect(requestPermission).toHaveBeenCalledWith(true)
+    expect(requestPermission).toHaveBeenCalledTimes(1)
 })
