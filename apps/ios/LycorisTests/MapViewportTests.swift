@@ -12,7 +12,7 @@ struct MapViewportTests {
     let point = try #require(sampleMarker(1).point)
     let annotation = NativeMapView.PlaceAnnotation(
       place: PlacePresentation(marker: sampleMarker(1), origin: nil, located: false, baseURL: nil),
-      point: point)
+      coordinate: point.coordinate)
     let view = try #require(coordinator.mapView(map, viewFor: annotation))
     var rendered: Set<Data> = []
     for category in PlaceCategory.allCases {

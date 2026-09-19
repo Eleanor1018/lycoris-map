@@ -18,6 +18,8 @@ struct MapScreen: View {
   @State private var store: PlaceStore
   @State private var location = LocationProvider()
   @State private var connectivity = ConnectivityMonitor()
+  @State private var mapCoordinates: MapCoordinateResolver
+  @State private var showsCoordinateError = false
   @State private var account = AccountStore()
   @State private var contribution = ContributionStore()
   @State private var selectingLocation = false
@@ -66,6 +68,14 @@ struct MapScreen: View {
   ) {
     _detent = State(initialValue: initialDetent)
     _store = State(initialValue: PlaceStore(isPreview: isPreview, initialPlace: initialPlace))
+    #if LYCORIS_LOCAL_TESTS
+      // Hermetic fixture runs have an explicit datum. Live provider calibration is
+      // verified separately, not allowed to make fixture tests depend on Apple search.
+      _mapCoordinates = State(initialValue: MapCoordinateResolver(space: .wgs84))
+    #else
+      _mapCoordinates = State(
+        initialValue: MapCoordinateResolver(space: isPreview ? .wgs84 : .unresolved))
+    #endif
     self.bookmarks = bookmarks
   }
 
@@ -101,11 +111,13 @@ struct MapScreen: View {
         NativeMapView(
           topInset: layout.topInset, bottomInset: mapBottomInset,
           appearance: preferences.mapAppearance,
+          coordinateSpace: mapCoordinates.space,
           places: mapPlaces, focus: store.focus,
           showsUserLocation: !store.isPreview && location.hasRequestedLocation
             && location.isAuthorized, isActive: scenePhase == .active, animated: !reduceMotion,
           isSelectingLocation: selectingLocation, selectedLocation: pickedLocation,
           onPickLocation: pickLocation,
+          onUnresolvedCoordinate: coordinateUnavailable,
           onViewport: { store.viewportChanged($0) },
           onSelect: { if !selectingLocation { selectPlace($0) } },
           onScreenCenter: { screenCenter = $0 }
@@ -203,6 +215,20 @@ struct MapScreen: View {
     }
     .ignoresSafeArea(.keyboard)
     .sensoryFeedback(.selection, trigger: locationPickFeedback)
+    .alert(Text("Map unavailable", tableName: "Coordinates"), isPresented: $showsCoordinateError) {
+      Button("Try again") { mapCoordinates.resolveIfNeeded(retryPending: true) }
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      if mapCoordinates.space == .unresolved {
+        Text(
+          "Connect to the internet and try again before choosing a map location.",
+          tableName: "Coordinates")
+      } else {
+        Text(
+          "This map location could not be verified. Please choose a nearby point.",
+          tableName: "Coordinates")
+      }
+    }
     .alert("Not available yet", isPresented: $showsUnavailableAction) {
       Button("OK", role: .cancel) {}
     }
@@ -242,8 +268,10 @@ struct MapScreen: View {
       case .settings(let destination):
         SettingsSheet(preferences: preferences, destination: destination)
       case .mapAppearance(let center):
-        MapAppearanceSheet(preferences: preferences, center: center)
-          .navigationTransition(.zoom(sourceID: "map-appearance", in: appearanceTransition))
+        MapAppearanceSheet(
+          preferences: preferences, center: center, coordinateSpace: mapCoordinates.space
+        )
+        .navigationTransition(.zoom(sourceID: "map-appearance", in: appearanceTransition))
       case .link(let link):
         PlaceLinkSheet(link: link, account: account) { marker, authenticated in
           guard case .link(let current) = modal, current == link else { return }
@@ -310,6 +338,7 @@ struct MapScreen: View {
       applyPreferences()
       requestStartupLocation()
       if !store.isPreview {
+        mapCoordinates.resolveIfNeeded()
         connectivity.start()
         contribution.connect(account)
         await account.restore()
@@ -325,6 +354,7 @@ struct MapScreen: View {
       guard !store.isPreview else { return }
       contribution.setActive(phase == .active)
       if phase == .active {
+        mapCoordinates.resolveIfNeeded(retryPending: true)
         location.refreshAuthorization()
         if !location.isAuthorized { store.revokeLocation() }
         requestStartupLocation()
@@ -337,6 +367,7 @@ struct MapScreen: View {
     }
     .onChange(of: connectivity.recoveryCount) { _, _ in
       guard !store.isPreview, scenePhase == .active else { return }
+      mapCoordinates.resolveIfNeeded(retryPending: true)
       store.networkDidRecover()
       Task {
         await account.networkDidRecover()
@@ -381,6 +412,7 @@ struct MapScreen: View {
       cancelVoiceSearch()
       store.stop()
       connectivity.stop()
+      mapCoordinates.stop()
     }
     .onChange(of: isSearchFocused) { _, focused in
       if focused {
@@ -602,6 +634,10 @@ struct MapScreen: View {
   }
 
   private func showNearby(_ category: PlaceCategory) {
+    guard store.isPreview || screenCenter != nil else {
+      coordinateUnavailable()
+      return
+    }
     cancelVoiceSearch()
     account.closeDetail()
     query = ""
@@ -651,8 +687,13 @@ struct MapScreen: View {
       return
     }
     guard let point = place.point else { return }
+    guard let coordinate = mapCoordinates.space.coordinate(for: point) else {
+      coordinateUnavailable()
+      return
+    }
     let item = MKMapItem(
-      location: CLLocation(latitude: point.latitude, longitude: point.longitude), address: nil)
+      location: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude),
+      address: nil)
     item.name = place.title
     if !item.openInMaps(launchOptions: [
       MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking
@@ -778,6 +819,11 @@ struct MapScreen: View {
     guard selectingLocation else { return }
     pickedLocation = point
     locationPickFeedback += 1
+  }
+
+  private func coordinateUnavailable() {
+    mapCoordinates.resolveIfNeeded(retryPending: true)
+    showsCoordinateError = true
   }
 
   private func confirmLocation() {

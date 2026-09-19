@@ -77,7 +77,7 @@ The `$()` escape preserves the double slash in an xcconfig URL. Remove the overr
 - `Core/API`: environment configuration, public DTOs, transport and HTTP diagnostics.
 - `Core/Preferences`, `Core/Navigation`: validated preferences and strict place-link parsing.
 - `Features/Settings`, `Features/Search`: native settings and device-only voice input.
-- `Core/Location`: WGS84 values, viewport splitting and on-demand Core Location.
+- `Core/Location`: canonical WGS84 values, calibrated MapKit coordinate boundaries, viewport splitting and startup/on-demand Core Location.
 - `Features/Places`: shared rows, real details, public images and native share sheet.
 - `Features/Account`: session and private data lifecycle, native auth/profile/password/library screens, and image encoding.
 - `Features/Contributions`: native form, protected draft journal, marker writes and resumable photo protocol.
@@ -145,3 +145,7 @@ The microphone expands the existing map search panel, just like focusing the tex
 Place links accept only the registered scheme/host and a positive Int64 ID. Unknown sources, duplicate parameters, credentials, fragments and malformed IDs are rejected. Optional `lang=en|zh` is accepted for compatibility, but the recipient's chosen language takes precedence. Public reads are cookie-free; a public 404 may fall back to a verified, owner/epoch-scoped account read. Private details/photos remain in AccountStore. Dismissed or superseded link sheets cannot open late results. An already-open sheet or location selection must be closed before opening a link.
 
 VoiceOver headers, detail focus, refreshed annotation labels, 44pt touch targets, accessibility-size layouts, opaque panels under Reduce Transparency, and the existing Reduce Motion behavior support system preferences. Foreground checks refresh location authorization and remove revoked location references. See `docs/i6-acceptance.md` for tests and remaining real-device checks.
+
+## Coordinate alignment
+
+MapKit coordinates are calibrated against a fixed public landmark before interpreting mainland map picks. API/storage values stay WGS84; display, picking and viewport boundaries are handled explicitly. See [the measured control-point comparison and failure behavior](docs/coordinate-alignment.md). Map pins use the Web category palette: toilet blue, nursing orange, medical green, and other yellow; their visible tips anchor to the actual coordinates.
