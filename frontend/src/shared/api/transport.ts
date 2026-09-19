@@ -16,6 +16,7 @@
 
 import { ApiError } from './ApiError'
 import { parseAuthEnvelope, parseSpringSecurityMessage } from './envelope'
+import { createDeadline, type Deadline } from './requestDeadline'
 
 export type RequestOptions = {
     method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
@@ -33,6 +34,8 @@ export type RequestOptions = {
     cache?: RequestCache
     /** Base URL override; defaults to the same-origin proxy. */
     baseUrl?: string
+    /** Override the bounded fetch/body deadline (defaults by payload size). */
+    timeoutMs?: number
 }
 
 export const DEFAULT_BASE_URL = ''
@@ -74,6 +77,44 @@ async function parseBody(response: Response): Promise<unknown> {
 async function parseBlobOrDefault(response: Response): Promise<unknown> {
     if (!response.ok) return parseBody(response)
     return response.blob()
+}
+
+/**
+ * Fetch plus a fully deadline-bounded body read.
+ *
+ * The deadline's timer stays armed until `cleanup`, so a response whose body
+ * never completes is rejected as a network timeout instead of hanging forever.
+ * A caller abort is re-thrown as `AbortError`; only the deadline maps to
+ * `ApiError.network`, so user cancellations never surface as network errors.
+ */
+async function fetchWithinDeadline(
+    url: string,
+    init: RequestInit,
+    deadline: Deadline,
+    parse: (response: Response) => Promise<unknown>,
+): Promise<{ response: Response; body: unknown }> {
+    let response: Response
+    try {
+        response = await deadline.guard(fetch(url, init))
+    } catch (error) {
+        if (deadline.reason() === 'timeout')
+            throw ApiError.network('Request timed out. Please try again.')
+        if (error instanceof DOMException && error.name === 'AbortError') throw error
+        throw ApiError.network('网络请求失败，请检查网络连接')
+    }
+    let body: unknown
+    try {
+        body = await deadline.guard(parse(response))
+    } catch (error) {
+        if (deadline.reason() === 'timeout')
+            throw ApiError.network('Request timed out. Please try again.')
+        if (error instanceof DOMException && error.name === 'AbortError') throw error
+        throw ApiError.network(
+            'Response interrupted. Please try again.',
+            response.headers.get('x-request-id') ?? undefined,
+        )
+    }
+    return { response, body }
 }
 
 function messageFromBody(status: number, body: unknown): { code?: number; message: string } {
@@ -122,6 +163,8 @@ export type BlobRequestOptions = {
     signal?: AbortSignal
     /** Base URL override; defaults to the same-origin proxy. */
     baseUrl?: string
+    /** Override the bounded fetch/body deadline. */
+    timeoutMs?: number
 }
 
 /**
@@ -145,40 +188,40 @@ export async function request(path: string, options: RequestOptions = {}): Promi
     }
     Object.assign(headers, options.headers ?? {})
 
-    let response: Response
+    const deadline = createDeadline({
+        signal: options.signal,
+        timeoutMs: options.timeoutMs,
+        upload: body !== undefined,
+    })
     try {
-        response = await fetch(url, {
-            method: options.method ?? 'GET',
-            headers,
-            credentials: options.credentials ?? 'include',
-            ...(options.cache ? { cache: options.cache } : {}),
-            ...(body === undefined ? {} : { body }),
-            ...(options.signal ? { signal: options.signal } : {}),
-        })
-    } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') throw error
-        throw ApiError.network('网络请求失败，请检查网络连接')
-    }
+        const { response, body: parsed } = await fetchWithinDeadline(
+            url,
+            {
+                method: options.method ?? 'GET',
+                headers,
+                credentials: options.credentials ?? 'include',
+                ...(options.cache ? { cache: options.cache } : {}),
+                ...(body === undefined ? {} : { body }),
+                signal: deadline.signal,
+            },
+            deadline,
+            parseBody,
+        )
 
-    const requestId = response.headers.get('x-request-id') ?? undefined
-    let parsed: unknown
-    try {
-        parsed = await parseBody(response)
-    } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') throw error
-        throw ApiError.network('Response interrupted. Please try again.', requestId)
-    }
+        const requestId = response.headers.get('x-request-id') ?? undefined
+        if (!response.ok) {
+            const { code, message } = messageFromBody(response.status, parsed)
+            throw new ApiError(response.status, message, {
+                code,
+                requestId,
+                accessDenied: accessDenied(response.status, parsed, path),
+            })
+        }
 
-    if (!response.ok) {
-        const { code, message } = messageFromBody(response.status, parsed)
-        throw new ApiError(response.status, message, {
-            code,
-            requestId,
-            accessDenied: accessDenied(response.status, parsed, path),
-        })
+        return parsed
+    } finally {
+        deadline.cleanup()
     }
-
-    return parsed
 }
 
 /**
@@ -196,31 +239,36 @@ export async function requestBlob(path: string, options: BlobRequestOptions = {}
     const headers: Record<string, string> = { Accept: 'image/*' }
     Object.assign(headers, options.headers ?? {})
 
-    let response: Response
+    const deadline = createDeadline({
+        signal: options.signal,
+        timeoutMs: options.timeoutMs,
+    })
     try {
-        response = await fetch(url, {
-            method: 'GET',
-            headers,
-            credentials: 'include',
-            ...(options.cache ? { cache: options.cache } : {}),
-            ...(options.signal ? { signal: options.signal } : {}),
-        })
-    } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') throw error
-        throw ApiError.network('网络请求失败，请检查网络连接')
+        const { response, body: parsed } = await fetchWithinDeadline(
+            url,
+            {
+                method: 'GET',
+                headers,
+                credentials: 'include',
+                ...(options.cache ? { cache: options.cache } : {}),
+                signal: deadline.signal,
+            },
+            deadline,
+            parseBlobOrDefault,
+        )
+
+        const requestId = response.headers.get('x-request-id') ?? undefined
+        if (!response.ok) {
+            const { code, message } = messageFromBody(response.status, parsed)
+            throw new ApiError(response.status, message, {
+                code,
+                requestId,
+                accessDenied: accessDenied(response.status, parsed, path),
+            })
+        }
+
+        return parsed as Blob
+    } finally {
+        deadline.cleanup()
     }
-
-    const requestId = response.headers.get('x-request-id') ?? undefined
-    const parsed = await parseBlobOrDefault(response)
-
-    if (!response.ok) {
-        const { code, message } = messageFromBody(response.status, parsed)
-        throw new ApiError(response.status, message, {
-            code,
-            requestId,
-            accessDenied: accessDenied(response.status, parsed, path),
-        })
-    }
-
-    return parsed as Blob
 }

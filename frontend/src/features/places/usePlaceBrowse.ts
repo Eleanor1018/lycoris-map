@@ -136,6 +136,27 @@ export function usePlaceBrowse(
             return [...new Map(batches.flat().map((marker) => [marker.id, marker])).values()]
         },
     })
+    // `placeholderData` only survives while a query is pending; React Query
+    // clears `data` when the latest window settles in error. Keep the last
+    // successful public viewport payload per language so a failed/cancelled
+    // region read cannot blank every already-valid pin. A successful empty
+    // response overwrites this (honest empty), and a language change isolates
+    // it immediately. Only the public viewport write path feeds this ref, so
+    // owner-private detail data can never leak into public markers.
+    const lastMapData = useRef<{ language: Language; markers: readonly Marker[] } | null>(null)
+    useEffect(() => {
+        // A placeholder is the previous window's data marked as success; it is
+        // not a freshly confirmed result and must not overwrite the retained
+        // fallback (which would also defeat the 404 pruning below).
+        if (!mapQuery.isSuccess || mapQuery.isPlaceholderData) return
+        lastMapData.current = { language, markers: mapQuery.data }
+    }, [
+        mapQuery.isSuccess,
+        mapQuery.isPlaceholderData,
+        mapQuery.dataUpdatedAt,
+        mapQuery.data,
+        language,
+    ])
     const nearbyFilters = nearby
         ? {
               lat: Math.round(nearby.point.lat * 1e6) / 1e6,
@@ -180,25 +201,38 @@ export function usePlaceBrowse(
                 query.queryKey[1] === 'markers' &&
                 query.queryKey[2] !== 'detail',
         }
-        // Cancel pre-404 responses, remove the stale item, then allow fresh public
-        // reads to restore it if it becomes visible again.
+        // Cancel pre-404 responses, remove the stale item from caches and from
+        // the retained fallback, then allow fresh public reads to restore it if
+        // it becomes visible again. Pruning the ref matters because a later
+        // viewport failure falls back to it even after the detail is closed.
         void client.cancelQueries(lists).then(() => {
             client.setQueriesData<Marker[]>(lists, (data) =>
                 data?.filter((marker) => String(marker.id) !== id),
             )
+            if (lastMapData.current?.language === language)
+                lastMapData.current = {
+                    language,
+                    markers: lastMapData.current.markers.filter(
+                        (marker) => String(marker.id) !== id,
+                    ),
+                }
             void client.invalidateQueries(lists)
         })
-    }, [client, id, unavailable])
+    }, [client, id, unavailable, language])
     const activeQuery = term ? searchQuery : nearby ? nearbyQuery : mapQuery
     const debouncing = !!term && term !== query
+    const fallback =
+        !term && !nearby && lastMapData.current?.language === language
+            ? lastMapData.current.markers
+            : undefined
     const allResults: readonly Marker[] = useMemo(
         () =>
             debouncing
                 ? []
-                : (activeQuery.data ?? []).filter(
+                : (activeQuery.data ?? fallback ?? []).filter(
                       (marker) => !(unavailable && String(marker.id) === id),
                   ),
-        [debouncing, activeQuery.data, unavailable, id],
+        [debouncing, activeQuery.data, fallback, unavailable, id],
     )
     const results = useMemo(() => {
         if (!clusterIds) return allResults
