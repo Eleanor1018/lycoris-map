@@ -1,0 +1,28 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "No internet connection. Check your connection and allow Lycoris to use Wi-Fi or cellular data in Settings." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法连接网络。请检查网络连接，并在系统设置中允许 Lycoris 使用无线局域网或蜂窝数据。"
+          }
+        }
+      }
+    },
+    "The request timed out. Please try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求超时，请重试。"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

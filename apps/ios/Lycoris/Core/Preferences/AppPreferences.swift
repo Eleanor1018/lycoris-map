@@ -76,10 +76,13 @@ final class AppPreferences {
 
 extension String {
   /// Also localizes model-generated text; SwiftUI's environment alone cannot do that.
-  init(appLocalized key: String.LocalizationValue, language: AppLanguage = .current()) {
+  init(
+    appLocalized key: String.LocalizationValue, language: AppLanguage = .current(),
+    table: String? = nil
+  ) {
     let bundle =
       Bundle.main.path(forResource: language.locale.identifier, ofType: "lproj")
       .flatMap(Bundle.init(path:)) ?? .main
-    self.init(localized: key, bundle: bundle, locale: language.locale)
+    self.init(localized: key, table: table, bundle: bundle, locale: language.locale)
   }
 }

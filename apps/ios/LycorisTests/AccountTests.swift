@@ -8,11 +8,16 @@ import Testing
 struct AccountTests {
   @Test func networkDenialExplainsRecoveryAndDoesNotInventALogin() async {
     let store = AccountStore(api: DisconnectedAccountAPI())
-    #expect(!(await store.authenticate(
-      username: "fixture", email: "", password: "fixture", register: false)))
+    #expect(
+      !(await store.authenticate(
+        username: "fixture", email: "", password: "fixture", register: false)))
     #expect(store.user == nil && !store.isBusy)
-    #expect(store.message == String(appLocalized:
-      "No internet connection. Check your connection and allow Lycoris to use Wi-Fi or cellular data in Settings."))
+    #expect(
+      store.message
+        == String(
+          appLocalized:
+            "No internet connection. Check your connection and allow Lycoris to use Wi-Fi or cellular data in Settings.",
+          table: "Network"))
   }
 
   private func waitFor(_ condition: () async -> Bool) async throws {
@@ -127,7 +132,8 @@ struct AccountTests {
     await api.failLogout()
     await store.logout()
     #expect(store.user?.publicId == "account-a")
-    #expect(store.message == String(appLocalized: "Logout could not be confirmed. Please try again."))
+    #expect(
+      store.message == String(appLocalized: "Logout could not be confirmed. Please try again."))
   }
 
   @Test func identityRecheckPreventsWriteAsAnotherAccount() async {

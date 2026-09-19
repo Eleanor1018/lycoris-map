@@ -451,9 +451,10 @@ final class AccountStore {
       case .notConnectedToInternet, .dataNotAllowed:
         return String(
           appLocalized:
-            "No internet connection. Check your connection and allow Lycoris to use Wi-Fi or cellular data in Settings.")
+            "No internet connection. Check your connection and allow Lycoris to use Wi-Fi or cellular data in Settings.",
+          table: "Network")
       case .timedOut:
-        return String(appLocalized: "The request timed out. Please try again.")
+        return String(appLocalized: "The request timed out. Please try again.", table: "Network")
       default: break
       }
     }
