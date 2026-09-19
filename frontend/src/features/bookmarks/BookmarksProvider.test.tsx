@@ -70,3 +70,63 @@ it('preserves the target-language title while a bookmark from another language i
         resolve()
     })
 })
+
+it('keeps the first-save state when the ids read is still unresolved, and ignores a late stale read', async () => {
+    let finishStaleIds!: (ids: number[]) => void
+    let calls = 0
+    vi.spyOn(api, 'fetchMe').mockResolvedValue({
+        publicId: 'A',
+        username: 'A',
+        email: null,
+        nickname: null,
+        pronouns: null,
+        signature: null,
+        avatarUrl: null,
+    })
+    vi.spyOn(places, 'readFavorites').mockImplementation(() => {
+        calls += 1
+        // The read in flight when the write starts hangs; the authoritative
+        // re-read after invalidation returns the post-write server state.
+        return calls === 1
+            ? new Promise((resolve) => {
+                  finishStaleIds = resolve
+              })
+            : Promise.resolve([5])
+    })
+    vi.spyOn(places, 'readFavoriteDetails').mockResolvedValue([])
+    vi.spyOn(places, 'setFavorite').mockResolvedValue(undefined)
+    let latest: ReturnType<typeof useBookmarks> | undefined
+    function Harness() {
+        const bookmarks = useBookmarks('en', true)
+        latest = bookmarks
+        return (
+            <button
+                disabled={!bookmarks.scope}
+                onClick={() => {
+                    void bookmarks.controller.toggle(
+                        syntheticPlace({ id: 5 }),
+                        true,
+                        'en',
+                        bookmarks.scope!,
+                    )
+                }}
+            >
+                Save
+            </button>
+        )
+    }
+    render(
+        <AppProviders>
+            <Harness />
+        </AppProviders>,
+    )
+    await waitFor(() => expect(screen.getByRole('button')).toBeEnabled())
+    fireEvent.click(screen.getByRole('button'))
+    await waitFor(() => expect(latest?.saved.has(5)).toBe(true))
+    // The stale pre-write read resolves with data that never saw the write; it
+    // must not erase the confirmed state.
+    await act(async () => {
+        finishStaleIds([])
+    })
+    await waitFor(() => expect(latest?.saved.has(5)).toBe(true))
+})
