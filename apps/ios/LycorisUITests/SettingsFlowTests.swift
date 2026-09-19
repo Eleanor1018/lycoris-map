@@ -24,6 +24,37 @@ import XCTest
     XCTAssertTrue(app.collectionViews["map.panel.content"].waitForExistence(timeout: 5))
   }
 
+  func testVoiceSearchExpandsTheExistingPanelAndKeepsKeyboardSearchInPlace() {
+    let app = launch(englishOverride: true)
+    let handle = app.buttons["map.panel.handle"]
+    XCTAssertEqual(handle.value as? String, "Collapsed")
+    app.buttons["map.voice"].tap()
+    let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+    let deny = springboard.buttons.matching(
+      NSPredicate(
+        format: "label IN %@", ["Don’t Allow", "Don't Allow", "不允许"])
+    ).firstMatch
+    if deny.waitForExistence(timeout: 2) { deny.tap() }
+    XCTAssertTrue(app.staticTexts["voice.status"].waitForExistence(timeout: 5))
+    XCTAssertEqual(handle.value as? String, "Expanded")
+    XCTAssertTrue(app.textFields["map.search"].isHittable)
+    XCTAssertFalse(app.navigationBars["Voice search"].exists)
+    attach(app, "voice-inside-expanded-search")
+    app.buttons["voice.keyboard"].tap()
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+    let search = app.textFields["map.search"]
+    search.typeText("hospital")
+    XCTAssertEqual(search.value as? String, "hospital")
+    XCTAssertFalse(app.staticTexts["voice.status"].exists)
+    app.buttons["map.voice"].tap()
+    XCTAssertTrue(app.buttons["voice.cancel"].waitForExistence(timeout: 5))
+    app.buttons["voice.cancel"].tap()
+    XCTAssertTrue(app.staticTexts["voice.status"].waitForNonExistence(timeout: 5))
+    XCTAssertEqual(handle.value as? String, "Expanded")
+    handle.tap()
+    XCTAssertEqual(handle.value as? String, "Collapsed")
+  }
+
   func testLanguageAndRadiusPersistAndUseNativeSettings() {
     let app = launch()
     expand(app)

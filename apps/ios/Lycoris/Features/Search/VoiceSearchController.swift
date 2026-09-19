@@ -4,7 +4,9 @@ import Observation
 
 @MainActor @Observable
 final class VoiceSearchController {
-  enum State: Equatable { case idle, authorizing, recording, ready, unsupported, denied, failed }
+  enum State: Equatable {
+    case idle, authorizing, recording, finishing, ready, unsupported, denied, failed
+  }
   private(set) var state: State = .idle
   private(set) var transcript = ""
   private var engine: AVAudioEngine?
@@ -16,6 +18,7 @@ final class VoiceSearchController {
   private var generation = UUID()
 
   func start(language: AppLanguage) async {
+    guard !Task.isCancelled else { return }
     stop()
     transcript = ""
     let token = generation
@@ -88,11 +91,27 @@ final class VoiceSearchController {
       timeout = Task { [weak self] in
         try? await Task.sleep(for: .seconds(55))
         guard !Task.isCancelled, let self, self.generation == token else { return }
-        self.stop()
+        self.finish()
       }
     } catch {
       stop()
       state = .failed
+    }
+  }
+
+  /// End audio, but allow the recognizer to deliver the last buffered words.
+  func finish() {
+    guard state == .recording else { return }
+    state = .finishing
+    stopCapture()
+    request?.endAudio()
+    recognition?.finish()
+    timeout?.cancel()
+    let token = generation
+    timeout = Task { [weak self] in
+      do { try await Task.sleep(for: .seconds(2)) } catch { return }
+      guard let self, self.generation == token else { return }
+      self.stop()
     }
   }
 
@@ -109,20 +128,24 @@ final class VoiceSearchController {
     generation = UUID()
     timeout?.cancel()
     timeout = nil
+    stopCapture()
+    request?.endAudio()
+    recognition?.cancel()
+    recognition = nil
+    recognizer = nil
+    request = nil
+    if state == .recording || state == .authorizing || state == .finishing {
+      state = transcript.isEmpty ? .idle : .ready
+    }
+  }
+
+  private func stopCapture() {
     if let engine {
       engine.stop()
       if hasTap { engine.inputNode.removeTap(onBus: 0) }
     }
     hasTap = false
     engine = nil
-    request?.endAudio()
-    recognition?.cancel()
-    recognition = nil
-    recognizer = nil
-    request = nil
     try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-    if state == .recording || state == .authorizing {
-      state = transcript.isEmpty ? .idle : .ready
-    }
   }
 }

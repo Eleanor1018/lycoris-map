@@ -1,3 +1,4 @@
+import AVFoundation
 import MapKit
 import SwiftUI
 
@@ -7,7 +8,9 @@ struct MapScreen: View {
   @State private var locationDenied = false
   @State private var awaitsLocationAuthorization = false
   @State private var linkError = false
-  @State private var focusKeyboardAfterDismiss = false
+  @State private var voice = VoiceSearchController()
+  @State private var showsVoiceSearch = false
+  @State private var voiceTask: Task<Void, Never>?
   @Environment(\.openURL) private var openURL
   @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -222,10 +225,6 @@ struct MapScreen: View {
     .sheet(
       item: $modal,
       onDismiss: {
-        if focusKeyboardAfterDismiss {
-          focusKeyboardAfterDismiss = false
-          isSearchFocused = true
-        }
         pendingBookmark = nil
         bookmarkIntent = UUID()
         contributionIntent = nil
@@ -245,18 +244,6 @@ struct MapScreen: View {
       case .mapAppearance(let center):
         MapAppearanceSheet(preferences: preferences, center: center)
           .navigationTransition(.zoom(sourceID: "map-appearance", in: appearanceTransition))
-      case .voice:
-        VoiceSearchSheet(
-          language: preferences.language,
-          onSearch: { text in
-            modal = nil
-            query = text
-            movePanel(to: .expanded)
-          },
-          onKeyboard: {
-            focusKeyboardAfterDismiss = true
-            modal = nil
-          })
       case .link(let link):
         PlaceLinkSheet(link: link, account: account) { marker, authenticated in
           guard case .link(let current) = modal, current == link else { return }
@@ -305,7 +292,10 @@ struct MapScreen: View {
     } message: {
       Text("Check the link and close any open sheet before trying again.")
     }
-    .onChange(of: preferences.language) { _, _ in applyPreferences() }
+    .onChange(of: preferences.language) { _, _ in
+      cancelVoiceSearch()
+      applyPreferences()
+    }
     .onChange(of: preferences.radius) { _, _ in applyPreferences() }
     .onChange(of: preferences.searchType) { _, _ in applyPreferences() }
     .onChange(of: location.isAuthorized) { _, authorized in
@@ -327,6 +317,11 @@ struct MapScreen: View {
       }
     }
     .onChange(of: scenePhase) { _, phase in
+      if phase == .background
+        || (phase == .inactive && (voice.state == .recording || voice.state == .finishing))
+      {
+        cancelVoiceSearch()
+      }
       guard !store.isPreview else { return }
       contribution.setActive(phase == .active)
       if phase == .active {
@@ -383,11 +378,37 @@ struct MapScreen: View {
       }
     }
     .onDisappear {
+      cancelVoiceSearch()
       store.stop()
       connectivity.stop()
     }
     .onChange(of: isSearchFocused) { _, focused in
-      if focused { movePanel(to: .expanded) }
+      if focused {
+        cancelVoiceSearch()
+        movePanel(to: .expanded)
+      }
+    }
+    .onChange(of: modal?.id) { _, modalID in
+      if modalID != nil { cancelVoiceSearch() }
+    }
+    .onChange(of: voice.transcript) { _, text in
+      if showsVoiceSearch { query = text }
+    }
+    .onChange(of: voice.state) { _, state in
+      if showsVoiceSearch && state == .ready { finishVoiceSearch() }
+    }
+    .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) {
+      _ in cancelVoiceSearch()
+    }
+    .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) {
+      notification in
+      let raw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+      if voice.state == .recording,
+        raw == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue
+          || raw == AVAudioSession.RouteChangeReason.noSuitableRouteForCategory.rawValue
+      {
+        cancelVoiceSearch()
+      }
     }
     .onReceive(
       NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
@@ -452,17 +473,28 @@ struct MapScreen: View {
             if store.isPreview { showsUnavailableAction = true } else { modal = .account(.profile) }
           },
           onVoiceSearch: {
-            isSearchFocused = false
-            modal = .voice
-          }
+            if showsVoiceSearch { finishVoiceSearch() } else { startVoiceSearch() }
+          }, voiceActive: showsVoiceSearch
         )
         .padding(.horizontal, 14)
         .padding(.bottom, detent == .collapsed ? 14 : detent == .nearby ? 7 : 11)
+
+        if showsVoiceSearch {
+          VoiceSearchControls(
+            voice: voice, onFinish: finishVoiceSearch, onRetry: startVoiceSearch,
+            onKeyboard: {
+              cancelVoiceSearch()
+              isSearchFocused = true
+            }, onCancel: cancelVoiceSearch
+          )
+          .padding(.horizontal, 14).padding(.bottom, 11)
+        }
 
         Group {
           if store.browse != nil || store.pendingNearby != nil {
             ScrollView {
               PlaceResultsView(store: store, onSelect: selectPlace) {
+                cancelVoiceSearch()
                 query = ""
                 store.closeResults()
               }
@@ -555,6 +587,7 @@ struct MapScreen: View {
   }
 
   private func selectPlace(_ place: PlacePresentation) {
+    cancelVoiceSearch()
     if let marker = (account.bookmarks + account.created).first(where: { String($0.id) == place.id }
     ) {
       selectAccountPlace(marker)
@@ -569,6 +602,7 @@ struct MapScreen: View {
   }
 
   private func showNearby(_ category: PlaceCategory) {
+    cancelVoiceSearch()
     account.closeDetail()
     query = ""
     let token = store.nearby(category)
@@ -628,7 +662,10 @@ struct MapScreen: View {
   }
 
   private func movePanel(to newDetent: MapPanelDetent) {
-    if newDetent != .expanded { isSearchFocused = false }
+    if newDetent != .expanded {
+      cancelVoiceSearch()
+      isSearchFocused = false
+    }
     withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.86)) {
       if newDetent == .collapsed {
         store.closeDetail()
@@ -639,6 +676,7 @@ struct MapScreen: View {
   }
 
   private func selectAccountPlace(_ marker: Marker) {
+    cancelVoiceSearch()
     isSearchFocused = false
     account.select(marker)
     store.focusAccountPlace(store.presentation(marker))
@@ -693,6 +731,7 @@ struct MapScreen: View {
   }
 
   private func beginContribution(_ intent: ContributionIntent) {
+    cancelVoiceSearch()
     editLoadTask?.cancel()
     guard !store.isPreview else {
       showsUnavailableAction = true
@@ -753,6 +792,44 @@ struct MapScreen: View {
       contributionError = String(appLocalized: "Could not save the contribution on this device.")
     }
   }
+
+  private func startVoiceSearch() {
+    cancelVoiceSearch()
+    voice = VoiceSearchController()
+    account.closeDetail()
+    store.closeDetail()
+    isSearchFocused = false
+    query = ""
+    showsVoiceSearch = true
+    movePanel(to: .expanded)
+    let controller = voice
+    let language = preferences.language
+    voiceTask = Task {
+      guard !Task.isCancelled else { return }
+      await controller.start(language: language)
+    }
+  }
+
+  private func finishVoiceSearch() {
+    guard showsVoiceSearch else { return }
+    if voice.state == .recording {
+      voice.finish()
+      return
+    }
+    if voice.state == .finishing { return }
+    let text = voice.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+    cancelVoiceSearch()
+    query = text
+    if !text.isEmpty { store.search(text, debounce: false) }
+  }
+
+  private func cancelVoiceSearch() {
+    guard showsVoiceSearch || voiceTask != nil else { return }
+    showsVoiceSearch = false
+    voiceTask?.cancel()
+    voiceTask = nil
+    voice.stop()
+  }
 }
 
 private enum ContributionIntent {
@@ -766,7 +843,6 @@ private enum MapModal: Identifiable {
   case contribution
   case settings(SettingsDestination)
   case mapAppearance(GeoPoint?)
-  case voice
   case link(PlaceLink)
   var id: String {
     switch self {
@@ -775,7 +851,6 @@ private enum MapModal: Identifiable {
     case .contribution: "contribution"
     case .settings(let destination): "settings-\(destination.rawValue)"
     case .mapAppearance: "map-appearance"
-    case .voice: "voice"
     case .link(let link): "link-\(link.id)"
     }
   }
