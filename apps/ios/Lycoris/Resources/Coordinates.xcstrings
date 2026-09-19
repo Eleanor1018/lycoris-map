@@ -1,0 +1,39 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Map unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地图暂不可用"
+          }
+        }
+      }
+    },
+    "Connect to the internet and try again before choosing a map location.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请连接网络后重试，再选择地图位置。"
+          }
+        }
+      }
+    },
+    "This map location could not be verified. Please choose a nearby point.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法确认此位置的地图坐标，请选择附近的其他位置。"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

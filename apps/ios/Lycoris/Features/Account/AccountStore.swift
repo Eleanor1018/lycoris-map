@@ -23,6 +23,7 @@ final class AccountStore {
   private var libraryGeneration = UUID()
   private var detailGeneration = UUID()
   private var identityGeneration = UUID()
+  private var networkGeneration = 0
   private var libraryTask: Task<Void, Never>?
   private var detailTask: Task<Void, Never>?
   @ObservationIgnored var onPrivateDataInvalidated: (() -> Void)?
@@ -40,11 +41,17 @@ final class AccountStore {
 
   init(api: any AccountServing = AccountAPI()) { self.api = api }
 
+  func networkDidRecover() async {
+    networkGeneration += 1
+    await restore()
+  }
+
   func restore() async {
     guard !isBusy, !isChecking else { return }
     isChecking = true
     let token = epoch
     let generation = identityGeneration
+    let network = networkGeneration
     defer {
       isChecking = false
       hasChecked = true
@@ -57,6 +64,11 @@ final class AccountStore {
       reloadLibrary()
     } catch {
       guard token == epoch, generation == identityGeneration else { return }
+      if error is URLError, network != networkGeneration {
+        // Recovery may arrive just before this in-flight read reports failure.
+        Task { [weak self] in await self?.restore() }
+        return
+      }
       if (error as? AccountFailure)?.status == 401 {
         expire()
       } else {
@@ -433,6 +445,18 @@ final class AccountStore {
   private func failureMessage(_ error: Error) -> String {
     if error is SessionStorageFailure {
       return String(appLocalized: "Could not save your session securely. Please try again.")
+    }
+    if let error = error as? URLError {
+      switch error.code {
+      case .notConnectedToInternet, .dataNotAllowed:
+        return String(
+          appLocalized:
+            "No internet connection. Check your connection and allow Lycoris to use Wi-Fi or cellular data in Settings.",
+          table: "Network")
+      case .timedOut:
+        return String(appLocalized: "The request timed out. Please try again.", table: "Network")
+      default: break
+      }
     }
     return (error as? AccountFailure)?.message ?? AccountFailure(status: 0).message
   }

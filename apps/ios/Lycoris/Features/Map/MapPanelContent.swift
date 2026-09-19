@@ -30,6 +30,13 @@ struct MapPanelContent: View {
         .listRowInsets(EdgeInsets())
         .listRowBackground(Color.clear)
         .listRowSeparator(.hidden)
+      } header: {
+        // Grouped rows clip their corners even with a transparent background.
+        // Keep the heading outside that mask instead of padding the cards inward.
+        Text("Find Nearby").font(.title3.weight(.semibold)).textCase(nil)
+          .foregroundStyle(.primary)
+          .accessibilityAddTraits(.isHeader)
+          .listRowInsets(EdgeInsets(top: 0, leading: 6, bottom: 8, trailing: 6))
       }
       if showsSettings {
         if showsBookmarks || !bookmarks.isEmpty {
@@ -53,6 +60,7 @@ struct MapPanelContent: View {
         } header: {
           Text("Settings").font(.title3.weight(.semibold)).textCase(nil)
             .accessibilityAddTraits(.isHeader)
+            .listRowInsets(EdgeInsets(top: 0, leading: 6, bottom: 0, trailing: 6))
         }
       }
     }
@@ -68,8 +76,6 @@ struct MapPanelContent: View {
 
   private var nearbyCategories: some View {
     VStack(alignment: .leading, spacing: 0) {
-      Text("Find Nearby").font(.title3.weight(.semibold))
-        .padding(.horizontal, 6).padding(.bottom, 8).accessibilityAddTraits(.isHeader)
       if dynamicTypeSize.isAccessibilitySize {
         VStack(spacing: 12) {
           category(.toilet)

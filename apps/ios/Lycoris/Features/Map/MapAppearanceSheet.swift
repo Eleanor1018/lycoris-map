@@ -4,6 +4,7 @@ import SwiftUI
 struct MapAppearanceSheet: View {
   @Bindable var preferences: AppPreferences
   let center: GeoPoint?
+  var coordinateSpace: MapCoordinateSpace = .wgs84
   @Environment(\.dismiss) private var dismiss
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -21,16 +22,18 @@ struct MapAppearanceSheet: View {
               preferences.mapAppearance = appearance
             } label: {
               VStack(spacing: 8) {
-                MapAppearancePreview(appearance: appearance, center: center)
-                  .frame(height: dynamicTypeSize.isAccessibilitySize ? 100 : 92)
-                  .clipShape(.rect(cornerRadius: 16))
-                  .overlay {
-                    RoundedRectangle(cornerRadius: 16)
-                      .strokeBorder(
-                        preferences.mapAppearance == appearance
-                          ? Color.accentColor : Color.secondary.opacity(0.25),
-                        lineWidth: preferences.mapAppearance == appearance ? 3 : 1)
-                  }
+                MapAppearancePreview(
+                  appearance: appearance, center: center, coordinateSpace: coordinateSpace
+                )
+                .frame(height: dynamicTypeSize.isAccessibilitySize ? 100 : 92)
+                .clipShape(.rect(cornerRadius: 16))
+                .overlay {
+                  RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(
+                      preferences.mapAppearance == appearance
+                        ? Color.accentColor : Color.secondary.opacity(0.25),
+                      lineWidth: preferences.mapAppearance == appearance ? 3 : 1)
+                }
                 Text(appearance.title).font(.subheadline.weight(.medium))
                   .multilineTextAlignment(.center).foregroundStyle(.primary)
               }
@@ -62,6 +65,7 @@ struct MapAppearanceSheet: View {
 private struct MapAppearancePreview: View {
   let appearance: MapAppearance
   let center: GeoPoint?
+  let coordinateSpace: MapCoordinateSpace
   @Environment(\.colorScheme) private var colorScheme
   @Environment(\.displayScale) private var displayScale
   @State private var image: UIImage?
@@ -78,7 +82,11 @@ private struct MapAppearancePreview: View {
         }
       }
       .frame(width: geometry.size.width, height: geometry.size.height).clipped()
-      .task(id: SnapshotKey(size: geometry.size, colorScheme: colorScheme, scale: displayScale)) {
+      .task(
+        id: SnapshotKey(
+          size: geometry.size, colorScheme: colorScheme, scale: displayScale, space: coordinateSpace
+        )
+      ) {
         await loadPreview(size: geometry.size)
       }
     }
@@ -89,14 +97,17 @@ private struct MapAppearancePreview: View {
     let size: CGSize
     let colorScheme: ColorScheme
     let scale: CGFloat
+    let space: MapCoordinateSpace
   }
 
   private func loadPreview(size: CGSize) async {
     guard size.width > 0, size.height > 0 else { return }
+    let point = center ?? GeoPoint(latitude: 40.766, longitude: -74.077)!
+    guard let coordinate = coordinateSpace.coordinate(for: point) else { return }
     let options = MKMapSnapshotter.Options()
     options.preferredConfiguration = appearance.configuration()
     options.region = MKCoordinateRegion(
-      center: center?.coordinate ?? CLLocationCoordinate2D(latitude: 40.766, longitude: -74.077),
+      center: coordinate,
       latitudinalMeters: 1800, longitudinalMeters: 1800)
     // Match the cell exactly so the snapshot's native attribution is not cropped.
     options.size = size

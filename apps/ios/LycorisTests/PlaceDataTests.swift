@@ -150,6 +150,25 @@ actor DeferredMarkers: MarkerServing {
 
 @MainActor
 struct PlaceStoreTests {
+  @Test func networkRecoveryRetriesFailedReadsWithoutMovingTheMap() async throws {
+    let api = DeferredMarkers()
+    let store = PlaceStore(api: api)
+    store.search("fixture", debounce: false)
+    try await waitFor { await api.count() == 1 }
+    await api.finish(0, .failure(URLError(.notConnectedToInternet)))
+    try await waitFor { store.resultsState == .failed(.requestFailed) }
+    let focus = store.focus
+    store.retryFailedRequests()
+    try await waitFor { await api.count() == 2 }
+    store.retryFailedRequests()
+    await api.finish(1, .success([sampleMarker(1)]))
+    try await waitFor { store.resultsState == .loaded }
+    #expect(await api.count() == 2)
+    #expect(store.focus == focus && store.browse == .search("fixture"))
+    #expect(store.results.map(\.id) == [1])
+    store.stop()
+  }
+
   private func waitFor(_ condition: () async -> Bool) async throws {
     for _ in 0..<200 {
       if await condition() { return }

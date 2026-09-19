@@ -24,7 +24,7 @@ final class LocationProvider: NSObject, @MainActor CLLocationManagerDelegate {
       || manager.authorizationStatus == .authorizedAlways
   }
 
-  /// Only called from a location button or an explicit Nearby entry.
+  /// Refresh after returning from Settings as well as before a location request.
   func refreshAuthorization() {
     let status = manager.authorizationStatus
     isAuthorized = status == .authorizedWhenInUse || status == .authorizedAlways

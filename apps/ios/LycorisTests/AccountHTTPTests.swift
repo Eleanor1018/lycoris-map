@@ -84,8 +84,10 @@ struct AccountHTTPTests {
     #expect(config.httpShouldSetCookies)
     #expect(config.httpCookieStorage != nil)
     #expect(config.urlCache == nil && config.urlCredentialStorage == nil)
+    #expect(!config.waitsForConnectivity && config.timeoutIntervalForResource == 60)
     let publicConfig = MarkerAPI().session.configuration
     #expect(!publicConfig.httpShouldSetCookies && publicConfig.httpCookieStorage == nil)
+    #expect(publicConfig.waitsForConnectivity && publicConfig.timeoutIntervalForResource == 60)
   }
 
   @Test func privateMarkerFlagsSurviveDecodingAndFavoriteMayHaveEmptyBody() async throws {

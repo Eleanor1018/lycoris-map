@@ -4,6 +4,31 @@ import Testing
 @testable import Lycoris
 
 struct MapViewportTests {
+  @MainActor @Test func categoryPinsKeepTheirShapeAndRefreshWhenAnExistingPlaceChangesCategory()
+    throws
+  {
+    let map = MKMapView()
+    let coordinator = NativeMapView(topInset: 0, bottomInset: 0).makeCoordinator()
+    let point = try #require(sampleMarker(1).point)
+    let annotation = NativeMapView.PlaceAnnotation(
+      place: PlacePresentation(marker: sampleMarker(1), origin: nil, located: false, baseURL: nil),
+      coordinate: point.coordinate)
+    let view = try #require(coordinator.mapView(map, viewFor: annotation))
+    var rendered: Set<Data> = []
+    for category in PlaceCategory.allCases {
+      annotation.place = PlacePresentation(
+        marker: sampleMarker(1, category: category),
+        origin: nil, located: false, baseURL: nil)
+      coordinator.configure(view, for: annotation)
+      let image = try #require(view.image)
+      #expect(image.size == CGSize(width: 27, height: 43))
+      #expect(view.centerOffset == CGPoint(x: 0, y: -17.5))
+      #expect(view.accessibilityIdentifier == "map.pin.1")
+      rendered.insert(try #require(image.pngData()))
+    }
+    #expect(rendered.count == 4)
+  }
+
   @MainActor @Test(arguments: [0.0, 35.0, 170.0])
   func locationSelectionUsesTheTouchedCoordinateAndSurvivesCameraChanges(heading: Double) throws {
     let map = MKMapView(frame: CGRect(x: 0, y: 0, width: 402, height: 874))

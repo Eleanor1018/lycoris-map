@@ -4,7 +4,7 @@ Native SwiftUI application, Apple Maps / MapKit, iPhone, iOS 26+. Open `Lycoris.
 
 ## Current scope: I6
 
-The Figma map shell now reads public places from the Rust backend: viewport markers, debounced search, three Nearby categories, marker selection and real details. Core Location is requested from the location/Nearby controls; denied or unavailable location falls back to the explicitly labelled map center. Place sharing opens the native share sheet with a Lycoris place identifier link, and Navigate opens walking directions in Apple Maps. Shared links contain no coordinates, user origin or credentials.
+The Figma map shell now reads public places from the Rust backend: viewport markers, debounced search, three Nearby categories, marker selection and real details. Core Location is requested once when the live map first becomes active, and from the location/Nearby controls; denied or unavailable location falls back to the explicitly labelled map center. Place sharing opens the native share sheet with a Lycoris place identifier link, and Navigate opens walking directions in Apple Maps. Shared links contain no coordinates, user origin or credentials.
 
 I4 connects account-password login and registration, cookie session restoration, logout, profile fields, native photo selection and avatar upload, password changes, Bookmarks and My Places. Login and registration use fully native SwiftUI navigation and grouped forms, following the user’s updated preference. Profile and library screens also use native Form/List. I5 adds native contribution and editing forms, map location selection, durable drafts and resumable photo proposals. I6 adds persistent language/radius settings, native source/about screens, on-device voice search, place links and accessibility refinements. No server deployment is performed.
 
@@ -14,7 +14,7 @@ In Xcode's Run scheme arguments, add `-lycoris-preview` followed by one of `coll
 
 Fixture text, photo and coordinates are only visual reference data. The Figma toilet title, decorative photo and New Jersey map coordinate do not describe a verified real place. See `docs/i3-acceptance.md` and `docs/i4-acceptance.md` for API behavior and validation. Explicit visual previews disable networking and real sharing/navigation.
 
-The initial map camera uses the public New Jersey area shown in the design. It is not the user's current location. Startup does not request location or start the user-location layer; that begins only after a location/Nearby action.
+The initial map camera uses the public New Jersey area shown in the design. It is not the user's current location. Startup requests When In Use location permission and centers on the first valid fix. Denial or an unavailable fix quietly leaves browsing usable; explicit location actions retain their retry/settings feedback. Foreground transitions do not repeat a completed startup request or recenter the map. Granting previously denied location access in Settings resumes the initial fix. Design previews never request location.
 
 ## Toolchain and build
 
@@ -39,7 +39,24 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
 
 Simulator builds do not need a signing team, but must keep local ad-hoc signing enabled for Keychain access; do not use `CODE_SIGNING_ALLOWED=NO` for account tests. A physical device requires the owner's Xcode signing team. The bundle ID is currently `com.lycoris.maps`; confirm release identity when preparing distribution.
 
+The app icon reuses the original flower artwork from `frontend-old/public/LycorisIcon.png`. `Resources/Assets.xcassets/AppIcon.appiconset` contains its 1024×1024 sRGB PNG, scaled from the 704×704 original and composited on white without an alpha channel. `Base.xcconfig` selects this asset for every build configuration; Xcode derives the smaller device icons. This is the existing artwork, not a newly generated design.
+
+`Resources/PrivacyInfo.xcprivacy` declares the required-reason UserDefaults API with reason `CA92.1`: `AppPreferences` reads and writes this app's own language, search radius/category and map appearance preferences. The synchronized app folder includes this manifest in the app bundle. This declaration covers required-reason API use; App Store privacy disclosures still need to reflect the app and backend's actual data handling. See [Apple's approved reasons](https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api).
+
+### First TestFlight build
+
+1. Create or select the App Store Connect app record with bundle ID `com.lycoris.maps`. In Xcode, select the paid developer team and automatic signing for the Lycoris target.
+2. Select the **Lycoris** scheme and **Any iOS Device (arm64)**, then **Product → Archive**. The shared scheme archives Release, using the production HTTPS API. Simulator builds cannot be distributed through TestFlight.
+3. In **Window → Organizer → Archives**, select the archive and **Validate App**. After resolving validation errors, choose **Distribute App → TestFlight & App Store**. Keep automatic signing, symbol upload and build-number management enabled. This uploads a build; App Store publication remains a separate action.
+4. Wait for processing under the app's **TestFlight** tab, and resolve any export-compliance questions based on the app's actual encryption use. Create an internal testing group, add the processed build and your own eligible App Store Connect account, and install from its invitation using TestFlight on an iPhone running iOS 26 or later.
+
+Internal testing does not require the App Store product-page screenshots or preview video. External testing is a separate step involving TestFlight App Review. Increment the build number for subsequent uploads, or allow Xcode to manage it. Local unsigned Release compilation is not a signed archive, upload validation or a successful TestFlight installation.
+
+References: [Xcode distribution](https://developer.apple.com/documentation/xcode/distributing-your-app-for-beta-testing-and-releases), [internal testers](https://developer.apple.com/help/app-store-connect/test-a-beta-version/add-internal-testers).
+
 ## Service address
+
+Entering the live app starts the account-session GET and public map GETs immediately, without a login tap. These requests allow iOS to present its per-app network prompt where applicable. Public map requests wait for connectivity with a 60-second total request bound; account requests fail promptly so a denied network cannot trap the sign-in sheet; the app observes connection recovery and retries failed public reads and account-session checks. It does not replay login/register/profile writes. Previously denied system permissions cannot be re-granted by application code. Offline account errors now explain checking Wi-Fi/cellular access in Settings.
 
 Normal Xcode Run (Debug) and Release use `https://api.lycoris-map.com`. The shared address is in `Config/Base.xcconfig`; the same HTTPS service works from the simulator and a physical iPhone. API calls and `/uploads` media use this origin. An unconfigured address still produces an unavailable state, and Release rejects HTTP.
 
@@ -60,7 +77,7 @@ The `$()` escape preserves the double slash in an xcconfig URL. Remove the overr
 - `Core/API`: environment configuration, public DTOs, transport and HTTP diagnostics.
 - `Core/Preferences`, `Core/Navigation`: validated preferences and strict place-link parsing.
 - `Features/Settings`, `Features/Search`: native settings and device-only voice input.
-- `Core/Location`: WGS84 values, viewport splitting and on-demand Core Location.
+- `Core/Location`: canonical WGS84 values, calibrated MapKit coordinate boundaries, viewport splitting and startup/on-demand Core Location.
 - `Features/Places`: shared rows, real details, public images and native share sheet.
 - `Features/Account`: session and private data lifecycle, native auth/profile/password/library screens, and image encoding.
 - `Features/Contributions`: native form, protected draft journal, marker writes and resumable photo protocol.
@@ -69,9 +86,15 @@ The `$()` escape preserves the double slash in an xcconfig URL. Remove the overr
 - `LycorisUITests`: keyboard/drag, design previews, public browsing and isolated synthetic account acceptance flows.
 - `docs`: design references, gaps and acceptance evidence.
 
-The system sheet was prototyped first. On iOS 26.5 its largest detent becomes edge-to-edge; the design keeps 10 points on both sides. `PanelLayout` therefore owns only the custom container's geometry. SwiftUI controls, MapKit and system materials remain native. The map is not conditionally removed or keyed by panel state.
+`PanelLayout` owns the floating collapsed container and its continuous transition to edge-to-edge Nearby and Expanded states, following the user's latest iOS refinements. Section headings share the same leading alignment. SwiftUI controls, MapKit and system materials remain native. The map is not conditionally removed or keyed by panel state.
 
 `NativeMapView` is a small `MKMapView` bridge. Public layout margins place attribution above the panel's lowest resting position. It stays fixed while the panel moves, as recommended by [Apple's Maps guidance](https://developer.apple.com/design/human-interface-guidelines/maps/); expanded panels temporarily cover it. When device geometry or text size changes those margins, MapKit coordinate conversions preserve the geographic point under the screen center, camera distance and heading. I1 uses a flat map (pitch gestures disabled); rotation, pan and zoom remain native.
+
+After startup or a location/Nearby action grants location access, compass-capable devices show a directional beam around the native user-location dot. `DirectionalUserLocationView` preserves MapKit's dot and accuracy circle and adds only an Apple Maps–style gradient beam. This is our rendering: public MapKit exposes its heading behavior through [followWithHeading](https://developer.apple.com/documentation/mapkit/mkusertrackingmode/followwithheading), which also follows and rotates the camera. Browsing in Lycoris stays free; moving the device does not recenter or rotate the map.
+
+`UserHeadingProvider` starts only while the location-enabled map is in an active scene and attached to a window, with authorization and available compass hardware. It stops both sensor streams when inactive, detached or unauthorized. Its separate Core Location manager runs coarse location updates because [true heading requires location updates](https://developer.apple.com/documentation/corelocation/clheading/trueheading); it does not change Nearby's captured origin. Valid true north takes precedence over magnetic north; invalid bearings hide the beam, and lower accuracy widens it. Interface orientation accounts for landscape windows, camera rotation is subtracted, and animation crosses north by the shortest turn. Reduce Motion disables this interpolation. The simulator and unsupported hardware keep the ordinary dot without inventing a heading.
+
+Heading acceptance (2026-09-17): five `UserHeadingTests` cover bearings, orientation, availability/permission gates, foreground/teardown and invalid/outdated callbacks. Existing `MapViewportTests` and `LivePlaceTests.testSimulatedLocationAnchorsNearby` passed. Separate temporary rendering fixtures were inspected for north, east, a rotated map, lower accuracy and no heading; no synthetic compass input is shipped. Real magnetometer behavior, calibration and motion smoothness still require a physical iPhone or supported iPad. The existing iPhone-targeted app configuration is unchanged.
 
 Future phases replace prototype content behind this container. Refer to `docs/design-mapping.md` before adding screens that are not yet present in the iOS Figma page.
 
@@ -111,14 +134,18 @@ All contribution requests share the account mutation gate, verify `/api/me`, and
 
 ## I6 settings and system behavior
 
-Settings uses a native inset-grouped List with system separators and 44pt rows at standard text sizes; accessibility text grows vertically. Its five rows open native Form sheets. English / Simplified Chinese take effect immediately in the interface and API requests and persist across launches. Model-derived strings use the selected localization bundle too. Nearby defaults to 1000m, offers 1000/2500m presets and accepts a custom integer from 1 to 50,000m. Language/radius changes invalidate older requests while preserving the current map camera and the captured Nearby center. Existing contribution drafts retain their content language.
+Settings uses a native inset-grouped List with system separators and 44pt rows at standard text sizes; accessibility text grows vertically. Its five rows open native Form sheets. English / Simplified Chinese take effect immediately in the interface and API requests and persist across launches. Model-derived strings use the selected localization bundle too. Nearby defaults to 1000m. Searching Range contains one native numeric field with an m suffix; existing values are preserved, and edits save when input finishes or the sheet closes. Empty or out-of-range input keeps the last saved value; the accepted range remains 1 to 50,000m. Language/radius changes invalidate older requests while preserving the current map camera and the captured Nearby center. Existing contribution drafts retain their content language.
 
-Search Type persists All / Accessible Toilets / Nursing Rooms / Medical Institutions. It filters keyword results, including confirmed voice-search text, using the latest selection. The current Rust search endpoint returns the complete, unpaginated result set and does not accept a category parameter, so the store keeps the original response and derives filtered results without another request. All includes custom categories. Explicit Nearby categories and viewport loading keep their own behavior; changing the type during an in-flight search cannot restore an older selection.
+Search Type persists All / Accessible Toilets / Nursing Rooms / Medical Institutions. It filters keyword results, including dictated voice-search text, using the latest selection. The current Rust search endpoint returns the complete, unpaginated result set and does not accept a category parameter, so the store keeps the original response and derives filtered results without another request. All includes custom categories. Explicit Nearby categories and viewport loading keep their own behavior; changing the type during an in-flight search cannot restore an older selection.
 
 The map icon opens a compact native Map Style sheet with a system zoom transition from the button. Explore uses Apple's standard map; Satellite uses Apple's hybrid imagery with road labels. Both preserve the existing map instance, camera and Lycoris places, and the choice persists. Native MapKit snapshots preview the current area. Larger accessibility text uses a scrollable single-column layout. The Settings map-source entry continues to identify Apple Maps.
 
-The microphone opens native voice search. Recording requires both speech and microphone permission and an available on-device recognizer. Audio is not sent to a speech server; only confirmed search text reaches the normal search endpoint. Unsupported devices offer the keyboard. Dismissal, backgrounding, interruptions and input loss stop recording and invalidate pending callbacks; a session ends after at most 55 seconds. Returning from Settings never silently restarts the microphone: Retry explicitly checks permissions again.
+The microphone expands the existing map search panel, just like focusing the text field; it does not open a separate sheet. Native recording controls stay in that panel, and recognized text fills the same search field and debounced result list. Finishing recognition leaves the results in place; switching to the keyboard preserves the current text. Recording requires both speech and microphone permission and an available on-device recognizer. Audio stays on device; dictated search text is sent to the normal search endpoint as it changes, like typed text. Unsupported devices offer the keyboard. Closing/collapsing search, selecting a result or category, opening a sheet, backgrounding, interruptions and input loss stop recording and invalidate pending callbacks; recording ends after at most 55 seconds, with up to 2 seconds for buffered final recognition. Returning from Settings never silently restarts the microphone: Retry explicitly checks permissions again.
 
 Place links accept only the registered scheme/host and a positive Int64 ID. Unknown sources, duplicate parameters, credentials, fragments and malformed IDs are rejected. Optional `lang=en|zh` is accepted for compatibility, but the recipient's chosen language takes precedence. Public reads are cookie-free; a public 404 may fall back to a verified, owner/epoch-scoped account read. Private details/photos remain in AccountStore. Dismissed or superseded link sheets cannot open late results. An already-open sheet or location selection must be closed before opening a link.
 
 VoiceOver headers, detail focus, refreshed annotation labels, 44pt touch targets, accessibility-size layouts, opaque panels under Reduce Transparency, and the existing Reduce Motion behavior support system preferences. Foreground checks refresh location authorization and remove revoked location references. See `docs/i6-acceptance.md` for tests and remaining real-device checks.
+
+## Coordinate alignment
+
+MapKit coordinates are calibrated against a fixed public landmark before interpreting mainland map picks. API/storage values stay WGS84; display, picking and viewport boundaries are handled explicitly. See [the measured control-point comparison and failure behavior](docs/coordinate-alignment.md). Map pins use the Web category palette: toilet blue, nursing orange, medical green, and other yellow; their visible tips anchor to the actual coordinates.

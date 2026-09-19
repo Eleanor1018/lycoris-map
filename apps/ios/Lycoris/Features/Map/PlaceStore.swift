@@ -45,6 +45,7 @@ final class PlaceStore {
   private var browseGeneration = UUID()
   private var detailGeneration = UUID()
   private var locationGeneration = UUID()
+  private var networkGeneration = 0
 
   func updatePreferences(language: String, radius: Int, searchType: SearchType = .all) {
     self.searchType = searchType
@@ -133,6 +134,7 @@ final class PlaceStore {
     viewportGeneration = generation
     viewportState = .loading
     let language = language
+    let network = networkGeneration
     viewportTask = Task { [weak self, api] in
       do {
         if debounce { try await Task.sleep(for: .milliseconds(250)) }
@@ -147,6 +149,10 @@ final class PlaceStore {
         self.viewportState = .loaded
       } catch {
         guard !Task.isCancelled, let self, generation == self.viewportGeneration else { return }
+        if error is URLError, network != self.networkGeneration {
+          self.viewportChanged(viewport, debounce: false)
+          return
+        }
         self.viewportMarkers = []
         self.viewportState = .failed(self.failureReason(error))
       }
@@ -236,6 +242,7 @@ final class PlaceStore {
     detailGeneration = generation
     detailState = .loading
     let language = language
+    let network = networkGeneration
     detailTask = Task { [weak self, api] in
       do {
         let marker = try await api.detail(id: id, language: language)
@@ -246,6 +253,10 @@ final class PlaceStore {
         self.detailState = .loaded
       } catch {
         guard !Task.isCancelled, let self, generation == self.detailGeneration else { return }
+        if error is URLError, network != self.networkGeneration {
+          self.loadDetail(id)
+          return
+        }
         let failure = self.failureReason(error)
         self.detailState = .failed(failure)
         if failure == .unavailable {
@@ -300,6 +311,20 @@ final class PlaceStore {
     if let id = selectedPlace.flatMap({ Int64($0.id) }) { loadDetail(id) }
   }
 
+  /// Retry safe reads after a network grant/reconnection without moving the camera.
+  func networkDidRecover() {
+    networkGeneration += 1
+    retryFailedRequests()
+  }
+
+  func retryFailedRequests() {
+    if case .failed(.requestFailed) = viewportState, let viewport {
+      viewportChanged(viewport, debounce: false)
+    }
+    if case .failed(.requestFailed) = resultsState { retryResults() }
+    if case .failed(.requestFailed) = detailState { retryDetail() }
+  }
+
   func stop() {
     viewportTask?.cancel()
     browseTask?.cancel()
@@ -320,6 +345,7 @@ final class PlaceStore {
     unfilteredResults = []
     resultsState = .loading
     let language = language
+    let network = networkGeneration
     browseTask = Task { [weak self, api] in
       do {
         if debounce { try await Task.sleep(for: .milliseconds(300)) }
@@ -330,6 +356,10 @@ final class PlaceStore {
         self.resultsState = .loaded
       } catch {
         guard !Task.isCancelled, let self, generation == self.browseGeneration else { return }
+        if error is URLError, network != self.networkGeneration {
+          self.loadResults(query)
+          return
+        }
         self.resultsState = .failed(self.failureReason(error))
       }
     }

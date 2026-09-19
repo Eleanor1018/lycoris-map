@@ -24,6 +24,37 @@ import XCTest
     XCTAssertTrue(app.collectionViews["map.panel.content"].waitForExistence(timeout: 5))
   }
 
+  func testVoiceSearchExpandsTheExistingPanelAndKeepsKeyboardSearchInPlace() {
+    let app = launch(englishOverride: true)
+    let handle = app.buttons["map.panel.handle"]
+    XCTAssertEqual(handle.value as? String, "Collapsed")
+    app.buttons["map.voice"].tap()
+    let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+    let deny = springboard.buttons.matching(
+      NSPredicate(
+        format: "label IN %@", ["Don’t Allow", "Don't Allow", "不允许"])
+    ).firstMatch
+    if deny.waitForExistence(timeout: 2) { deny.tap() }
+    XCTAssertTrue(app.staticTexts["voice.status"].waitForExistence(timeout: 5))
+    XCTAssertEqual(handle.value as? String, "Expanded")
+    XCTAssertTrue(app.textFields["map.search"].isHittable)
+    XCTAssertFalse(app.navigationBars["Voice search"].exists)
+    attach(app, "voice-inside-expanded-search")
+    app.buttons["voice.keyboard"].tap()
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+    let search = app.textFields["map.search"]
+    search.typeText("hospital")
+    XCTAssertEqual(search.value as? String, "hospital")
+    XCTAssertFalse(app.staticTexts["voice.status"].exists)
+    app.buttons["map.voice"].tap()
+    XCTAssertTrue(app.buttons["voice.cancel"].waitForExistence(timeout: 5))
+    app.buttons["voice.cancel"].tap()
+    XCTAssertTrue(app.staticTexts["voice.status"].waitForNonExistence(timeout: 5))
+    XCTAssertEqual(handle.value as? String, "Expanded")
+    handle.tap()
+    XCTAssertEqual(handle.value as? String, "Collapsed")
+  }
+
   func testLanguageAndRadiusPersistAndUseNativeSettings() {
     let app = launch()
     expand(app)
@@ -33,7 +64,8 @@ import XCTest
     app.buttons["settings.done"].tap()
     XCTAssertEqual(app.buttons["settings.range"].label, "搜索范围")
     app.buttons["settings.range"].tap()
-    app.buttons["settings.radius.2500"].tap()
+    setRadius("2500", in: app)
+    app.buttons["settings.keyboard-done"].tap()
     attach(app, "i6-native-range-zh")
     app.buttons["settings.done"].tap()
     XCTAssertEqual(app.buttons["settings.range"].value as? String, "2.5km")
@@ -42,6 +74,16 @@ import XCTest
     expand(app)
     XCTAssertEqual(app.buttons["settings.range"].label, "搜索范围")
     XCTAssertEqual(app.buttons["settings.range"].value as? String, "2.5km")
+    app.buttons["settings.range"].tap()
+    XCTAssertEqual(app.textFields["settings.radius.custom"].value as? String, "2500")
+    setRadius("50001", in: app)
+    app.buttons["settings.done"].tap()
+    XCTAssertEqual(app.buttons["settings.range"].value as? String, "2.5km")
+    app.buttons["settings.range"].tap()
+    setRadius("", in: app)
+    app.buttons["settings.keyboard-done"].tap()
+    XCTAssertEqual(app.textFields["settings.radius.custom"].value as? String, "2500")
+    app.buttons["settings.done"].tap()
     attach(app, "i6-settings-persisted-zh")
     app.buttons["settings.source"].tap()
     XCTAssertTrue(app.staticTexts["Apple 地图"].exists)
@@ -52,9 +94,27 @@ import XCTest
     app.buttons["settings.done"].tap()
     XCTAssertEqual(app.buttons["settings.range"].label, "Searching Range")
     app.buttons["settings.range"].tap()
-    app.buttons["settings.radius.1000"].tap()
-    app.buttons["settings.done"].tap()
+    setRadius("1000", in: app)
+    // Pull the sheet down while editing, without Apply or either Done action.
+    app.navigationBars["Searching Range"].coordinate(
+      withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)
+    )
+    .press(
+      forDuration: 0.1,
+      thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.9)))
+    XCTAssertTrue(app.buttons["settings.done"].waitForNonExistence(timeout: 5))
+    XCTAssertEqual(app.buttons["settings.range"].value as? String, "1km")
     attach(app, "i6-settings-en")
+  }
+
+  private func setRadius(_ value: String, in app: XCUIApplication) {
+    let field = app.textFields["settings.radius.custom"]
+    XCTAssertTrue(field.waitForExistence(timeout: 5))
+    field.tap()
+    if let current = field.value as? String, current != field.placeholderValue, !current.isEmpty {
+      field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
+    }
+    if !value.isEmpty { field.typeText(value) }
   }
 
   func testLargeTextSettingsAndVoiceKeyboardFallback() {

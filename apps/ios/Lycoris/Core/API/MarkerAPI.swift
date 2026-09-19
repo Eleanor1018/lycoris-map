@@ -48,6 +48,14 @@ enum PlaceCategory: String, Codable, CaseIterable, Sendable {
     case .medical: "MedicalTint"
     }
   }
+  var pinAsset: String {
+    switch self {
+    case .toilet: "PlacePin"
+    case .nursing: "PlacePinNursing"
+    case .medical: "PlacePinMedical"
+    case .other: "PlacePinOther"
+    }
+  }
 }
 
 struct MarkerBounds: Equatable, Sendable {
@@ -106,6 +114,8 @@ struct MarkerAPI: MarkerServing {
       configuration.httpCookieStorage = nil
       configuration.urlCredentialStorage = nil
       configuration.timeoutIntervalForRequest = 15
+      configuration.waitsForConnectivity = true
+      configuration.timeoutIntervalForResource = 60
       self.session = URLSession(configuration: configuration)
     }
   }

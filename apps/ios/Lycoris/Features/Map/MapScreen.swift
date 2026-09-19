@@ -1,3 +1,4 @@
+import AVFoundation
 import MapKit
 import SwiftUI
 
@@ -5,14 +6,20 @@ struct MapScreen: View {
   @State private var preferences = AppPreferences()
   @Namespace private var appearanceTransition
   @State private var locationDenied = false
+  @State private var awaitsLocationAuthorization = false
   @State private var linkError = false
-  @State private var focusKeyboardAfterDismiss = false
+  @State private var voice = VoiceSearchController()
+  @State private var showsVoiceSearch = false
+  @State private var voiceTask: Task<Void, Never>?
   @Environment(\.openURL) private var openURL
   @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @State private var detent: MapPanelDetent
   @State private var store: PlaceStore
   @State private var location = LocationProvider()
+  @State private var connectivity = ConnectivityMonitor()
+  @State private var mapCoordinates: MapCoordinateResolver
+  @State private var showsCoordinateError = false
   @State private var account = AccountStore()
   @State private var contribution = ContributionStore()
   @State private var selectingLocation = false
@@ -61,6 +68,14 @@ struct MapScreen: View {
   ) {
     _detent = State(initialValue: initialDetent)
     _store = State(initialValue: PlaceStore(isPreview: isPreview, initialPlace: initialPlace))
+    #if LYCORIS_LOCAL_TESTS
+      // Hermetic fixture runs have an explicit datum. Live provider calibration is
+      // verified separately, not allowed to make fixture tests depend on Apple search.
+      _mapCoordinates = State(initialValue: MapCoordinateResolver(space: .wgs84))
+    #else
+      _mapCoordinates = State(
+        initialValue: MapCoordinateResolver(space: isPreview ? .wgs84 : .unresolved))
+    #endif
     self.bookmarks = bookmarks
   }
 
@@ -78,7 +93,7 @@ struct MapScreen: View {
           * (dynamicTypeSize.isAccessibilitySize ? 3 : 2) + 24,
         detailHeight: selectedPlace == nil
           ? nil
-          : 208 + (selectedPlace?.hasPhoto == true ? (geometry.size.width - 50) * 198 / 353 : 0)
+          : 208 + (selectedPlace?.hasPhoto == true ? (geometry.size.width - 30) * 198 / 353 : 0)
             + (selectedPlace?.distanceReference != nil ? 30 : 0)
             + max(geometry.safeAreaInsets.bottom, 29),
         collapsedHeaderHeight: max(44, searchHeight) + 28
@@ -96,11 +111,13 @@ struct MapScreen: View {
         NativeMapView(
           topInset: layout.topInset, bottomInset: mapBottomInset,
           appearance: preferences.mapAppearance,
+          coordinateSpace: mapCoordinates.space,
           places: mapPlaces, focus: store.focus,
           showsUserLocation: !store.isPreview && location.hasRequestedLocation
-            && location.isAuthorized, animated: !reduceMotion,
+            && location.isAuthorized, isActive: scenePhase == .active, animated: !reduceMotion,
           isSelectingLocation: selectingLocation, selectedLocation: pickedLocation,
           onPickLocation: pickLocation,
+          onUnresolvedCoordinate: coordinateUnavailable,
           onViewport: { store.viewportChanged($0) },
           onSelect: { if !selectingLocation { selectPlace($0) } },
           onScreenCenter: { screenCenter = $0 }
@@ -198,6 +215,20 @@ struct MapScreen: View {
     }
     .ignoresSafeArea(.keyboard)
     .sensoryFeedback(.selection, trigger: locationPickFeedback)
+    .alert(Text("Map unavailable", tableName: "Coordinates"), isPresented: $showsCoordinateError) {
+      Button("Try again") { mapCoordinates.resolveIfNeeded(retryPending: true) }
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      if mapCoordinates.space == .unresolved {
+        Text(
+          "Connect to the internet and try again before choosing a map location.",
+          tableName: "Coordinates")
+      } else {
+        Text(
+          "This map location could not be verified. Please choose a nearby point.",
+          tableName: "Coordinates")
+      }
+    }
     .alert("Not available yet", isPresented: $showsUnavailableAction) {
       Button("OK", role: .cancel) {}
     }
@@ -220,10 +251,6 @@ struct MapScreen: View {
     .sheet(
       item: $modal,
       onDismiss: {
-        if focusKeyboardAfterDismiss {
-          focusKeyboardAfterDismiss = false
-          isSearchFocused = true
-        }
         pendingBookmark = nil
         bookmarkIntent = UUID()
         contributionIntent = nil
@@ -241,20 +268,10 @@ struct MapScreen: View {
       case .settings(let destination):
         SettingsSheet(preferences: preferences, destination: destination)
       case .mapAppearance(let center):
-        MapAppearanceSheet(preferences: preferences, center: center)
-          .navigationTransition(.zoom(sourceID: "map-appearance", in: appearanceTransition))
-      case .voice:
-        VoiceSearchSheet(
-          language: preferences.language,
-          onSearch: { text in
-            modal = nil
-            query = text
-            movePanel(to: .expanded)
-          },
-          onKeyboard: {
-            focusKeyboardAfterDismiss = true
-            modal = nil
-          })
+        MapAppearanceSheet(
+          preferences: preferences, center: center, coordinateSpace: mapCoordinates.space
+        )
+        .navigationTransition(.zoom(sourceID: "map-appearance", in: appearanceTransition))
       case .link(let link):
         PlaceLinkSheet(link: link, account: account) { marker, authenticated in
           guard case .link(let current) = modal, current == link else { return }
@@ -303,30 +320,58 @@ struct MapScreen: View {
     } message: {
       Text("Check the link and close any open sheet before trying again.")
     }
-    .onChange(of: preferences.language) { _, _ in applyPreferences() }
+    .onChange(of: preferences.language) { _, _ in
+      cancelVoiceSearch()
+      applyPreferences()
+    }
     .onChange(of: preferences.radius) { _, _ in applyPreferences() }
     .onChange(of: preferences.searchType) { _, _ in applyPreferences() }
     .onChange(of: location.isAuthorized) { _, authorized in
-      if !authorized { store.revokeLocation() }
+      if !authorized {
+        store.revokeLocation()
+        awaitsLocationAuthorization = location.hasRequestedLocation
+      } else {
+        requestStartupLocation()
+      }
     }
     .task {
       applyPreferences()
+      requestStartupLocation()
       if !store.isPreview {
+        mapCoordinates.resolveIfNeeded()
+        connectivity.start()
         contribution.connect(account)
         await account.restore()
         contribution.synchronize()
       }
     }
     .onChange(of: scenePhase) { _, phase in
+      if phase == .background
+        || (phase == .inactive && (voice.state == .recording || voice.state == .finishing))
+      {
+        cancelVoiceSearch()
+      }
       guard !store.isPreview else { return }
       contribution.setActive(phase == .active)
       if phase == .active {
+        mapCoordinates.resolveIfNeeded(retryPending: true)
         location.refreshAuthorization()
         if !location.isAuthorized { store.revokeLocation() }
+        requestStartupLocation()
+        store.retryFailedRequests()
         Task {
           await account.restore()
           contribution.synchronize()
         }
+      }
+    }
+    .onChange(of: connectivity.recoveryCount) { _, _ in
+      guard !store.isPreview, scenePhase == .active else { return }
+      mapCoordinates.resolveIfNeeded(retryPending: true)
+      store.networkDidRecover()
+      Task {
+        await account.networkDidRecover()
+        contribution.synchronize()
       }
     }
     .onChange(of: account.epoch) { _, _ in
@@ -363,9 +408,39 @@ struct MapScreen: View {
         store.closeResults()
       }
     }
-    .onDisappear { store.stop() }
+    .onDisappear {
+      cancelVoiceSearch()
+      store.stop()
+      connectivity.stop()
+      mapCoordinates.stop()
+    }
     .onChange(of: isSearchFocused) { _, focused in
-      if focused { movePanel(to: .expanded) }
+      if focused {
+        cancelVoiceSearch()
+        movePanel(to: .expanded)
+      }
+    }
+    .onChange(of: modal?.id) { _, modalID in
+      if modalID != nil { cancelVoiceSearch() }
+    }
+    .onChange(of: voice.transcript) { _, text in
+      if showsVoiceSearch { query = text }
+    }
+    .onChange(of: voice.state) { _, state in
+      if showsVoiceSearch && state == .ready { finishVoiceSearch() }
+    }
+    .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.interruptionNotification)) {
+      _ in cancelVoiceSearch()
+    }
+    .onReceive(NotificationCenter.default.publisher(for: AVAudioSession.routeChangeNotification)) {
+      notification in
+      let raw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
+      if voice.state == .recording,
+        raw == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue
+          || raw == AVAudioSession.RouteChangeReason.noSuitableRouteForCategory.rawValue
+      {
+        cancelVoiceSearch()
+      }
     }
     .onReceive(
       NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
@@ -430,17 +505,28 @@ struct MapScreen: View {
             if store.isPreview { showsUnavailableAction = true } else { modal = .account(.profile) }
           },
           onVoiceSearch: {
-            isSearchFocused = false
-            modal = .voice
-          }
+            if showsVoiceSearch { finishVoiceSearch() } else { startVoiceSearch() }
+          }, voiceActive: showsVoiceSearch
         )
         .padding(.horizontal, 14)
         .padding(.bottom, detent == .collapsed ? 14 : detent == .nearby ? 7 : 11)
+
+        if showsVoiceSearch {
+          VoiceSearchControls(
+            voice: voice, onFinish: finishVoiceSearch, onRetry: startVoiceSearch,
+            onKeyboard: {
+              cancelVoiceSearch()
+              isSearchFocused = true
+            }, onCancel: cancelVoiceSearch
+          )
+          .padding(.horizontal, 14).padding(.bottom, 11)
+        }
 
         Group {
           if store.browse != nil || store.pendingNearby != nil {
             ScrollView {
               PlaceResultsView(store: store, onSelect: selectPlace) {
+                cancelVoiceSearch()
                 query = ""
                 store.closeResults()
               }
@@ -533,6 +619,7 @@ struct MapScreen: View {
   }
 
   private func selectPlace(_ place: PlacePresentation) {
+    cancelVoiceSearch()
     if let marker = (account.bookmarks + account.created).first(where: { String($0.id) == place.id }
     ) {
       selectAccountPlace(marker)
@@ -547,6 +634,11 @@ struct MapScreen: View {
   }
 
   private func showNearby(_ category: PlaceCategory) {
+    guard store.isPreview || screenCenter != nil else {
+      coordinateUnavailable()
+      return
+    }
+    cancelVoiceSearch()
     account.closeDetail()
     query = ""
     let token = store.nearby(category)
@@ -558,16 +650,31 @@ struct MapScreen: View {
   }
 
   private func locate() {
+    requestLocation(showFailure: true)
+  }
+
+  private func requestStartupLocation() {
+    guard scenePhase == .active, !store.isPreview, !location.isRequesting else { return }
+    guard !location.hasRequestedLocation || (awaitsLocationAuthorization && location.isAuthorized)
+    else { return }
+    awaitsLocationAuthorization = false
+    requestLocation(showFailure: false)
+  }
+
+  private func requestLocation(showFailure: Bool) {
     guard !store.isPreview else {
       showsUnavailableAction = true
       return
     }
     let token = store.beginLocationRequest()
     location.request { result in
+      if case .failure(.denied) = result { awaitsLocationAuthorization = true }
       guard store.acceptsLocation(token) else { return }
+      if !showFailure && (modal != nil || selectingLocation || isSearchFocused) { return }
       switch result {
       case .success(let point): store.locate(point, token: token)
       case .failure(let failure):
+        guard showFailure else { return }
         locationDenied = failure == .denied
         showsLocationError = true
       }
@@ -580,8 +687,13 @@ struct MapScreen: View {
       return
     }
     guard let point = place.point else { return }
+    guard let coordinate = mapCoordinates.space.coordinate(for: point) else {
+      coordinateUnavailable()
+      return
+    }
     let item = MKMapItem(
-      location: CLLocation(latitude: point.latitude, longitude: point.longitude), address: nil)
+      location: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude),
+      address: nil)
     item.name = place.title
     if !item.openInMaps(launchOptions: [
       MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeWalking
@@ -591,7 +703,10 @@ struct MapScreen: View {
   }
 
   private func movePanel(to newDetent: MapPanelDetent) {
-    if newDetent != .expanded { isSearchFocused = false }
+    if newDetent != .expanded {
+      cancelVoiceSearch()
+      isSearchFocused = false
+    }
     withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.86)) {
       if newDetent == .collapsed {
         store.closeDetail()
@@ -602,6 +717,7 @@ struct MapScreen: View {
   }
 
   private func selectAccountPlace(_ marker: Marker) {
+    cancelVoiceSearch()
     isSearchFocused = false
     account.select(marker)
     store.focusAccountPlace(store.presentation(marker))
@@ -656,6 +772,7 @@ struct MapScreen: View {
   }
 
   private func beginContribution(_ intent: ContributionIntent) {
+    cancelVoiceSearch()
     editLoadTask?.cancel()
     guard !store.isPreview else {
       showsUnavailableAction = true
@@ -704,6 +821,11 @@ struct MapScreen: View {
     locationPickFeedback += 1
   }
 
+  private func coordinateUnavailable() {
+    mapCoordinates.resolveIfNeeded(retryPending: true)
+    showsCoordinateError = true
+  }
+
   private func confirmLocation() {
     guard selectingLocation, let point = pickedLocation else { return }
     do {
@@ -715,6 +837,44 @@ struct MapScreen: View {
     } catch {
       contributionError = String(appLocalized: "Could not save the contribution on this device.")
     }
+  }
+
+  private func startVoiceSearch() {
+    cancelVoiceSearch()
+    voice = VoiceSearchController()
+    account.closeDetail()
+    store.closeDetail()
+    isSearchFocused = false
+    query = ""
+    showsVoiceSearch = true
+    movePanel(to: .expanded)
+    let controller = voice
+    let language = preferences.language
+    voiceTask = Task {
+      guard !Task.isCancelled else { return }
+      await controller.start(language: language)
+    }
+  }
+
+  private func finishVoiceSearch() {
+    guard showsVoiceSearch else { return }
+    if voice.state == .recording {
+      voice.finish()
+      return
+    }
+    if voice.state == .finishing { return }
+    let text = voice.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+    cancelVoiceSearch()
+    query = text
+    if !text.isEmpty { store.search(text, debounce: false) }
+  }
+
+  private func cancelVoiceSearch() {
+    guard showsVoiceSearch || voiceTask != nil else { return }
+    showsVoiceSearch = false
+    voiceTask?.cancel()
+    voiceTask = nil
+    voice.stop()
   }
 }
 
@@ -729,7 +889,6 @@ private enum MapModal: Identifiable {
   case contribution
   case settings(SettingsDestination)
   case mapAppearance(GeoPoint?)
-  case voice
   case link(PlaceLink)
   var id: String {
     switch self {
@@ -738,7 +897,6 @@ private enum MapModal: Identifiable {
     case .contribution: "contribution"
     case .settings(let destination): "settings-\(destination.rawValue)"
     case .mapAppearance: "map-appearance"
-    case .voice: "voice"
     case .link(let link): "link-\(link.id)"
     }
   }
