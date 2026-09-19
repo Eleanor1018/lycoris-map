@@ -48,6 +48,14 @@ enum PlaceCategory: String, Codable, CaseIterable, Sendable {
     case .medical: "MedicalTint"
     }
   }
+  var pinAsset: String {
+    switch self {
+    case .toilet: "PlacePin"
+    case .nursing: "PlacePinNursing"
+    case .medical: "PlacePinMedical"
+    case .other: "PlacePinOther"
+    }
+  }
 }
 
 struct MarkerBounds: Equatable, Sendable {

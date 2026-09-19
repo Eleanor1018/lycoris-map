@@ -93,6 +93,7 @@ struct NativeMapView: UIViewRepresentable {
       guard let point = place.point else { continue }
       if let pin = existing[place.id] {
         pin.place = place
+        if let view = map.view(for: pin) { coordinator.configure(view, for: pin) }
         map.view(for: pin)?.accessibilityLabel = place.title
         map.view(for: pin)?.isEnabled = !isSelectingLocation
         map.view(for: pin)?.isAccessibilityElement = !isSelectingLocation
@@ -304,13 +305,19 @@ struct NativeMapView: UIViewRepresentable {
         mapView.dequeueReusableAnnotationView(withIdentifier: "place")
         ?? MKAnnotationView(annotation: annotation, reuseIdentifier: "place")
       view.annotation = annotation
-      view.image = UIImage(named: "PlacePin")
-      view.centerOffset = CGPoint(x: 0, y: -21.5)
+      configure(view, for: pin)
+      return view
+    }
+
+    func configure(_ view: MKAnnotationView, for pin: PlaceAnnotation) {
+      view.image = UIImage(named: pin.place.category.pinAsset)
+      // The 43pt asset includes a shadow below its tip at y=39. Anchor the tip,
+      // not the image bottom, to the geographic point.
+      view.centerOffset = CGPoint(x: 0, y: -17.5)
       view.accessibilityLabel = pin.place.title
       view.accessibilityIdentifier = "map.pin.\(pin.place.id)"
       view.isEnabled = !parent.isSelectingLocation
       view.isAccessibilityElement = !parent.isSelectingLocation
-      return view
     }
 
     func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
