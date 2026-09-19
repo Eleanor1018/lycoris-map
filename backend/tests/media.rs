@@ -618,3 +618,102 @@ fn crc32(data: &[u8]) -> u32 {
     }
     !crc
 }
+
+#[tokio::test]
+async fn renditions_preserve_ratio_alpha_originals_and_have_content_hashes() {
+    use lycoris_backend::media::ImageVariant;
+    use sha2::{Digest, Sha256};
+    let dir = TempDir::new().unwrap();
+    let store = store(dir.path());
+    let saved = store
+        .save(MediaDirectory::Markers, "thumbnail", rgb_jpeg(1800, 1200))
+        .await
+        .unwrap();
+    let original = std::fs::read(saved_path(dir.path(), &saved)).unwrap();
+    for (variant, dimensions) in [
+        (ImageVariant::Thumb, (640, 427)),
+        (ImageVariant::Detail, (1280, 853)),
+    ] {
+        let opened = store.open("markers", &saved.filename).await.unwrap();
+        let mut prepared = store
+            .prepare(opened, "markers", &saved.filename, variant)
+            .await
+            .unwrap();
+        let mut bytes = Vec::new();
+        prepared.opened.file.read_to_end(&mut bytes).await.unwrap();
+        let decoded = image::load_from_memory(&bytes).unwrap();
+        assert_eq!((decoded.width(), decoded.height()), dimensions);
+        assert!(bytes.len() < original.len());
+        let hash: String = Sha256::digest(&bytes)
+            .iter()
+            .map(|v| format!("{v:02x}"))
+            .collect();
+        assert_eq!(prepared.digest, hash);
+        let again = store
+            .prepare(
+                store.open("markers", &saved.filename).await.unwrap(),
+                "markers",
+                &saved.filename,
+                variant,
+            )
+            .await
+            .unwrap();
+        assert_eq!(again.object_key, prepared.object_key);
+    }
+    assert_eq!(
+        std::fs::read(saved_path(dir.path(), &saved)).unwrap(),
+        original
+    );
+    let small = store
+        .save(MediaDirectory::Avatars, "alpha", rgba_png(40, 20))
+        .await
+        .unwrap();
+    let mut prepared = store
+        .prepare(
+            store.open("avatars", &small.filename).await.unwrap(),
+            "avatars",
+            &small.filename,
+            ImageVariant::Thumb,
+        )
+        .await
+        .unwrap();
+    let mut bytes = Vec::new();
+    prepared.opened.file.read_to_end(&mut bytes).await.unwrap();
+    let decoded = image::load_from_memory(&bytes).unwrap();
+    assert_eq!((decoded.width(), decoded.height()), (40, 20));
+    assert!(decoded.color().has_alpha());
+    assert_eq!(prepared.opened.content_type, "image/png");
+}
+
+#[tokio::test]
+async fn replaced_source_changes_rendition_identity_and_missing_source_is_not_resurrected() {
+    use lycoris_backend::media::ImageVariant;
+    let dir = TempDir::new().unwrap();
+    let store = store(dir.path());
+    let saved = store
+        .save(MediaDirectory::Markers, "replace", rgb_png(50, 40))
+        .await
+        .unwrap();
+    let first = store
+        .prepare(
+            store.open("markers", &saved.filename).await.unwrap(),
+            "markers",
+            &saved.filename,
+            ImageVariant::Thumb,
+        )
+        .await
+        .unwrap();
+    std::fs::write(saved_path(dir.path(), &saved), rgb_jpeg(60, 30)).unwrap();
+    let second = store
+        .prepare(
+            store.open("markers", &saved.filename).await.unwrap(),
+            "markers",
+            &saved.filename,
+            ImageVariant::Thumb,
+        )
+        .await
+        .unwrap();
+    assert_ne!(first.object_key, second.object_key);
+    std::fs::remove_file(saved_path(dir.path(), &saved)).unwrap();
+    assert!(store.open("markers", &saved.filename).await.is_err());
+}

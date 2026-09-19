@@ -2,6 +2,7 @@ import { useUi } from '@/shared/i18n/ui'
 import { useRef, type ComponentProps } from 'react'
 import { Button } from '@/shared/ui/button'
 import { FigmaIcon, type FigmaIconName } from '@/shared/ui/figma-icon'
+import { useVoiceSearch } from '@/shared/ui/useVoiceSearch'
 export function DesignButton({
     className = '',
     available = true,
@@ -46,14 +47,16 @@ export function SearchField({
 }) {
     const ui = useUi()
     const input = useRef<HTMLInputElement>(null)
+    const voice = useVoiceSearch({ language: ui.language, onResult: onChange })
     const placeholder = mobile
         ? 'Search Positions'
         : bookmarks
           ? 'Search Bookmarks'
           : 'Lycoris Maps'
+    const active = voice.active
     return (
         <div
-            className={`design-search ${mobile ? 'mobile-search' : ''}`}
+            className={`design-search ${mobile ? 'mobile-search' : ''} ${active ? 'is-listening' : ''}`}
             onClick={(event) => {
                 if (!(event.target instanceof Element) || event.target.closest('button')) return
                 input.current?.focus()
@@ -71,9 +74,32 @@ export function SearchField({
             <IconButton
                 icon={mobile ? 'mobileMicrophone' : 'microphone'}
                 size={20}
-                label="Microphone"
-                available={false}
+                label={active ? 'Stop listening' : 'Start voice search'}
+                aria-pressed={active}
+                aria-busy={voice.starting || undefined}
+                onClick={voice.toggle}
             />
+            {active && (
+                <span className="voice-search-status" role="status">
+                    {ui.text(
+                        voice.starting
+                            ? 'Waiting for microphone access…'
+                            : 'Voice search is listening…',
+                    )}
+                </span>
+            )}
+            {voice.error && (
+                <div className="voice-search-error" role="alert">
+                    <span>{ui.text(voice.error)}</span>
+                    <IconButton
+                        className="voice-search-dismiss"
+                        icon="close"
+                        size={14}
+                        label="Dismiss notification"
+                        onClick={voice.dismissError}
+                    />
+                </div>
+            )}
         </div>
     )
 }

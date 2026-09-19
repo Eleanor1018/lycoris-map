@@ -36,7 +36,10 @@
 //! 部署提醒：`root`（`UPLOAD_DIR`）应由服务运行用户独占写权限，避免其他本地用户
 //! 放入可执行内容或替换目录；详见 `backend/README.md`。本核心不引入 `unsafe`。
 
+mod renditions;
 mod storage;
+
+pub use renditions::{ImageVariant, PreparedImage};
 
 pub mod model;
 pub mod repository;

@@ -1,7 +1,12 @@
 import { expect, it } from 'vitest'
 import {
+    appleMapsUrl,
+    baiduMapsUrl,
     distanceLabel,
     distanceMeters,
+    googleMapsUrl,
+    navigationAppUrl,
+    navigationApps,
     navigationUrl,
     openingHours,
     placeShareUrl,
@@ -45,4 +50,44 @@ it('shares an ID and language, and navigates to the destination without includin
         ['travelmode', 'walking'],
         ['destination', '31.2,121.4'],
     ])
+})
+
+it('builds a destination-only walking link for each offered navigation app', () => {
+    const place = { lat: 31.2, lng: 121.4, title: 'Blue Café & Restroom' }
+    expect(navigationApps).toEqual(['apple', 'google', 'baidu'])
+
+    const apple = new URL(appleMapsUrl(place))
+    expect(apple.origin).toBe('https://maps.apple.com')
+    expect([...apple.searchParams]).toEqual([
+        ['daddr', '31.2,121.4'],
+        ['dirflg', 'w'],
+    ])
+
+    const google = new URL(googleMapsUrl(place))
+    expect(google.origin).toBe('https://www.google.com')
+    expect([...google.searchParams]).toEqual([
+        ['api', '1'],
+        ['travelmode', 'walking'],
+        ['destination', '31.2,121.4'],
+    ])
+
+    const baidu = new URL(baiduMapsUrl(place))
+    expect(baidu.origin).toBe('https://api.map.baidu.com')
+    expect([...baidu.searchParams]).toEqual([
+        ['origin', '我的位置'],
+        ['destination', 'latlng:31.2,121.4|name:Blue Café & Restroom'],
+        ['mode', 'walking'],
+        ['coord_type', 'wgs84'],
+        ['output', 'html'],
+        ['src', 'webapp.lycoris.maps'],
+    ])
+
+    // Apple/Google carry no origin at all; Baidu's origin is the literal
+    // "我的位置", never the user's precise coordinates.
+    expect(apple.searchParams.has('origin')).toBe(false)
+    expect(google.searchParams.has('origin')).toBe(false)
+    expect(baidu.searchParams.get('origin')).toBe('我的位置')
+    expect(navigationAppUrl('apple', place)).toBe(appleMapsUrl(place))
+    expect(navigationAppUrl('google', place)).toBe(googleMapsUrl(place))
+    expect(navigationAppUrl('baidu', place)).toBe(baiduMapsUrl(place))
 })

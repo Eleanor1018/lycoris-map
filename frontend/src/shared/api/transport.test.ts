@@ -12,7 +12,7 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
     })
 }
 
-function stubFetch(response: Response | (() => Promise<Response>)) {
+function stubFetch(response: Response | ((...args: FetchArgs) => Promise<Response>)) {
     const mock = vi.fn<(...args: FetchArgs) => Promise<Response>>(
         typeof response === 'function' ? response : async () => response,
     )
@@ -40,11 +40,25 @@ describe('request', () => {
         expect(mock.mock.calls[0]?.[0]).toBe('/api/markers/viewport?minLat=1&maxLat=2&lang=zh')
     })
 
-    it('forwards an AbortSignal', async () => {
-        const mock = stubFetch(jsonResponse({}))
+    it('propagates a caller cancellation through the deadline signal', async () => {
+        const mock = stubFetch(
+            (_input, init) =>
+                new Promise<Response>((_resolve, reject) => {
+                    init?.signal?.addEventListener('abort', () =>
+                        reject(new DOMException('aborted', 'AbortError')),
+                    )
+                }),
+        )
         const controller = new AbortController()
-        await request('/api/me', { signal: controller.signal })
-        expect(mock.mock.calls[0]?.[1]?.signal).toBe(controller.signal)
+        const pending = request('/api/me', { signal: controller.signal })
+        const forwarded = mock.mock.calls[0]?.[1]?.signal
+        // The forwarded signal is the deadline wrapper, not the caller's
+        // identity; cancelling the caller must still abort the live request.
+        expect(forwarded).toBeInstanceOf(AbortSignal)
+        expect(forwarded?.aborted).toBe(false)
+        controller.abort()
+        expect(forwarded?.aborted).toBe(true)
+        await expect(pending).rejects.toBeInstanceOf(DOMException)
     })
 
     it('serializes a JSON body with the JSON content type', async () => {
@@ -218,10 +232,17 @@ describe('requestBlob', () => {
         expect((init?.headers as Record<string, string>)['Content-Type']).toBeUndefined()
     })
 
-    it('forwards query, headers, signal and baseUrl', async () => {
-        const mock = stubFetch(pngResponse())
+    it('forwards query, headers, a cancellable signal and baseUrl', async () => {
+        const mock = stubFetch(
+            (_input, init) =>
+                new Promise<Response>((_resolve, reject) => {
+                    init?.signal?.addEventListener('abort', () =>
+                        reject(new DOMException('aborted', 'AbortError')),
+                    )
+                }),
+        )
         const controller = new AbortController()
-        await requestBlob('/api/users/uuid/avatar', {
+        const pending = requestBlob('/api/users/uuid/avatar', {
             query: { v: 2, skip: undefined },
             headers: { 'X-App-Language': 'zh' },
             signal: controller.signal,
@@ -230,7 +251,10 @@ describe('requestBlob', () => {
         const init = mock.mock.calls[0]?.[1]
         expect(mock.mock.calls[0]?.[0]).toBe('https://api.example.test/api/users/uuid/avatar?v=2')
         expect((init?.headers as Record<string, string>)['X-App-Language']).toBe('zh')
-        expect(init?.signal).toBe(controller.signal)
+        expect(init?.signal).toBeInstanceOf(AbortSignal)
+        controller.abort()
+        expect(init?.signal?.aborted).toBe(true)
+        await expect(pending).rejects.toBeInstanceOf(DOMException)
     })
 
     it('rethrows AbortError untouched', async () => {
@@ -244,5 +268,125 @@ describe('requestBlob', () => {
     it('keeps plain JSON requests unaffected', async () => {
         stubFetch(jsonResponse({ ok: true }))
         await expect(request('/api/me')).resolves.toEqual({ ok: true })
+    })
+})
+
+describe('bounded deadline', () => {
+    function hangingFetch(): ReturnType<typeof stubFetch> {
+        // Real-ish fetch: never resolves, but rejects when its signal aborts.
+        return stubFetch(
+            (_input, init) =>
+                new Promise<Response>((_resolve, reject) => {
+                    const signal = init?.signal
+                    if (!signal) return
+                    if (signal.aborted) {
+                        reject(new DOMException('aborted', 'AbortError'))
+                        return
+                    }
+                    signal.addEventListener('abort', () =>
+                        reject(new DOMException('aborted', 'AbortError')),
+                    )
+                }),
+        )
+    }
+    function hangingBodyResponse(body: 'text' | 'blob'): Response {
+        const response = new Response('x', {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+        })
+        if (body === 'text')
+            vi.spyOn(response, 'text').mockImplementation(() => new Promise(() => {}))
+        else vi.spyOn(response, 'blob').mockImplementation(() => new Promise(() => {}))
+        return response
+    }
+
+    it('turns a hung fetch into a network timeout', async () => {
+        hangingFetch()
+        const error = await request('/api/me', { timeoutMs: 30 }).catch((v: unknown) => v)
+        expect(error).toBeInstanceOf(ApiError)
+        expect((error as ApiError).status).toBe(0)
+        expect((error as ApiError).message).toContain('timed out')
+    })
+
+    it('turns a hung response body read into a network timeout', async () => {
+        stubFetch(() => Promise.resolve(hangingBodyResponse('text')))
+        const error = await request('/api/me', { timeoutMs: 30 }).catch((v: unknown) => v)
+        expect(error).toBeInstanceOf(ApiError)
+        expect((error as ApiError).status).toBe(0)
+        expect((error as ApiError).message).toContain('timed out')
+    })
+
+    it('bounds a hung blob body too', async () => {
+        stubFetch(() => Promise.resolve(hangingBodyResponse('blob')))
+        const error = await requestBlob('/api/me/avatar', { timeoutMs: 30 }).catch(
+            (v: unknown) => v,
+        )
+        expect(error).toBeInstanceOf(ApiError)
+        expect((error as ApiError).message).toContain('timed out')
+    })
+
+    it('keeps a caller cancellation as AbortError, not a network error', async () => {
+        hangingFetch()
+        const controller = new AbortController()
+        const pending = request('/api/me', { signal: controller.signal, timeoutMs: 5_000 })
+        controller.abort()
+        await expect(pending).rejects.toBeInstanceOf(DOMException)
+        await expect(pending.catch((v: unknown) => v)).resolves.not.toBeInstanceOf(ApiError)
+    })
+
+    it('clears the deadline timer after a success so later work is unaffected', async () => {
+        stubFetch(async () => jsonResponse({ ok: true }))
+        const original = globalThis.clearTimeout
+        const clear = vi.fn((id?: number) => original(id))
+        vi.stubGlobal('clearTimeout', clear)
+        await request('/api/me')
+        expect(clear).toHaveBeenCalled()
+        // A subsequent request still runs normally.
+        await expect(request('/api/me')).resolves.toEqual({ ok: true })
+    })
+
+    it('does not interfere with the next request after a timeout', async () => {
+        hangingFetch()
+        await expect(request('/api/me', { timeoutMs: 20 })).rejects.toMatchObject({ status: 0 })
+        stubFetch(jsonResponse({ ok: true }))
+        await expect(request('/api/me', { timeoutMs: 1_000 })).resolves.toEqual({ ok: true })
+    })
+
+    it('does not dispatch a write when the caller signal is already aborted', async () => {
+        const dispatched = vi.fn()
+        const fetcher = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+            // A pre-aborted signal must reach fetch as aborted; a real fetch
+            // would reject without sending. Record any attempted dispatch.
+            if (!init?.signal?.aborted) dispatched()
+            return new Promise<Response>((_resolve, reject) => {
+                init?.signal?.addEventListener('abort', () =>
+                    reject(new DOMException('aborted', 'AbortError')),
+                )
+            })
+        })
+        vi.stubGlobal('fetch', fetcher)
+        const controller = new AbortController()
+        controller.abort()
+        const error = await request('/api/markers/1/favorite', {
+            method: 'POST',
+            signal: controller.signal,
+        }).catch((value: unknown) => value)
+        expect(error).toBeInstanceOf(DOMException)
+        expect((error as DOMException).name).toBe('AbortError')
+        expect(error).not.toBeInstanceOf(ApiError)
+        expect(fetcher.mock.calls[0]?.[1]?.signal?.aborted).toBe(true)
+        expect(dispatched).not.toHaveBeenCalled()
+    })
+
+    it('honours an explicit timeoutMs override for uploads', async () => {
+        hangingFetch()
+        const started = Date.now()
+        const error = await request('/api/upload', {
+            method: 'POST',
+            json: { a: 1 },
+            timeoutMs: 30,
+        }).catch((v: unknown) => v)
+        expect(error).toBeInstanceOf(ApiError)
+        expect(Date.now() - started).toBeLessThan(2_000)
     })
 })

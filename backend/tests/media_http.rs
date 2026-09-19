@@ -2263,3 +2263,91 @@ async fn photo_resume_completion_finishes_once_after_http_waiter_is_cancelled() 
             .unwrap();
     assert_eq!(count, 1);
 }
+
+#[tokio::test]
+async fn thumbnail_head_and_conditional_requests_always_recheck_permissions() {
+    let env = TestEnv::new().await;
+    let (owner_cookie, owner) = register(&env, "thumb-owner").await;
+    write_marker_file(&env, "rendition.png", &rgba_png(800, 400));
+    let marker = insert_marker(
+        &env,
+        "缩略图",
+        true,
+        "APPROVED",
+        &owner,
+        Some("/uploads/markers/rendition.png"),
+    )
+    .await;
+    let url = "/uploads/markers/rendition.png?variant=thumb";
+    let first = send(&env.router, Call::new(Method::GET, url)).await;
+    assert_eq!(first.status, StatusCode::OK);
+    let decoded = image::load_from_memory(&first.body).unwrap();
+    assert_eq!((decoded.width(), decoded.height()), (640, 320));
+    let etag = first.header(header::ETAG).unwrap();
+    let head = send(&env.router, Call::new(Method::HEAD, url)).await;
+    assert_eq!(head.status, StatusCode::OK);
+    assert!(head.body.is_empty());
+    assert_eq!(head.header(header::ETAG), Some(etag));
+    assert_eq!(
+        head.header(header::CONTENT_LENGTH).unwrap(),
+        first.body.len().to_string()
+    );
+    assert!(head.headers.contains_key("x-lycoris-media-key"));
+    let unchanged = send(
+        &env.router,
+        Call::new(Method::GET, url).header("If-None-Match", etag),
+    )
+    .await;
+    assert_eq!(unchanged.status, StatusCode::NOT_MODIFIED);
+    let mismatch = send(
+        &env.router,
+        Call::new(Method::GET, url).header("If-Match", "\"old\""),
+    )
+    .await;
+    assert_eq!(mismatch.status, StatusCode::PRECONDITION_FAILED);
+    sqlx::query("UPDATE map_markers SET is_public=false WHERE id=$1")
+        .bind(marker)
+        .execute(&env.pool)
+        .await
+        .unwrap();
+    for method in [Method::GET, Method::HEAD] {
+        let denied = send(
+            &env.router,
+            Call::new(method, url).header("If-None-Match", etag),
+        )
+        .await;
+        assert_eq!(denied.status, StatusCode::NOT_FOUND);
+        assert!(!denied.headers.contains_key("x-lycoris-media-key"));
+    }
+    assert_eq!(
+        send(
+            &env.router,
+            Call::new(Method::GET, url).cookie(owner_cookie.clone())
+        )
+        .await
+        .status,
+        StatusCode::OK
+    );
+    sqlx::query("UPDATE map_markers SET deactivated=true WHERE id=$1")
+        .bind(marker)
+        .execute(&env.pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        send(
+            &env.router,
+            Call::new(Method::HEAD, url)
+                .cookie(owner_cookie)
+                .header("If-None-Match", etag)
+        )
+        .await
+        .status,
+        StatusCode::NOT_FOUND
+    );
+    let invalid = send(
+        &env.router,
+        Call::new(Method::GET, "/uploads/markers/rendition.png?variant=99999"),
+    )
+    .await;
+    assert_eq!(invalid.status, StatusCode::BAD_REQUEST);
+}
