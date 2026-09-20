@@ -1,0 +1,3 @@
+<inset xmlns:android="http://schemas.android.com/apk/res/android" android:inset="14dp">
+    <bitmap android:src="@drawable/lycoris_mark" android:gravity="fill" />
+</inset>

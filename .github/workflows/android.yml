@@ -1,0 +1,185 @@
+name: Android
+
+on:
+  push:
+    paths:
+      - 'apps/android/**'
+      - '.github/workflows/android.yml'
+  pull_request:
+    paths:
+      - 'apps/android/**'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+    working-directory: apps/android
+
+jobs:
+  checks:
+    name: Build and synthetic tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle wrapper and cache
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-provider: basic
+          cache-read-only: ${{ github.event_name == 'pull_request' || github.ref_name != github.event.repository.default_branch }}
+          dependency-graph: disabled
+          build-scan-publish: false
+
+      - name: Install compile SDK and build tools
+        run: >-
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+
+      - name: Run unit tests and Android lint
+        run: ./gradlew --no-daemon --max-workers=2 :app:testQaUnitTest :app:lintQa
+
+      - name: Build QA, installable preview, unsigned release and instrumentation APKs
+        run: >-
+          ./gradlew --no-daemon --max-workers=2
+          :app:assembleQa :app:assemblePreview :app:assembleRelease :app:assembleQaAndroidTest
+
+      - name: Check release APK 16 KB ZIP alignment
+        run: >-
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 4
+          app/build/outputs/apk/release/app-release-unsigned.apk
+
+      - name: Save built QA APKs for minimum SDK tests
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-qa-instrumentation-apks
+          path: |
+            apps/android/app/build/outputs/apk/qa/app-qa.apk
+            apps/android/app/build/outputs/apk/androidTest/qa/app-qa-androidTest.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # Includes the real QA Activity and native map; network success is not required.
+      # No QA backend credentials, release signing secrets or production writes.
+      # The opt-in server-backed test skips when its synthetic credentials are absent.
+      - name: Run local instrumentation on AOSP API 36
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 36
+          target: default
+          arch: x86_64
+          avd-name: lycoris-ci-api36
+          cores: 2
+          ram-size: 2048M
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          disable-animations: true
+          working-directory: apps/android
+          script: |
+            test -z "$(adb shell pm list packages com.google.android.gms)"
+            ./gradlew --no-daemon --max-workers=2 :app:connectedQaAndroidTest
+
+      - name: Save test and lint reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-check-reports
+          path: |
+            apps/android/app/build/reports/
+            apps/android/app/build/test-results/
+            apps/android/app/build/outputs/androidTest-results/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Save installable QA and preview APKs plus unsigned release APK
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-preview-qa-and-unsigned-release
+          path: |
+            apps/android/app/build/outputs/apk/qa/*.apk
+            apps/android/app/build/outputs/apk/preview/*.apk
+            apps/android/app/build/outputs/apk/release/*-unsigned.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  api26:
+    name: Minimum SDK 26 instrumentation
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Download the already-built QA and test APKs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: android-qa-instrumentation-apks
+          path: apps/android/build/api26-apks
+          digest-mismatch: error
+
+      - name: Set up JDK 17 for SDK tools
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # This job reuses exactly the APKs tested on API 36; no Gradle or R8 build runs here.
+      # The official API 26 default/x86_64 image has no Google Play services.
+      - name: Run the same instrumentation suite on AOSP API 26
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 26
+          target: default
+          arch: x86_64
+          avd-name: lycoris-ci-api26
+          cores: 2
+          ram-size: 2048M
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          disable-animations: true
+          working-directory: apps/android
+          script: |
+            mkdir -p build/api26-results
+            test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = 26
+            test -z "$(adb shell pm list packages com.google.android.gms)"
+            sha256sum build/api26-apks/qa/app-qa.apk build/api26-apks/androidTest/qa/app-qa-androidTest.apk > build/api26-results/apk-sha256.txt
+            adb install -r -t build/api26-apks/qa/app-qa.apk
+            adb install -r -t build/api26-apks/androidTest/qa/app-qa-androidTest.apk
+            adb shell am instrument -w -r com.lycoris.maps.qa.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tee build/api26-results/instrumentation.txt
+            adb logcat -d -v threadtime > build/api26-results/logcat.txt
+            python3 -c 'import pathlib, re; result = pathlib.Path("build/api26-results/instrumentation.txt").read_text(); success = re.search(r"(?m)^OK \(([1-9][0-9]*) tests?\)\s*$", result); assert success and re.search(r"(?m)^INSTRUMENTATION_CODE: -1\s*$", result), "Instrumentation did not finish with a nonempty successful result"; assert not re.search(r"(?m)^INSTRUMENTATION_STATUS_CODE: -[12]\s*$|INSTRUMENTATION_FAILED|INSTRUMENTATION_ABORTED|FAILURES!!!", result), "Instrumentation reported a test or runner failure"; print("API 26 instrumentation passed (" + success.group(1) + " tests reported; inspect the log for the expected opt-in backend skip)")'
+
+      - name: Save API 26 instrumentation evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: android-api26-results
+          path: apps/android/build/api26-results/
+          if-no-files-found: warn
+          retention-days: 14

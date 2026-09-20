@@ -1,0 +1,86 @@
+name: lycoris-android-qa
+
+services:
+  postgres:
+    image: postgis/postgis:18-3.6@sha256:60f6ad1d21ea86a67d47780b9a0d1e1d200500f62b19293fa834d0dea80b8677
+    platform: linux/amd64
+    container_name: lycoris-android-qa-postgres
+    environment:
+      POSTGRES_DB: lycoris_android_qa
+      POSTGRES_USER: lycoris_android_qa
+      POSTGRES_PASSWORD: ${ANDROID_QA_DB_PASSWORD:?Run qa_setup.py init first}
+    volumes:
+      - postgres:/var/lib/postgresql
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U lycoris_android_qa -d lycoris_android_qa]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    mem_limit: 512m
+    cpus: 0.5
+    restart: "no"
+
+  redis:
+    image: redis:8.10.1@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5
+    container_name: lycoris-android-qa-redis
+    command: [redis-server, --save, "", --appendonly, "no"]
+    mem_limit: 96m
+    cpus: 0.25
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: "no"
+
+  backend:
+    image: lycoris-android-qa-backend:local
+    container_name: lycoris-android-qa-backend
+    build:
+      context: ../../../backend
+      dockerfile: Dockerfile
+      target: runtime
+      args:
+        CARGO_BUILD_JOBS: "1"
+        HTTP_PROXY: ${ANDROID_QA_BUILD_PROXY:-}
+        HTTPS_PROXY: ${ANDROID_QA_BUILD_PROXY:-}
+        NO_PROXY: localhost,127.0.0.1,postgres,redis
+    environment:
+      DATABASE_URL: postgres://lycoris_android_qa:${ANDROID_QA_DB_PASSWORD:?Run qa_setup.py init first}@postgres:5432/lycoris_android_qa
+      REDIS_URL: redis://redis:6379
+      SERVER_HOST: 0.0.0.0
+      SERVER_PORT: "18186"
+      UPLOAD_DIR: /var/lib/lycoris/uploads
+      SESSION_COOKIE_NAME: LYCORIS_ANDROID_QA
+      SESSION_COOKIE_SECURE: "false"
+      SESSION_COOKIE_SAME_SITE: lax
+      SESSION_NAMESPACE: lycoris:android:qa:session
+      MARKER_CACHE_NAMESPACE: lycoris:android:qa:markers
+      RATE_LIMIT_NAMESPACE: lycoris:android:qa:ratelimit
+      DB_MAX_CONNECTIONS: "3"
+      APP_AVAILABILITY_ZONE: Asia/Shanghai
+      WRITE_ALLOWED_ORIGINS: http://127.0.0.1:18187
+      CORS_ALLOWED_ORIGINS: http://127.0.0.1:18187
+    ports:
+      - 127.0.0.1:18186:18186
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads:/var/lib/lycoris/uploads
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 384m
+    cpus: 1
+    restart: "no"
+
+volumes:
+  postgres:
+    name: lycoris-android-qa-postgres
+  uploads:
+    name: lycoris-android-qa-uploads
