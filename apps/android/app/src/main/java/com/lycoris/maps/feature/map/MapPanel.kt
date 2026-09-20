@@ -3,8 +3,11 @@ package com.lycoris.maps.feature.map
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.AnchoredDraggableState
+import androidx.compose.foundation.gestures.AnchoredDraggableDefaults
 import androidx.compose.foundation.gestures.DraggableAnchors
+import androidx.compose.foundation.gestures.FlingBehavior
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.ScrollScope
 import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.gestures.animateTo
 import androidx.compose.foundation.layout.*
@@ -48,57 +51,97 @@ fun MapPanel(
     // two consecutive pages have the same measured height.
     var measuredHeight by remember { mutableFloatStateOf(middleContentHeight) }
     val geometry = PanelGeometry.measure(availableHeight, measuredHeight, middleContentHeight, collapsed)
-    val state = remember { AnchoredDraggableState(PanelStop.MIDDLE) }
+    val state = remember { AnchoredDraggableState(requestedStop) }
     val scope = rememberCoroutineScope()
     val scroll = rememberLazyListState()
     val currentOnStop by rememberUpdatedState(onStop)
     val currentGeometry by rememberUpdatedState(geometry)
+    val currentRequestedStop by rememberUpdatedState(requestedStop)
+    val currentPageKey by rememberUpdatedState(pageKey)
     val flingThreshold = with(density) { 300.dp.toPx() }
 
     SideEffect {
-        // Measurements change the pixel offsets. Preserve the logical target: picking the
-        // nearest new offset would turn the initial middle state into expanded at offset zero.
-        val previousTarget = state.targetValue
-        val target = if (previousTarget == PanelStop.EXPANDED && geometry.full <= geometry.middle + 1f) PanelStop.MIDDLE else previousTarget
+        // Geometry can merge/split physical anchors, but never chooses a new logical stop.
+        // In particular, an expanded request stays expanded while its physical anchor is middle.
         state.updateAnchors(DraggableAnchors {
             PanelStop.COLLAPSED at geometry.offset(PanelStop.COLLAPSED)
             // Keep middle as the canonical anchor when short content makes middle == expanded.
             if (geometry.full > geometry.middle + 1f) PanelStop.EXPANDED at 0f
             PanelStop.MIDDLE at geometry.offset(PanelStop.MIDDLE)
-        }, newTarget = target)
+        }, newTarget = geometry.anchorFor(requestedStop))
     }
     LaunchedEffect(requestedStop, pageKey, geometry) {
-        val target = if (requestedStop == PanelStop.EXPANDED && geometry.full <= geometry.middle + 1f) PanelStop.MIDDLE else requestedStop
+        val target = geometry.anchorFor(requestedStop)
         if (state.targetValue != target) state.animateTo(target, spring(dampingRatio = 0.9f, stiffness = 420f))
     }
-    LaunchedEffect(state) {
-        snapshotFlow { state.settledValue }.collect { currentOnStop(it) }
+
+    suspend fun settleUserStop(logicalStop: PanelStop) {
+        val requestAtStart = currentRequestedStop
+        val pageAtStart = currentPageKey
+        state.animateTo(currentGeometry.anchorFor(logicalStop), spring(dampingRatio = 0.9f, stiffness = 420f))
+        if (currentRequestedStop == requestAtStart && currentPageKey == pageAtStart && logicalStop != currentRequestedStop) {
+            currentOnStop(logicalStop)
+        }
+    }
+
+    // settledValue also changes during updateAnchors: observing it cannot identify a user action.
+    // Report direct gestures from their actual fling completion, keeping Foundation's fling physics.
+    val defaultFling = AnchoredDraggableDefaults.flingBehavior(state)
+    val userFling = remember(state, defaultFling) {
+        object : FlingBehavior {
+            override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
+                val requestAtStart = currentRequestedStop
+                val pageAtStart = currentPageKey
+                val remaining = with(defaultFling) { this@performFling.performFling(initialVelocity) }
+                // Foundation commits settledValue after this callback returns. The final anchor
+                // is already available from the actual offset; do not read stale settledValue here.
+                val physicalStop = state.anchors.closestAnchor(state.requireOffset())
+                if (physicalStop != null && currentRequestedStop == requestAtStart && currentPageKey == pageAtStart) {
+                    val logicalStop = currentGeometry.userStop(physicalStop, currentRequestedStop)
+                    if (logicalStop != currentRequestedStop) currentOnStop(logicalStop)
+                }
+                return remaining
+            }
+        }
     }
     LaunchedEffect(pageKey) { scroll.scrollToItem(0) }
     SideEffect { onVisibleHeight(geometry.full - state.offset.takeIf { it.isFinite() }.orEmptyOffset(geometry)) }
 
-    val connection = remember(state, scroll) {
+    val connection = remember(state, scroll, flingThreshold) {
         object : NestedScrollConnection {
+            private var sheetMoved = false
+
+            private fun drag(delta: Float): Offset {
+                val consumed = state.dispatchRawDelta(delta)
+                if (consumed != 0f) sheetMoved = true
+                return Offset(0f, consumed)
+            }
+
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 if (source != NestedScrollSource.UserInput || available.y >= 0) return Offset.Zero
-                return Offset(0f, state.dispatchRawDelta(available.y))
+                return drag(available.y)
             }
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                 if (source != NestedScrollSource.UserInput) return Offset.Zero
-                return Offset(0f, state.dispatchRawDelta(available.y))
+                return drag(available.y)
             }
             override suspend fun onPreFling(available: Velocity): Velocity {
                 // At full height the inner list owns flings while it can still scroll.
                 // Do not collapse the sheet when a scrolled list moves toward its beginning;
                 // onPostFling receives only the list's unconsumed remainder.
                 if (state.offset <= 0f && (available.y < 0 || scroll.canScrollBackward)) return Velocity.Zero
+                if (!sheetMoved && available.y == 0f) return Velocity.Zero
+                sheetMoved = false
                 val target = currentGeometry.destination(state.offset, available.y, flingThreshold)
-                state.animateTo(target, spring(dampingRatio = 0.9f, stiffness = 420f))
+                settleUserStop(currentGeometry.userStop(target, currentRequestedStop))
                 return available
             }
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                // Scrolling the list or bringing an item into view is not a sheet-stop request.
+                if (!sheetMoved && available.y == 0f) return Velocity.Zero
+                sheetMoved = false
                 val target = currentGeometry.destination(state.offset, available.y, flingThreshold)
-                state.animateTo(target, spring(dampingRatio = 0.9f, stiffness = 420f))
+                settleUserStop(currentGeometry.userStop(target, currentRequestedStop))
                 return available
             }
         }
@@ -113,11 +156,11 @@ fun MapPanel(
             .offset { IntOffset(0, state.offset.takeIf { it.isFinite() }.orEmptyOffset(geometry).roundToInt()) }
             .clip(RoundedCornerShape(topStart = 50.dp, topEnd = 50.dp))
             .background(LycorisColors.Surface).nestedScroll(connection)
-            .anchoredDraggable(state, Orientation.Vertical)
+            .anchoredDraggable(state, Orientation.Vertical, flingBehavior = userFling)
             .semantics {
                 paneTitle = pageKey
-                expand { scope.launch { state.animateTo(if (geometry.full > geometry.middle + 1f) PanelStop.EXPANDED else PanelStop.MIDDLE) }; true }
-                collapse { scope.launch { state.animateTo(PanelStop.COLLAPSED) }; true }
+                expand { scope.launch { settleUserStop(PanelStop.EXPANDED) }; true }
+                collapse { scope.launch { settleUserStop(PanelStop.COLLAPSED) }; true }
             },
     ) {
         Box(Modifier.testTag("panel-grabber").fillMaxWidth().height(12.dp), contentAlignment = androidx.compose.ui.Alignment.TopCenter) {
@@ -129,3 +172,11 @@ fun MapPanel(
 }
 
 private fun Float?.orEmptyOffset(geometry: PanelGeometry) = this ?: geometry.offset(PanelStop.MIDDLE)
+
+private fun PanelGeometry.anchorFor(stop: PanelStop): PanelStop =
+    if (stop == PanelStop.EXPANDED && full <= middle + 1f) PanelStop.MIDDLE else stop
+
+private fun PanelGeometry.userStop(physicalStop: PanelStop, requestedStop: PanelStop): PanelStop =
+    if (physicalStop == PanelStop.MIDDLE && requestedStop == PanelStop.EXPANDED && anchorFor(requestedStop) == PanelStop.MIDDLE) {
+        PanelStop.EXPANDED
+    } else physicalStop

@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -44,6 +45,14 @@ import com.lycoris.maps.core.map.MapViewHost
 import com.lycoris.maps.core.map.NativeMapState
 import com.lycoris.maps.core.map.MapBounds
 import com.lycoris.maps.core.map.MapCamera
+import com.lycoris.maps.core.map.GoogleMapViewHost
+import com.lycoris.maps.core.data.preferences.MapSource
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
+
+private enum class MapLoad { LOADING, LOADED, FAILED }
 
 enum class MainSection { EXPLORE, BOOKMARKS, SETTINGS }
 
@@ -86,7 +95,18 @@ fun HomeScreen(
     onAttribution: () -> Unit = {},
     panelContent: LazyListScope.() -> Unit = {},
     mapLayers: @Composable () -> Unit = {},
+    mapSource: MapSource = MapSource.OSM,
 ) {
+    var reload by remember { mutableIntStateOf(0) }
+    var mapLoad by remember(mapSource, reload) { mutableStateOf(MapLoad.LOADING) }
+    var dismissMapFailure by remember(mapSource, reload) { mutableStateOf(false) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(mapSource, reload, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            delay(20_000)
+            if (mapLoad == MapLoad.LOADING) mapLoad = MapLoad.FAILED
+        }
+    }
     var stop by rememberSaveable { mutableStateOf(PanelStop.MIDDLE) }
     var visibleHeight by remember { mutableFloatStateOf(0f) }
     var middleMeasured by remember { mutableFloatStateOf(0f) }
@@ -94,12 +114,27 @@ fun HomeScreen(
     var measuredSearchHeight by remember { mutableFloatStateOf(0f) }
     val density = LocalDensity.current
     val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val imeVisible = WindowInsets.ime.getBottom(density) > 0
     val secondary = secondaryTitle != null
     val pageKey = secondaryKey ?: secondaryTitle ?: section.name
-    LaunchedEffect(pageKey) { stop = PanelStop.MIDDLE }
-    BackHandler(enabled = secondary || stop == PanelStop.EXPANDED) {
-        focus.clearFocus()
-        if (secondary) (onBackSecondary ?: onCloseSecondary)() else stop = PanelStop.MIDDLE
+    var stopPageKey by rememberSaveable { mutableStateOf(pageKey) }
+    LaunchedEffect(pageKey) {
+        if (stopPageKey != pageKey) {
+            stop = PanelStop.MIDDLE
+            stopPageKey = pageKey
+        }
+    }
+    BackHandler(enabled = imeVisible || secondary || stop == PanelStop.EXPANDED) {
+        // System Back can reach the app callback while the IME is still visible (including
+        // Android 17). Dismiss that input layer without also closing its search/account page.
+        if (imeVisible) {
+            keyboard?.hide()
+            focus.clearFocus()
+        } else {
+            focus.clearFocus()
+            if (secondary) (onBackSecondary ?: onCloseSecondary)() else stop = PanelStop.MIDDLE
+        }
     }
     BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))) {
         val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -111,8 +146,20 @@ fun HomeScreen(
         val maxPanel = with(density) { (maxHeight - bottom - topInset - 4.dp).coerceAtLeast(52.dp).toPx() }
         val middle = if (!secondary && section != MainSection.BOOKMARKS && middleMeasured > 0) middleMeasured else with(density) { 284.dp.toPx() }
 
-        MapViewHost(Modifier.fillMaxSize(), state = map, onCameraIdle = onCameraIdle, onMapClick = onMapClick, onUserGesture = onUserGesture)
-        mapLayers()
+        key(mapSource, reload) {
+            if (mapSource == MapSource.GOOGLE) {
+                GoogleMapViewHost(Modifier.fillMaxSize(), state = map,
+                    onCameraIdle = onCameraIdle, onMapClick = onMapClick, onUserGesture = onUserGesture,
+                    topPaddingPx = with(density) { (topInset + searchHeight + 8.dp).roundToPx() },
+                    bottomPaddingPx = with(density) { bottom.roundToPx() } + visibleHeight.toInt(),
+                    onTilesLoaded = { mapLoad = MapLoad.LOADED }, onUnavailable = { mapLoad = MapLoad.FAILED })
+            } else {
+                MapViewHost(Modifier.fillMaxSize(), state = map, onCameraIdle = onCameraIdle,
+                    onMapClick = onMapClick, onUserGesture = onUserGesture,
+                    onTilesLoaded = { mapLoad = MapLoad.LOADED }, onUnavailable = { mapLoad = MapLoad.FAILED })
+            }
+            mapLayers()
+        }
         SearchBar(query, onQuery, {
             focus.clearFocus(); stop = PanelStop.EXPANDED; onSearch()
         }, onVoice, initials, onAccount, chinese,
@@ -127,19 +174,26 @@ fun HomeScreen(
             MapTool("locate", if (chinese) "定位" else "Locate me", onLocate,
                 Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = bottom + visibleDp + 20.dp), large = true)
         }
-        if (maxHeight - bottom - visibleDp > topInset + 70.dp) {
+        if (mapSource != MapSource.GOOGLE && maxHeight - bottom - visibleDp > topInset + 70.dp) {
             Box(Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = bottom + visibleDp)
                 .widthIn(max = (maxWidth - 82.dp).coerceAtLeast(1.dp)).heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onAttribution), contentAlignment = Alignment.BottomStart) {
                 Text("© OpenStreetMap contributors", Modifier.background(Color.White.copy(alpha = 0.86f)).padding(horizontal = 4.dp, vertical = 2.dp),
                     fontSize = 11.sp, lineHeight = 14.sp, color = Color(0xFF005EA8))
             }
         }
-        if (notice != null) {
+        val showMapFailure = notice == null && mapLoad == MapLoad.FAILED && !dismissMapFailure
+        if (notice != null || showMapFailure) {
             Surface(Modifier.align(Alignment.TopCenter).padding(top = topInset + searchHeight + 16.dp, start = 12.dp, end = 72.dp),
                 shape = RoundedCornerShape(20.dp), tonalElevation = 3.dp) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(notice, Modifier.weight(1f).padding(start = 16.dp, top = 12.dp, bottom = 12.dp), style = MaterialTheme.typography.bodyMedium)
-                    IconButton(onDismissNotice) { Icon(Icons.Rounded.Close, if (chinese) "关闭提示" else "Dismiss message") }
+                    Column(Modifier.weight(1f).padding(start = 16.dp, top = 12.dp, bottom = 12.dp)) {
+                        Text(notice ?: if (chinese) "地图暂时无法加载，请重试或切换地图来源。" else "Map unavailable. Retry or choose another map source.", style = MaterialTheme.typography.bodyMedium)
+                        if (showMapFailure) Row {
+                            TextButton({ map.camera = map.snapshotCamera(); reload++ }) { Text(if (chinese) "重试" else "Retry") }
+                            TextButton(onMapSource) { Text(if (chinese) "切换地图" else "Change map") }
+                        }
+                    }
+                    IconButton({ if (showMapFailure) dismissMapFailure = true else onDismissNotice() }) { Icon(Icons.Rounded.Close, if (chinese) "关闭提示" else "Dismiss message") }
                 }
             }
         }
@@ -160,7 +214,7 @@ fun HomeScreen(
                             MainSection.EXPLORE -> if (chinese) "查找附近" else "Find Nearby"
                             MainSection.BOOKMARKS -> if (chinese) "收藏" else "Bookmarks"
                             MainSection.SETTINGS -> if (chinese) "设置" else "Settings"
-                        }, chinese = chinese)
+                        }, chinese = chinese, startPadding = if (section == MainSection.BOOKMARKS) 30.dp else 41.dp)
                         when (section) {
                             MainSection.EXPLORE -> NearbyCategories(chinese, onNearby)
                             MainSection.SETTINGS -> SettingsRows(chinese, radius, mapSourceName, onSetting)
@@ -233,8 +287,8 @@ private fun MapTool(icon: String, label: String, onClick: () -> Unit, modifier: 
 }
 
 @Composable
-fun PanelTitle(title: String, onClose: (() -> Unit)? = null, chinese: Boolean = false) {
-    Row(Modifier.fillMaxWidth().padding(start = 41.dp, end = 24.dp).heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
+fun PanelTitle(title: String, onClose: (() -> Unit)? = null, chinese: Boolean = false, startPadding: androidx.compose.ui.unit.Dp = 41.dp) {
+    Row(Modifier.fillMaxWidth().padding(start = startPadding, end = 24.dp).heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, Modifier.weight(1f).semantics { heading() }, fontSize = 22.sp, lineHeight = 28.sp, color = LycorisColors.Text)
         if (onClose != null) IconButton(onClose) { Icon(Icons.Rounded.Close, if (chinese) "关闭" else "Close") }
     }

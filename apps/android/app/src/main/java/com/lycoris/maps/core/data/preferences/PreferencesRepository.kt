@@ -16,10 +16,10 @@ import java.io.IOException
 import java.util.Locale
 
 private val Context.lycorisPreferences by preferencesDataStore("lycoris_settings")
-enum class MapSource { OSM, TIANDITU }
+enum class MapSource { OSM, TIANDITU, GOOGLE }
 data class Preferences(val language: Language = if (Locale.getDefault().language == "zh") Language.ZH else Language.EN, val radiusMeters: Int = 1000, val mapSource: MapSource = MapSource.OSM)
 
-class PreferencesRepository(context: Context, scope: CoroutineScope, private val tiandituAvailable: Boolean) {
+class PreferencesRepository(context: Context, scope: CoroutineScope, private val tiandituAvailable: Boolean, private val googleAvailable: Boolean = false) {
     private val store = context.applicationContext.lycorisPreferences
     private val language = stringPreferencesKey("language")
     private val radius = intPreferencesKey("radius_meters")
@@ -28,14 +28,19 @@ class PreferencesRepository(context: Context, scope: CoroutineScope, private val
         Preferences(
             Language.entries.firstOrNull { it.tag == values[language] } ?: Preferences().language,
             values[radius]?.takeIf { it in 1..50000 } ?: 1000,
-            if (tiandituAvailable && values[source] == MapSource.TIANDITU.name) MapSource.TIANDITU else MapSource.OSM,
+            when (values[source]) {
+                MapSource.GOOGLE.name -> if (googleAvailable) MapSource.GOOGLE else MapSource.OSM
+                MapSource.TIANDITU.name -> if (tiandituAvailable) MapSource.TIANDITU else MapSource.OSM
+                else -> MapSource.OSM
+            },
         )
     }.stateIn(scope, SharingStarted.Eagerly, Preferences())
 
     suspend fun setLanguage(value: Language) { store.edit { it[language] = value.tag } }
     suspend fun setRadius(value: Int) { require(value in 1..50000); store.edit { it[radius] = value } }
     suspend fun setMapSource(value: MapSource) {
-        require(value == MapSource.OSM || tiandituAvailable)
+        require(value == MapSource.OSM || (value == MapSource.TIANDITU && tiandituAvailable) ||
+            (value == MapSource.GOOGLE && googleAvailable))
         store.edit { it[source] = value.name }
     }
 }

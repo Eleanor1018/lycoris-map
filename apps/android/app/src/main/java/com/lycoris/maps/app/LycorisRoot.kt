@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lycoris.maps.core.data.PlaceListState
+import com.lycoris.maps.core.data.preferences.MapSource
 import com.lycoris.maps.core.map.*
 import com.lycoris.maps.core.model.Language
 import com.lycoris.maps.core.platform.*
@@ -43,9 +44,11 @@ fun LycorisRoot(model: HomeViewModel) {
     }
     val zh = preferences.language == Language.ZH
     val devices = rememberDeviceActions(map, preferences.language, { model.setQuery(it); model.search() }, model::message,
-        allowInitialCenter = allowInitialCenter, onBackgroundMessage = model::backgroundMessage)
+        allowInitialCenter = allowInitialCenter, onBackgroundMessage = model::backgroundMessage,
+        onLocalNetworkGranted = model::retryViewport)
     var setting by rememberSaveable { mutableStateOf<String?>(null) }
     var accountPage by rememberSaveable { mutableStateOf(AccountPage.LOGIN) }
+    var centeredDetailId by rememberSaveable { mutableStateOf<Long?>(null) }
     val navigation = remember(context) { NavigationLauncher(context) }
     var webFallback by remember { mutableStateOf<NavigationDestination?>(null) }
     var previousPage by rememberSaveable { mutableStateOf(page) }
@@ -62,7 +65,14 @@ fun LycorisRoot(model: HomeViewModel) {
     LaunchedEffect(page) { devices.cancelVoice() }
     LaunchedEffect(viewport.failure) { viewport.failure?.let { model.backgroundMessage(it.displayMessage(preferences.language)) } }
     LaunchedEffect(detail.place?.id, page, map.ready) {
-        if (page == SecondaryPage.DETAIL && map.ready) detail.place?.let { map.moveTo(it.lat, it.lng, map.camera.zoom.coerceAtLeast(15.0)) }
+        if (page != SecondaryPage.DETAIL) {
+            centeredDetailId = null
+        } else if (map.ready) {
+            detail.place?.takeIf { it.id != centeredDetailId }?.let {
+                centeredDetailId = it.id
+                map.moveTo(it.lat, it.lng, map.camera.zoom.coerceAtLeast(15.0))
+            }
+        }
     }
     fun close() {
         devices.cancelVoice()
@@ -86,7 +96,8 @@ fun LycorisRoot(model: HomeViewModel) {
         { category ->
             val fix = devices.location.fix
             model.nearby(category, fix?.latitude ?: map.camera.latitude, fix?.longitude ?: map.camera.longitude)
-        }, model::contribute, { setting = "source" }, { setting = it }, preferences.radiusMeters, "OSM",
+        }, model::contribute, { setting = "source" }, { setting = it }, preferences.radiusMeters, if (preferences.mapSource == MapSource.GOOGLE) "Google Maps" else "OSM",
+        mapSource = preferences.mapSource,
         secondaryTitle = title, secondaryKey = page?.let { if (it == SecondaryPage.DETAIL) "detail:${detail.id}" else if (it == SecondaryPage.ACCOUNT) "account:$accountPage" else it.name }, onCloseSecondary = model::closeSecondary, onBackSecondary = ::close,
         notice = if (picking) { if (zh) "点击地图选择点位位置。" else "Tap the map to choose a place." } else notice,
         onDismissNotice = { if (picking) model.cancelPicking() else model.message(null) },
@@ -95,7 +106,12 @@ fun LycorisRoot(model: HomeViewModel) {
                 .onFailure { model.message(if (zh) "没有可用的浏览器。" else "No browser is available.") }
         },
         onUserGesture = model::mapGesture, onCameraIdle = model::cameraIdle, onMapClick = { lat, lng -> model.pickLocation(lat, lng) },
-        mapLayers = { PlaceLayers(map, renderedPlaces, { if (!picking) model.detail(it) }, devices.location.fix, devices.heading) },
+        mapLayers = {
+            if (preferences.mapSource == MapSource.GOOGLE) GooglePlaceLayers(map, renderedPlaces,
+                { if (!picking) model.detail(it) }, devices.location.fix, devices.heading,
+                onPickCoordinate = if (picking) model::pickLocation else null)
+            else PlaceLayers(map, renderedPlaces, { if (!picking) model.detail(it) }, devices.location.fix, devices.heading)
+        },
         panelContent = {
             when (page) {
                 SecondaryPage.SEARCH -> placeItems(search, model.container.clients, account, zh, model::detail, model::search)
@@ -152,7 +168,9 @@ fun LycorisRoot(model: HomeViewModel) {
             }
         })
     }
-    setting?.let { SettingsDialog(it, preferences, { setting = null }, model::language, model::radius) }
+    setting?.let { SettingsDialog(it, preferences, { setting = null }, model::language, model::radius,
+        onMapSource = { source -> map.camera = map.snapshotCamera(); model.mapSource(source) },
+        googleAvailability = model.container.googleMapsAvailability) }
     webFallback?.let { destination ->
         AlertDialog(onDismissRequest = { webFallback = null }, title = { Text(if (zh) "没有可用的导航应用" else "No navigation app available") },
             text = { Text(if (zh) "可以在浏览器中查看目的地。" else "You can view the destination in a browser.") },

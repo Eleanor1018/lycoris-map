@@ -138,7 +138,7 @@ private const val HEADING_LAYER = "lycoris-location-heading"
 private const val DOT_LAYER = "lycoris-location-dot"
 private const val HEADING_IMAGE = "lycoris-heading-artwork"
 /** Figma's exported half-cone has this fixed artwork bearing; its source bytes remain untouched. */
-private const val HEADING_ARTWORK_BEARING = 163.11334
+internal const val HEADING_ARTWORK_BEARING = 163.11334
 private val EMPTY_FEATURES: FeatureCollection = FeatureCollection.fromFeatures(emptyList())
 private val OWN_LAYERS = listOf(DOT_LAYER, HEADING_LAYER, CLUSTER_LAYER, PIN_LAYER, FALLBACK_LAYER, ACCURACY_LAYER)
 
@@ -333,7 +333,7 @@ private class PlaceRenderer(
     }
 }
 
-private class PlaceBitmaps(val pins: Map<PlaceCategory, Bitmap>, val heading: Bitmap?) {
+internal class PlaceBitmaps(val pins: Map<PlaceCategory, Bitmap>, val heading: Bitmap?) {
     companion object {
         suspend fun load(context: Context): PlaceBitmaps {
             val density = context.resources.displayMetrics.density
@@ -390,7 +390,7 @@ private fun placeFeatures(symbols: List<PlaceSymbol>): FeatureCollection = Featu
         if (!symbol.clustered) addStringProperty("placeId", symbol.memberIds.single().toString())
     }
 })
-private fun categoryColor(category: PlaceCategory?): Int = when (category) {
+internal fun categoryColor(category: PlaceCategory?): Int = when (category) {
     PlaceCategory.ACCESSIBLE_TOILET -> 0xFF6393F2.toInt()
     PlaceCategory.BABY_ROOM -> 0xFFFEA90C.toInt()
     PlaceCategory.FRIENDLY_CLINIC -> 0xFF1FBC00.toInt()
@@ -400,7 +400,7 @@ private fun categoryColor(category: PlaceCategory?): Int = when (category) {
 private fun colorHex(category: PlaceCategory?) = "#%06X".format(categoryColor(category) and 0xFFFFFF)
 
 /** System-font count on a native circle avoids a network glyph server or fabricated design asset. */
-private fun clusterBitmap(count: Int, category: PlaceCategory?, density: Float): Bitmap {
+internal fun clusterBitmap(count: Int, category: PlaceCategory?, density: Float): Bitmap {
     val side = (48 * density).roundToInt()
     val bitmap = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888).apply { this.density = (160 * density).roundToInt() }
     val canvas = Canvas(bitmap)

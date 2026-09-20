@@ -11,6 +11,7 @@ import androidx.lifecycle.Lifecycle
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import org.maplibre.android.RenderingEngine
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -32,6 +33,11 @@ class MapLifecycleTest {
         compose.waitUntil(10_000) { state.ready }
         var original: MapLibreMap? = null
         compose.runOnIdle {
+            assertEquals(
+                "The native map must use OpenGL ES so devices without Vulkan remain supported",
+                RenderingEngine.Type.OPENGL,
+                RenderingEngine.getCurrentType(),
+            )
             original = state.map
             original!!.moveCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder()
                 .target(LatLng(31.2304, 121.4737)).zoom(15.0).bearing(37.0).build()))

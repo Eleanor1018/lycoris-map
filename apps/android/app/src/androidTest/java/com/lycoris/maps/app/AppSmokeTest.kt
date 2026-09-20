@@ -16,6 +16,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.lycoris.maps.BuildConfig
+import com.lycoris.maps.core.device.QA_LOCAL_NETWORK_REQUESTED
 import com.lycoris.maps.core.model.PlaceCategory
 import com.lycoris.maps.feature.map.HomeViewModel
 import com.lycoris.maps.feature.map.MainSection
@@ -43,6 +44,7 @@ class AppSmokeTest {
     private var scenarioIntentBeforeWarmLink: Intent? = null
     private var permissionPreferences: SharedPreferences? = null
     private var originalLocationRequested: Boolean? = null
+    private var originalQaLocalNetworkRequested: Boolean? = null
 
     @Before fun launchQaActivity() {
         assertTrue("Smoke tests require the QA build", BuildConfig.TEST_ENVIRONMENT)
@@ -50,7 +52,9 @@ class AppSmokeTest {
         assertEquals("http://10.0.2.2:18187/", BuildConfig.API_BASE_URL)
         permissionPreferences = context.getSharedPreferences("device-permissions", Context.MODE_PRIVATE).also { preferences ->
             originalLocationRequested = if (preferences.contains("location-requested")) preferences.getBoolean("location-requested", false) else null
-            assertTrue(preferences.edit().putBoolean("location-requested", true).commit())
+            originalQaLocalNetworkRequested = if (preferences.contains(QA_LOCAL_NETWORK_REQUESTED)) preferences.getBoolean(QA_LOCAL_NETWORK_REQUESTED, false) else null
+            // System permission prompts are a separate matrix; never grant them in UI smoke.
+            assertTrue(preferences.edit().putBoolean("location-requested", true).putBoolean(QA_LOCAL_NETWORK_REQUESTED, true).commit())
         }
         // A startup exception in the real Activity/ViewModel must fail here, not be hidden by a test host.
         scenario = ActivityScenario.launch(MainActivity::class.java)
@@ -69,6 +73,8 @@ class AppSmokeTest {
             permissionPreferences?.edit()?.apply {
                 val previous = originalLocationRequested
                 if (previous == null) remove("location-requested") else putBoolean("location-requested", previous)
+                val previousLocalNetwork = originalQaLocalNetworkRequested
+                if (previousLocalNetwork == null) remove(QA_LOCAL_NETWORK_REQUESTED) else putBoolean(QA_LOCAL_NETWORK_REQUESTED, previousLocalNetwork)
             }?.let { assertTrue("Could not restore the QA permission marker", it.commit()) }
         }
     }

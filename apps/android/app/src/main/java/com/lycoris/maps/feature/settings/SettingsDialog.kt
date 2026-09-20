@@ -12,11 +12,16 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.lycoris.maps.core.data.preferences.Preferences
+import com.lycoris.maps.core.data.preferences.MapSource
+import com.lycoris.maps.core.map.GoogleMapsAvailability
 import com.lycoris.maps.core.data.preferences.parseRadius
 import com.lycoris.maps.core.model.Language
 
 @Composable
-fun SettingsDialog(kind: String, preferences: Preferences, onDismiss: () -> Unit, onLanguage: (Language) -> Unit, onRadius: (Int) -> Unit) {
+fun SettingsDialog(kind: String, preferences: Preferences, onDismiss: () -> Unit, onLanguage: (Language) -> Unit, onRadius: (Int) -> Unit,
+    onMapSource: (MapSource) -> Unit = {},
+    googleAvailability: GoogleMapsAvailability = GoogleMapsAvailability.NOT_CONFIGURED,
+) {
     val zh = preferences.language == Language.ZH
     when (kind) {
         "language" -> AlertDialog(onDismissRequest = onDismiss, confirmButton = {}, dismissButton = {
@@ -43,10 +48,20 @@ fun SettingsDialog(kind: String, preferences: Preferences, onDismiss: () -> Unit
         }
         "source" -> AlertDialog(onDismissRequest = onDismiss, confirmButton = { TextButton(onDismiss) { Text(if (zh) "完成" else "Done") } }, text = {
             Column {
-                Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(true, null); Text("OpenStreetMap", Modifier.padding(12.dp)) }
-                Text(if (zh) "天地图需要原生客户端授权，暂未启用。" else "Tianditu requires native-client authorization and is not enabled yet.", style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.height(12.dp))
-                Text("© OpenStreetMap contributors · MapLibre Native", style = MaterialTheme.typography.bodySmall)
+                listOf(MapSource.OSM to "OpenStreetMap", MapSource.GOOGLE to "Google Maps").forEach { (source, label) ->
+                    val enabled = source == MapSource.OSM || googleAvailability == GoogleMapsAvailability.AVAILABLE
+                    val selected = preferences.mapSource == source
+                    Row(Modifier.fillMaxWidth().selectable(selected, enabled = enabled, role = Role.RadioButton,
+                        onClick = { onMapSource(source); onDismiss() }).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected, null, enabled = enabled)
+                        Text(label, Modifier.padding(12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.38f))
+                    }
+                }
+                when (googleAvailability) {
+                    GoogleMapsAvailability.NOT_CONFIGURED -> Text(if (zh) "Google Maps 暂未配置。" else "Google Maps is not configured yet.", style = MaterialTheme.typography.bodySmall)
+                    GoogleMapsAvailability.PLAY_SERVICES_UNAVAILABLE -> Text(if (zh) "此设备的 Google Play 服务不可用。" else "Google Play services are unavailable on this device.", style = MaterialTheme.typography.bodySmall)
+                    GoogleMapsAvailability.AVAILABLE -> Unit
+                }
             }
         })
     }
