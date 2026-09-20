@@ -118,11 +118,20 @@ class PlaceRepository(
             place = previous.place.takeIf { previous.id == id && previous.language == language },
         )
         scope.launch {
+            var requestEpoch: Long? = null
+            var detailRequestStarted = false
             try {
                 if (id <= 0) throw ApiFailure.InvalidInput("marker")
-                val epoch = accounts?.state?.value?.epoch
+                // A cold private deep link must not issue an anonymous 404 while /me is restoring.
+                val ready = accounts?.awaitReadyState()
+                val epoch = ready?.epoch
+                requestEpoch = epoch
+                val identity = if (ready?.user != null) accounts?.identity()?.takeIf {
+                    it.epoch == epoch && it.publicId == ready.user.publicId
+                } ?: throw ApiFailure.SessionChanged() else null
+                detailRequestStarted = true
                 val place = apiCall {
-                    if (accounts?.identity() != null) accounts.withAuthenticatedRead { api, _ -> api.marker(id, language.tag).requireBody() }
+                    if (identity != null) accounts!!.withAuthenticatedRead(expectedIdentity = identity) { api, _ -> api.marker(id, language.tag).requireBody() }
                     else publicApi.marker(id, language.tag).requireBody()
                 }
                 if (!place.hasValidLocation || place.id != id || place.deactivated) throw ApiFailure.InvalidResponse()
@@ -136,8 +145,8 @@ class PlaceRepository(
                 throw cancelled
             } catch (failure: ApiFailure) {
                 synchronized(lock) {
-                    if (generation == detailGeneration) {
-                        val missing = failure is ApiFailure.Http && failure.status == 404
+                    if (generation == detailGeneration && (!detailRequestStarted || requestEpoch == accounts?.state?.value?.epoch)) {
+                        val missing = detailRequestStarted && failure is ApiFailure.Http && failure.status == 404
                         if (missing) pruneLocked(id)
                         detailMutable.update { it.copy(place = if (missing) null else it.place, loading = false, failure = failure, missing = missing) }
                     }

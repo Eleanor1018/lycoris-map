@@ -14,6 +14,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import okhttp3.Cookie
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.Assert.*
@@ -235,5 +237,60 @@ class AccountRepositoryTest {
         repository.refreshFavorites(Language.ZH)
         assertTrue(repository.state.value.favoritesInitialized)
         assertEquals(Language.ZH, repository.state.value.privateLanguage)
+    }
+
+    @Test fun deferredBookmarkIntentKeepsAnExistingBookmarkAfterLogin() = withRepository { server, repository, _ ->
+        login(server, repository)
+        server.enqueue(MockResponse().setBody("[1]"))
+        server.enqueue(MockResponse().setBody("[1]"))
+        server.enqueue(MockResponse().setBody("[$marker]"))
+        repository.setFavorite(1, desired = true, language = Language.EN)
+        assertEquals(setOf(1L), repository.state.value.favoriteIds)
+        assertTrue(repository.state.value.favoritesInitialized)
+        repeat(3) { assertEquals("GET", server.takeRequest(2, TimeUnit.SECONDS)!!.method) }
+        assertEquals(4, server.requestCount) // Login plus reads; no destructive DELETE or redundant POST.
+    }
+
+    @Test fun deferredBookmarkIntentAddsAnAbsentBookmarkAfterLogin() = withRepository { server, repository, _ ->
+        login(server, repository)
+        server.enqueue(MockResponse().setBody("[]"))
+        server.enqueue(MockResponse().setResponseCode(200))
+        server.enqueue(MockResponse().setBody("[1]"))
+        server.enqueue(MockResponse().setBody("[$marker]"))
+        repository.setFavorite(1, desired = true, language = Language.EN)
+        assertEquals(setOf(1L), repository.state.value.favoriteIds)
+        assertTrue(repository.state.value.favoritesInitialized)
+        assertEquals("GET", server.takeRequest().method)
+        val write = server.takeRequest()
+        assertEquals("POST", write.method)
+        assertEquals("/api/markers/1/favorite", write.path)
+    }
+
+    @Test fun deferredBookmarkDoesNotGuessWhenAuthoritativeIdsFail() = withRepository { server, repository, _ ->
+        login(server, repository)
+        server.enqueue(MockResponse().setResponseCode(503))
+        try { repository.setFavorite(1, desired = true, language = Language.EN); fail("Expected failed authoritative read") }
+        catch (_: ApiFailure.Http) { }
+        assertFalse(repository.state.value.favoritesInitialized)
+        assertTrue(repository.state.value.pendingFavoriteIds.isEmpty())
+        assertEquals(2, server.requestCount)
+        assertEquals("GET", server.takeRequest().method)
+    }
+
+    @Test fun cancelledRestoreSettlesReadinessWithoutUsingUnverifiedCookieAsAnonymous() = withRepository { server, repository, jar ->
+        jar.saveFromResponse(server.url("/"), listOf(Cookie.parse(server.url("/"), "session=owner; Path=/; Max-Age=600")!!))
+        server.enqueue(MockResponse().setBody(userA).setBodyDelay(600, TimeUnit.MILLISECONDS))
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val restore = scope.async { repository.restore() }
+            assertNotNull(server.takeRequest(2, TimeUnit.SECONDS))
+            restore.cancelAndJoin()
+            assertTrue(repository.state.value.initialized)
+            assertFalse(repository.state.value.busy)
+            assertNull(repository.state.value.failure)
+            try { withTimeout(2_000) { repository.awaitReadyState() }; fail("Unverified session must not act as anonymous") }
+            catch (_: ApiFailure.SessionRequired) { }
+            assertTrue(jar.hasCookies())
+        } finally { scope.cancel() }
     }
 }

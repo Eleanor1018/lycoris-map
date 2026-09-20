@@ -29,6 +29,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -82,16 +83,22 @@ class AccountRepository(
         current.user?.let { SessionIdentity(cookies.origin.toString(), it.publicId, current.epoch) }
     }
 
+    /** A retained cookie after a failed restore is an unknown session, not proven anonymity. */
+    internal suspend fun awaitReadyState(): AccountState {
+        val ready = state.first { it.initialized && !it.busy }
+        if (ready.user == null && cookies.hasCookies()) throw ready.failure ?: ApiFailure.SessionRequired()
+        return ready
+    }
+
     suspend fun restore() = withContext(io) {
         gate.withLock {
             if (state.value.initialized && state.value.user != null) return@withLock
             cookies.restore()
-            val epoch = transition(clearCookies = false)
+            val epoch = transition(clearCookies = false, initialized = false, busy = true)
             if (!cookies.hasCookies()) {
-                mutable.update { it.copy(initialized = true) }
+                mutable.update { it.copy(initialized = true, busy = false) }
                 return@withLock
             }
-            mutable.update { it.copy(busy = true) }
             try {
                 val user = apiCall { apiForEpoch(epoch).me().requireUserData().validUser() }
                 publishUser(epoch, user)
@@ -118,8 +125,7 @@ class AccountRepository(
 
     private suspend fun authenticate(block: suspend LycorisApi.() -> User): User = withContext(io) {
         gate.withLock {
-            val epoch = transition(clearCookies = true)
-            mutable.update { it.copy(busy = true) }
+            val epoch = transition(clearCookies = true, busy = true)
             try {
                 val user = apiCall { apiForEpoch(epoch).block().validUser() }
                 publishUser(epoch, user)
@@ -291,7 +297,12 @@ class AccountRepository(
     }
 
     /** Per-id guard plus the mutation gate prevents duplicate taps and query/write races. */
-    suspend fun toggleFavorite(id: Long, language: Language) {
+    suspend fun toggleFavorite(id: Long, language: Language) = changeFavorite(id, language, desired = null)
+
+    /** Used for deferred "sign in to bookmark" intent; an existing bookmark must not be removed. */
+    suspend fun setFavorite(id: Long, desired: Boolean, language: Language) = changeFavorite(id, language, desired)
+
+    private suspend fun changeFavorite(id: Long, language: Language, desired: Boolean?) {
         if (id <= 0) throw ApiFailure.InvalidInput("marker")
         val epoch = identity()?.epoch ?: throw ApiFailure.SessionRequired()
         val accepted = synchronized(sessionLock) {
@@ -314,10 +325,13 @@ class AccountRepository(
                     }
                 }
                 val wasFavorite = id in state.value.favoriteIds
-                if (wasFavorite) api.removeFavorite(id).requireSuccess() else api.addFavorite(id).requireSuccess()
+                val shouldBeFavorite = desired ?: !wasFavorite
+                if (wasFavorite != shouldBeFavorite) {
+                    if (shouldBeFavorite) api.addFavorite(id).requireSuccess() else api.removeFavorite(id).requireSuccess()
+                }
                 mutable.update { if (it.epoch == epoch) it.copy(
-                    favoriteIds = if (wasFavorite) it.favoriteIds - id else it.favoriteIds + id,
-                    favoritePlaces = if (wasFavorite) it.favoritePlaces.filterNot { marker -> marker.id == id } else it.favoritePlaces,
+                    favoriteIds = if (shouldBeFavorite) it.favoriteIds + id else it.favoriteIds - id,
+                    favoritePlaces = if (shouldBeFavorite) it.favoritePlaces else it.favoritePlaces.filterNot { marker -> marker.id == id },
                 ) else it }
                 // The write already succeeded. Keep that fact even if this reconciliation GET fails.
                 val ids = api.favoriteIds().requireBody().filter { it > 0 }.toSet()
@@ -415,16 +429,29 @@ class AccountRepository(
         }
     }
 
-    private fun transition(clearCookies: Boolean, failure: ApiFailure? = null): Long = synchronized(sessionLock) {
+    private fun transition(
+        clearCookies: Boolean,
+        failure: ApiFailure? = null,
+        initialized: Boolean = true,
+        busy: Boolean = false,
+    ): Long = synchronized(sessionLock) {
         privateScope.cancel()
         privateScope = newPrivateScope()
         favoritesRead++
         createdRead++
         inaccessiblePlaces.clear()
+        var transitionFailure: ApiFailure? = null
         try {
             cookies.advanceEpoch(clearCookies)
+        } catch (error: ApiFailure) {
+            transitionFailure = error
+            throw error
         } finally {
-            mutable.value = AccountState(initialized = true, epoch = cookies.epoch(), failure = failure)
+            mutable.value = AccountState(
+                initialized = transitionFailure != null || initialized,
+                busy = transitionFailure == null && busy,
+                epoch = cookies.epoch(), failure = transitionFailure ?: failure,
+            )
         }
         cookies.epoch()
     }
