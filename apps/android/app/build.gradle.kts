@@ -25,6 +25,27 @@ require(tencentMapsApiKey.isEmpty() || tencentMapsApiKey.matches(Regex("[A-Za-z0
     "Tencent Maps key contains invalid characters"
 }
 
+// Only a path belongs in local.properties; the key and passwords stay outside source control.
+// CI without this optional configuration continues producing an unsigned release artifact.
+val localBuildProperties = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
+}
+val releaseSigningPath = providers.environmentVariable("LYCORIS_ANDROID_SIGNING_PROPERTIES")
+    .orElse(providers.gradleProperty("lycoris.signingProperties")).orNull
+    ?: localBuildProperties.getProperty("lycoris.signingProperties")
+val releaseSigningProperties = releaseSigningPath?.let { path ->
+    require(path.isNotBlank()) { "Release signing properties path must not be blank" }
+    val credentialsFile = rootProject.file(path)
+    require(credentialsFile.isFile) { "Release signing properties file was not found" }
+    Properties().apply {
+        credentialsFile.inputStream().use { load(it) }
+        for (name in listOf("storeFile", "storePassword", "keyAlias", "keyPassword")) {
+            require(!getProperty(name).isNullOrBlank()) { "Release signing requires $name" }
+        }
+        require(rootProject.file(getProperty("storeFile")).isFile) { "Release keystore was not found" }
+    }
+}
+
 android {
     namespace = "com.lycoris.maps"
     compileSdk = 37
@@ -42,6 +63,16 @@ android {
         buildConfigField("String", "API_BASE_URL", "\"https://api.lycoris-map.com/\"")
         buildConfigField("boolean", "TEST_ENVIRONMENT", "false")
     }
+    signingConfigs {
+        releaseSigningProperties?.let { credentials ->
+            create("release") {
+                storeFile = rootProject.file(credentials.getProperty("storeFile"))
+                storePassword = credentials.getProperty("storePassword")
+                keyAlias = credentials.getProperty("keyAlias")
+                keyPassword = credentials.getProperty("keyPassword")
+            }
+        }
+    }
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -58,6 +89,7 @@ android {
             buildConfigField("boolean", "TEST_ENVIRONMENT", "true")
         }
         release {
+            if (releaseSigningProperties != null) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

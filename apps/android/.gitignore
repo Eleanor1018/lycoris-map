@@ -5,4 +5,7 @@ local.properties
 local.secrets.properties
 *.jks
 *.keystore
+*.p12
+*.pfx
+local.signing.properties
 captures/

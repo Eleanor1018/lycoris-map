@@ -44,7 +44,7 @@ Defects found and fixed during testing include first-measurement expansion of th
 - Computer Use has alternated between an unreadable Android Studio Running Devices floating window and a locked Mac. No native Figma screenshot comparison has been accepted yet. Android Studio is now open on the visible Android worktree; automated tests are not a substitute for a complete visual review.
 - The browser-only Tianditu key returned HTTP 403 / service code 301012 for a native WMTS request. OSM remains available; no browser-header impersonation or embedded Tianditu key is used. The new native Google selector remains disabled until an Android SDK key is configured.
 - Physical GPS/compass, on-device recognition, navigation-app return, OEM background behavior, signed-release runtime and optimized performance measurements remain unverified.
-- Release signing, app-store distribution and website `assetlinks.json` are not configured. The `.preview` package uses a debug certificate and is for evaluation. Release is unsigned.
+- Local release signing is now available (see the signing follow-up below); app-store distribution and website `assetlinks.json` remain unconfigured. The `.preview` package uses a debug certificate and is for evaluation. CI release artifacts remain unsigned.
 
 See [testing-qa.md](testing-qa.md) for the isolated environment and [release-checklist.md](release-checklist.md) for the full remaining acceptance matrix. No production records, server configuration or Web deployment were modified by these Android checks.
 
@@ -104,3 +104,11 @@ Evidence: `tencent-verified-build.log`, `tencent-pixel-final.log` in the ignored
 ## CI soft-keyboard fixture
 
 Remote run [35503823643](https://github.com/Eleanor1018/lycoris-map/actions/runs/35503823643) passed unit tests, lint, all APK builds and release ZIP alignment, but failed the real IME test on API 36. Its diagnostics reported a hardware keyboard, `showImeWithHardKeyboard=0` and zero IME bottom inset despite the focused text editor. The workflow now enables and checks `show_ime_with_hard_keyboard` only on its disposable API 36 and API 26 AVDs. The existing real-touch, keyboard-inset, Back handling and button-reachability assertions remain unchanged; no local or physical-device keyboard setting is changed. A new remote run is required to verify this fixture correction.
+
+## Local release signing
+
+A new owner-controlled release key was created outside the repository on 2026-09-20: RSA 3072, PKCS12, 30-year validity, randomly generated password, directory mode 700 and file modes 600. The public certificate and exact map-service registration values are recorded in [signing.md](signing.md). Ignored `local.properties` contains only the external credentials-file path. The private key and passwords were not uploaded to GitHub; an off-device owner backup remains necessary.
+
+`signingReport`, `assembleRelease` and `bundleRelease` passed in 1m10s. `apksigner verify --verbose --print-certs` verified the resulting APK with the intended release certificate; its package is `com.lycoris.maps`, it is not debuggable, and 16 KB ZIP alignment passes. The AAB JAR signature verifies with the same certificate. Debug/QA/Preview retain the original debug certificate. Five isolated Gradle configuration checks passed: absent configuration stays unsigned; an explicitly blank path, missing credentials file, partial fields or missing keystore fails configuration. Those checks did not change developer-device settings.
+
+This establishes local signing and artifact verification, not a store release or signed-release runtime acceptance. CI continues building unsigned release artifacts without private signing credentials. Build evidence is `release-signing-build.log` in the ignored runtime directory.
