@@ -45,6 +45,10 @@ export default defineConfig({
         port: DEV_PORT,
         strictPort: true,
         proxy: {
+            '/tiles/osm': {
+                target: 'https://lycoris-map.com',
+                changeOrigin: true,
+            },
             '/api': { target: LOCAL_BACKEND, changeOrigin: false },
             '/uploads': { target: LOCAL_BACKEND, changeOrigin: false },
             '/health': { target: LOCAL_BACKEND, changeOrigin: false },

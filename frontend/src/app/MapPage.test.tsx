@@ -501,7 +501,7 @@ it.each([false, true])(
         fireEvent.click(trigger)
         fireEvent.click(screen.getByRole('radio', { name: 'OSM' }))
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
-        expect(map.querySelector('img[src*="tile.openstreetmap.org"]')).toBeInTheDocument()
+        expect(map.querySelector('img[src^="/tiles/osm/"]')).toBeInTheDocument()
         expect(map.querySelector('img[src*="tianditu.gov.cn"]')).not.toBeInTheDocument()
         expect(within(map).queryByRole('link', { name: '天地图' })).not.toBeInTheDocument()
         expect({ ...map.dataset }).toEqual(camera)

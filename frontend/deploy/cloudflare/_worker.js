@@ -3,6 +3,78 @@ const BACKEND_ORIGIN = 'https://api.lycoris-map.com'
 const MEDIA_PATH = /^\/uploads\/(avatars|markers)\/[A-Za-z0-9_.-]+\.(?:jpe?g|png|webp|gif)$/i
 const MEDIA_KEY = /^media\/v1\/([a-f0-9]{64})\.(jpg|png|webp|gif)$/
 const MAX_IMAGE_BYTES = 16 * 1024 * 1024
+const OSM_TILE = /^\/tiles\/osm\/(0|[1-9]\d?)\/(0|[1-9]\d*)\/(0|[1-9]\d*)\.png$/
+
+async function osmTile(request) {
+    const url = new URL(request.url)
+    const match = url.pathname.match(OSM_TILE)
+    const [z, x, y] = match ? match.slice(1).map(Number) : []
+    const fail = (status) =>
+        new Response(null, {
+            status,
+            headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' },
+        })
+    if (!match || z > 19 || x >= 2 ** z || y >= 2 ** z || url.search) return fail(404)
+    if (!['GET', 'HEAD'].includes(request.method)) {
+        const response = fail(405)
+        response.headers.set('Allow', 'GET, HEAD')
+        return response
+    }
+    // Fixed provider/path only: never forward cookies, credentials or arbitrary URLs.
+    // OSM requires stable application identification and the real web Referer.
+    const headers = new Headers({
+        'User-Agent': 'LycorisMaps/1.0 (+https://lycoris-map.com)',
+        Accept: 'image/png',
+    })
+    for (const name of ['Referer', 'If-None-Match', 'If-Modified-Since']) {
+        const value = request.headers.get(name)
+        if (value) headers.set(name, value)
+    }
+    try {
+        const upstream = await fetch(
+            new Request(`https://tile.openstreetmap.org/${z}/${x}/${y}.png`, {
+                method: request.method,
+                headers,
+                signal: AbortSignal.timeout(15000),
+            }),
+            {
+                redirect: 'manual',
+                // Cloudflare's fetch cache honors the provider's freshness/validators.
+                // Do not override its TTL or forward browser reload/cache-bypass headers.
+                cf: { cacheEverything: true },
+            },
+        )
+        if (
+            upstream.status !== 304 &&
+            (upstream.status !== 200 ||
+                upstream.headers.get('Content-Type')?.split(';')[0] !== 'image/png' ||
+                upstream.headers.has('x-blocked'))
+        ) {
+            await upstream.body?.cancel()
+            return fail(upstream.status === 404 ? 404 : 502)
+        }
+        const outgoing = new Headers()
+        for (const name of [
+            'Content-Type',
+            'Content-Length',
+            'Cache-Control',
+            'Expires',
+            'ETag',
+            'Last-Modified',
+            'Age',
+            'Date',
+        ]) {
+            const value = upstream.headers.get(name)
+            if (value) outgoing.set(name, value)
+        }
+        outgoing.set('X-Content-Type-Options', 'nosniff')
+        outgoing.set('X-Lycoris-Tile-Source', 'osm-worker')
+        outgoing.set('X-Lycoris-Tile-Cache', upstream.headers.get('CF-Cache-Status') ?? 'UNKNOWN')
+        return new Response(upstream.body, { status: upstream.status, headers: outgoing })
+    } catch {
+        return fail(502)
+    }
+}
 
 function backendRequest(request, method = request.method) {
     const incoming = new URL(request.url)
@@ -183,6 +255,8 @@ async function controlledImage(request, env, context) {
 export default {
     async fetch(request, env, context) {
         const incoming = new URL(request.url)
+        if (incoming.pathname === '/tiles/osm' || incoming.pathname.startsWith('/tiles/osm/'))
+            return osmTile(request)
         if (incoming.pathname.startsWith('/__lycoris_media_cache/'))
             return new Response(null, { status: 404 })
         const isBackend = ['/api', '/uploads', '/health'].some(
