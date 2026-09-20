@@ -8,6 +8,7 @@ struct NativeMapView: UIViewRepresentable {
   var appearance: MapAppearance = .explore
   var coordinateSpace: MapCoordinateSpace = .wgs84
   var places: [PlacePresentation] = []
+  var language: AppLanguage = .current()
   var focus: MapFocus? = nil
   var showsUserLocation = false
   var isActive = true
@@ -80,6 +81,17 @@ struct NativeMapView: UIViewRepresentable {
     coordinator.placementTap?.isEnabled = isSelectingLocation
     coordinator.placementDoubleTap?.isEnabled = isSelectingLocation
     coordinator.updateSelectedLocation(on: map)
+    if coordinator.language != language {
+      coordinator.language = language
+      // Refresh existing pins so the localized category label follows the app's
+      // chosen language, not only the system language.
+      for annotation in map.annotations {
+        guard let pin = annotation as? PlaceAnnotation,
+          let view = map.view(for: pin)
+        else { continue }
+        coordinator.configure(view, for: pin)
+      }
+    }
     if coordinator.appearance != appearance {
       map.preferredConfiguration = appearance.configuration()
       coordinator.appearance = appearance
@@ -158,6 +170,7 @@ struct NativeMapView: UIViewRepresentable {
     var focusID: UUID?
     private var lastFocusCamera: MKMapCamera?
     var appearance: MapAppearance?
+    var language: AppLanguage
     var lastViewport: MapViewport?
     var placementTap: UITapGestureRecognizer?
     var placementDoubleTap: UITapGestureRecognizer?
@@ -166,6 +179,7 @@ struct NativeMapView: UIViewRepresentable {
     private weak var map: MKMapView?
     init(parent: NativeMapView) {
       self.parent = parent
+      self.language = parent.language
       super.init()
       headingProvider.onChange = { [weak self] in
         guard let self, let map = self.map else { return }
@@ -388,7 +402,7 @@ struct NativeMapView: UIViewRepresentable {
       // The 43pt asset includes a shadow below its tip at y=39. Anchor the tip,
       // not the image bottom, to the geographic point.
       view.centerOffset = CGPoint(x: 0, y: -17.5)
-      view.accessibilityLabel = pin.place.title
+      view.accessibilityLabel = PlaceAccessibility.placeLabel(pin.place, language: language)
       view.accessibilityIdentifier = "map.pin.\(pin.place.id)"
       view.isEnabled = !parent.isSelectingLocation
       view.isAccessibilityElement = !parent.isSelectingLocation

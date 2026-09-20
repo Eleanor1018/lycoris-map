@@ -109,8 +109,9 @@ final class LivePlaceTests: LocalBackendTestCase {
     XCTAssertTrue(row.label.contains("0m"), row.label)
     attach(app, name: "i3-nearby-simulated-location")
     row.tap()
-    XCTAssertTrue(
-      app.staticTexts["Straight-line distance from your location"].waitForExistence(timeout: 5))
+    XCTAssertTrue(app.staticTexts["place.title"].waitForExistence(timeout: 5))
+    XCTAssertFalse(app.staticTexts["Straight-line distance from your location"].exists)
+    XCTAssertTrue(app.staticTexts["0m"].exists)
     attach(app, name: "i3-detail-simulated-location")
   }
 

@@ -10,7 +10,13 @@ struct MapSearchBar: View {
   var onAccount: () -> Void = {}
   var onVoiceSearch: () -> Void
   var voiceActive = false
+  var voiceState: VoiceSearchController.State = .idle
+  var language: AppLanguage = .current()
   @ScaledMetric(relativeTo: .headline) private var avatarFont: CGFloat = 18
+
+  private var voiceButton: VoiceSearchButtonState {
+    VoiceSearchButtonState(isVoicePanelOpen: voiceActive, state: voiceState)
+  }
 
   var body: some View {
     HStack(spacing: 8) {
@@ -29,11 +35,12 @@ struct MapSearchBar: View {
           }
           .accessibilityIdentifier("map.search")
         Button(action: onVoiceSearch) {
-          Image(systemName: voiceActive ? "waveform" : "microphone").font(.subheadline)
-            .foregroundStyle(voiceActive ? Color.accentColor : Color.secondary)
+          Image(systemName: voiceButton.symbolName).font(.subheadline)
+            .foregroundStyle(voiceButton.usesActiveAppearance ? Color.accentColor : Color.secondary)
             .frame(width: 44, height: 44).contentShape(Rectangle())
         }.buttonStyle(.plain)
-          .accessibilityLabel(voiceActive ? "Stop recording" : "Voice search")
+          .disabled(!voiceButton.isEnabled)
+          .accessibilityLabel(voiceButton.label(language: language))
           .accessibilityIdentifier(
             "map.voice")
       }
