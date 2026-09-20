@@ -12,7 +12,6 @@ struct MapScreen: View {
   @State private var showsVoiceSearch = false
   @State private var voiceTask: Task<Void, Never>?
   @Environment(\.openURL) private var openURL
-  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @State private var detent: MapPanelDetent
   @State private var store: PlaceStore
@@ -147,24 +146,8 @@ struct MapScreen: View {
             width: layout.viewport.width - layout.horizontalInset(at: panelTop) * 2,
             height: panelHeight
           )
-          .background {
-            if reduceTransparency {
-              panelShape.fill(Color(.secondarySystemBackground))
-            } else {
-              panelShape.fill(.ultraThinMaterial)
-            }
-          }
-          .background {
-            panelShape
-              .fill(Color("PanelTint").opacity(0.4 * layout.collapsedProgress(at: panelTop)))
-          }
-          .overlay {
-            panelShape
-              .strokeBorder(.white.opacity(0.28), lineWidth: 0.5)
-              .allowsHitTesting(false)
-          }
           .clipShape(panelShape)
-          .shadow(color: .black.opacity(0.12), radius: 16, y: 4)
+          .modifier(MapPanelSurface(shape: panelShape))
           .position(x: layout.viewport.width / 2, y: panelTop + panelHeight / 2)
           .opacity(selectingLocation ? 0 : 1)
           .allowsHitTesting(!selectingLocation)
@@ -514,6 +497,11 @@ struct MapScreen: View {
         )
         .padding(.horizontal, 14)
         .padding(.bottom, detent == .collapsed ? 14 : detent == .nearby ? 7 : 11)
+        .contentShape(Rectangle())
+        // The floating search row is the collapsed panel's drag surface. Once
+        // open, leave text editing and content scrolling to their native controls.
+        .highPriorityGesture(
+          panelDrag(layout: layout), including: detent == .collapsed ? .all : .subviews)
 
         if showsVoiceSearch {
           VoiceSearchControls(
@@ -601,25 +589,27 @@ struct MapScreen: View {
       @unknown default: break
       }
     }
-    .highPriorityGesture(
-      DragGesture(minimumDistance: 10, coordinateSpace: .global)
-        .updating($dragTranslation) { value, translation, _ in
-          if abs(value.translation.height) > abs(value.translation.width) {
-            translation = value.translation.height
-          }
-        }
-        .onChanged { value in
-          guard abs(value.translation.height) > abs(value.translation.width) else { return }
-          isSearchFocused = false
-        }
-        .onEnded { value in
-          guard abs(value.translation.height) > abs(value.translation.width) else { return }
-          let target = layout.nearest(
-            to: layout.top(for: detent) + value.predictedEndTranslation.height)
-          movePanel(to: target)
-        }
-    )
+    .highPriorityGesture(panelDrag(layout: layout))
 
+  }
+
+  private func panelDrag(layout: PanelLayout) -> some Gesture {
+    DragGesture(minimumDistance: 10, coordinateSpace: .global)
+      .updating($dragTranslation) { value, translation, _ in
+        if abs(value.translation.height) > abs(value.translation.width) {
+          translation = value.translation.height
+        }
+      }
+      .onChanged { value in
+        guard abs(value.translation.height) > abs(value.translation.width) else { return }
+        isSearchFocused = false
+      }
+      .onEnded { value in
+        guard abs(value.translation.height) > abs(value.translation.width) else { return }
+        let target = layout.nearest(
+          to: layout.top(for: detent) + value.predictedEndTranslation.height)
+        movePanel(to: target)
+      }
   }
 
   private func selectPlace(_ place: PlacePresentation) {

@@ -28,3 +28,29 @@ All six UI suites inherit `LocalBackendTestCase`. Its `setUpWithError` skips fix
 - Xcode Debug app and simulator public-place/photo behavior were checked with Computer Use.
 
 Local logs: `/tmp/lycoris-ios-production-config-test.log`, `/tmp/lycoris-ios-production-guard.log`, `/tmp/lycoris-ios-production-release.log`. Physical-device signing, distribution and Universal Links were not part of this connection change.
+
+## 2026-09-20 — empty-map regression recheck
+
+The public viewport and search paths, query names and JSON DTO still match Rust.
+Bounded Shanghai reads with curl, an iOS-style User-Agent and Safari's User-Agent
+returned HTTP 200: 40 viewport records and 37 search records. All response fields
+matched `Marker`. Python urllib's default signature still receives an edge 403;
+this is not the native app's request signature and no Cloudflare setting changed.
+
+The client was preventing viewport publication and mainland pin projection while
+waiting for a public-landmark lookup. The working display space now exists before
+that lookup, and failure keeps browsing active. See `coordinate-alignment.md`.
+
+A temporary **read-only Debug UI smoke test against the real HTTPS service**
+passed on iPhone 17 / iOS 26.5 Simulator: real viewport pins appeared before any
+search, searching Shanghai returned rows, and opening one displayed its detail
+and pin. Its two screenshots were inspected. No account or marker was created or
+edited. The live probe was removed from the regular isolated Test suite afterward.
+
+The deterministic regression run passed 37 unit tests and three UI flows,
+including failed calibration, location following, dragging the collapsed search
+row/padding, ordinary taps, keyboard input and expanded scrolling. Debug and
+Release builds passed. The panel now uses SwiftUI's native
+[`glassEffect`](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views)
+with the same regular material as the map tools, retaining a solid Reduce
+Transparency fallback.

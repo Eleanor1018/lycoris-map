@@ -16,6 +16,8 @@ Fixture text, photo and coordinates are only visual reference data. The Figma to
 
 The initial map camera uses the public New Jersey area shown in the design. It is not the user's current location. Startup requests When In Use location permission and uses MapKit native user following after the first valid fix. The location button starts native following immediately when authorized; it does not wait for landmark calibration. A later Core Location fix updates canonical data without replaying the camera after a user pan. Denial or an unavailable fix quietly leaves browsing usable; explicit location actions retain their retry/settings feedback. Foreground transitions do not repeat a completed startup request or recenter the map. Granting previously denied location access in Settings resumes the initial fix. Design previews never request location.
 
+Point loading also starts immediately using the measured mainland display convention, with background landmark verification; a failed verification never suppresses viewport requests or all mainland pins. See `docs/coordinate-alignment.md`. The bottom panel uses the same native Liquid Glass as the map tools (with a solid Reduce Transparency fallback). When collapsed, its search row and surrounding padding support upward dragging; taps still activate search, voice and account controls. Expanded content retains native text editing and scrolling.
+
 ## Toolchain and build
 
 Verified local tools: Xcode 26.6, Swift 6.3.3, iOS 26.5 SDK/runtime. Swift 6 language mode and complete concurrency checking are enabled. No package dependencies.
