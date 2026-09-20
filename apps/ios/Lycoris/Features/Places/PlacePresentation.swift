@@ -34,7 +34,7 @@ struct PlacePresentation: Identifiable, Equatable, Sendable {
         meters < 1000 ? "\(Int(meters.rounded()))m" : String(format: "%.1fkm", meters / 1000)
       distanceReference =
         located
-        ? String(appLocalized: "Straight-line distance from your location")
+        ? nil
         : String(appLocalized: "Straight-line distance from map center")
     } else {
       distance = ""
