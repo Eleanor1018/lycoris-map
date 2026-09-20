@@ -78,3 +78,72 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
 On 2026-09-20, all seven guard tests passed. A real local-backend HTTP smoke test also passed manifest validation, missing-header write rejection, session login, favorite add/read/remove with empty mutation responses, and logout. The favorite was removed after verification, restoring the synthetic account's prior favorite list. These checks do not establish Android UI, real sensor, microphone or physical-device behavior.
 
 Use `docker compose --env-file apps/android/app/build/qa/backend.env -f apps/android/scripts/qa.compose.yml stop` when the test stack is no longer needed. This preserves its synthetic database and uploads for later sessions.
+
+
+## Opt-in native integration runner
+
+After building `:app:assembleQa` and `:app:assembleQaAndroidTest`, starting the isolated backend/gateway,
+and booting the intended emulator, run from the repository root:
+
+```sh
+python3 apps/android/scripts/qa_device_test.py --serial emulator-5554
+```
+
+Replace the serial with the exact intended device. The runner has no default device and never builds,
+starts containers, changes fixtures, or falls back to a public endpoint. It installs only
+`app/build/outputs/apk/qa/app-qa.apk` and
+`app/build/outputs/apk/androidTest/qa/app-qa-androidTest.apk`. Before installation it checks Gradle
+output metadata and the APK manifest package names with `aapt2`; after installation it checks that
+the fixed instrumentation runner targets `com.lycoris.maps.qa`. SDK tools are discovered from PATH,
+`ANDROID_SDK_ROOT` / `ANDROID_HOME`, `local.properties`, or standard SDK directories. Explicit
+`--adb /path/to/adb --aapt2 /path/to/aapt2` overrides are available.
+
+The script reads only the generated Alice account from ignored `app/build/qa/credentials.json`;
+the file must have mode `0600` and contain its seeded public ID. Do not put a password on the command
+line. Credentials are POSIX-quoted and piped to a noninteractive device shell, rather than included
+in the host adb process arguments, shell history, or echoed commands. Logs redact those values and
+sensitive header lines. The Android test has its own temporary encrypted cookie file and Keystore
+namespace, so it does not clear the QA app UI's saved session.
+
+The only class executed is
+`com.lycoris.maps.feature.contributions.QaBackendIntegrationTest`. Its direct instrumentation
+arguments are `lycorisQaUsername` and `lycorisQaPassword`; without them ordinary CI runs skip this
+live-backend test. The runner treats a skip as failure. It requires exactly one successful test,
+the expected class/method, the successful instrumentation exit marker, and all validated receipts.
+A zero adb exit code by itself is insufficient.
+
+Before installing/running, the runner reuses `qa_setup.verify_backend()`, checks that the effective
+Docker context is local, and validates the gateway manifest against the local fixture sentinel.
+The device test also asserts the QA BuildConfig, `.qa` package, fixed `10.0.2.2:18187` origin and
+manifest; `ApiClients` repeats the guarded preflight before every mutation. There is no base-URL,
+container, database or credential-path override.
+
+The live test verifies real Rust login, encrypted session restoration, favorite add/read/remove,
+exact creation-key replay, multi-chunk image upload, identical chunk replay, status reconciliation,
+and repeated completion/start. It restores the account's prior favorite state and leaves its new
+pending point and photo proposal labeled `Android QA integration <UUID>` for inspection. It never
+edits the existing fixture point text or approves/deletes contributions.
+
+After the test, canonical opaque receipt IDs are checked in a `BEGIN TRANSACTION READ ONLY`
+transaction against the fixed synthetic PostgreSQL container. This verifies one marker for the
+creation key, one upload for the photo key, exactly one image proposal for the new marker, the
+matching upload proposal ID/owner, `COMPLETED`, matching received/total bytes, and empty staging
+bytes. Repeated `COMPLETED` HTTP receipts alone are not treated as proof of database uniqueness.
+
+Success produces a short JSON object with test count, creation/proposal counts, uploaded byte count
+and a relative log path. Failures produce a redacted JSON reason and exit nonzero. Sanitized logs
+are mode `0600` under ignored `app/build/qa/device-tests/`. Credentials, cookies and environment
+contents are never printed. The runner does not delete the retained synthetic contributions.
+
+Offline safety checks require no device, Docker or backend:
+
+```sh
+python3 -B -m unittest discover -s apps/android/scripts -p 'qa_device_test_test.py' -v
+```
+
+The runner's seven offline checks cover shell quoting, log redaction, private Alice selection,
+failed/skipped instrumentation rejection, receipt validation, and the read-only uniqueness oracle.
+The underlying opt-in Android test and manual database oracle passed on 2026-09-20 (one created
+marker, one photo proposal, 763045 uploaded bytes and cleared staging). The reusable runner must
+also be executed on the chosen emulator to validate its full orchestration; offline checks alone
+do not establish that device result.
