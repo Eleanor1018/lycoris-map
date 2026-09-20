@@ -4,3 +4,4 @@ dist
 coverage
 pnpm-lock.yaml
 *.woff2
+src/features/map/tencent/mainland-coverage.json

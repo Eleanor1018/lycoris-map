@@ -1,10 +1,11 @@
-export type MapSource = 'osm' | 'tianditu'
+export type MapSource = 'osm' | 'tianditu' | 'tencent'
 
 export const osmTileUrl = '/tiles/osm/{z}/{x}/{y}.png'
 
 export const mapSourceNames: Record<MapSource, string> = {
     osm: 'OSM',
     tianditu: '天地图',
+    tencent: '腾讯地图',
 }
 
 export function tiandituApiKey(): string {
@@ -12,7 +13,12 @@ export function tiandituApiKey(): string {
 }
 
 export function isMapSourceAvailable(source: MapSource): boolean {
-    return source === 'osm' || tiandituApiKey().length > 0
+    if (source === 'osm') return true
+    return (source === 'tianditu' ? tiandituApiKey() : tencentApiKey()).length > 0
+}
+
+export function tencentApiKey(): string {
+    return (import.meta.env.VITE_TENCENT_MAP_KEY ?? '').trim()
 }
 
 export function tiandituTileUrl(layer: 'vec' | 'cva'): string {

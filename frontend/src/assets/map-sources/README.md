@@ -12,6 +12,10 @@ appearance; they are not tiles or a substitute for their map APIs.
   GS（2025）1508号.
 
 The picker displays linked provider attribution underneath the thumbnails.
+`tencent.png` is an unmodified 160×160 image returned by Tencent's official
+Static Map API v2 on 2026-09-20, centered at GCJ-02 31.228457,121.478224,
+zoom 14. © Tencent. The source is https://lbs.qq.com/service/staticV2/staticGuide/staticOverview.
+The browser key is supplied only during generation and is not stored in this asset.
 Full browser screenshots remain outside the repository; only public map crops
 are bundled. No account details, browser chrome or real user location appear
 in the thumbnails. OSM is the default base map. Tianditu becomes selectable

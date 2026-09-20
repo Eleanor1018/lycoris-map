@@ -65,6 +65,10 @@ it('keeps settings usable when storage writes fail', () => {
 })
 
 it('restores only supported, configured map sources', () => {
+    vi.stubEnv('VITE_TENCENT_MAP_KEY', 'test-browser-key')
+    expect(parsePreferences('{"source":"tencent"}').source).toBe('tencent')
+    vi.stubEnv('VITE_TENCENT_MAP_KEY', '')
+    expect(parsePreferences('{"source":"tencent"}').source).toBe('osm')
     vi.stubEnv('VITE_TIANDITU_API_KEY', 'browser-test-key')
     expect(parsePreferences('{"source":"tianditu"}').source).toBe('tianditu')
     for (const source of ['google', 'constructor', '', null, 1])

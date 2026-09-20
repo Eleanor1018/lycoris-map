@@ -121,6 +121,7 @@ export function MapShell({
     const [menuHeight, setMenuHeight] = useState<number | null>(null)
     const [nearbyHeight, setNearbyHeight] = useState(326)
     const [voice, setVoice] = useState(false)
+    const [mapSourceError, setMapSourceError] = useState<string | null>(null)
     const mainMenu =
         (panel === 'initial' || panel === 'search') &&
         browse?.mode !== 'search' &&
@@ -399,6 +400,7 @@ export function MapShell({
             ) : (
                 <MapSurface
                     onMap={onMap}
+                    onSourceError={setMapSourceError}
                     onPick={picking ? selectPoint : undefined}
                     places={
                         browse
@@ -619,6 +621,7 @@ export function MapShell({
                 </div>
             )}
             <div className="map-notices">
+                {mapSourceError && <MapNotice key={mapSourceError} message={mapSourceError} />}
                 {!sample && <HeadingPermission />}
                 {browse && (browse.location.error || browse.location.pending) && (
                     <MapNotice
