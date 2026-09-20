@@ -4,6 +4,16 @@ import { useOptionalLanguage } from './LanguageProvider'
 
 /** English keys keep reference-design text visible at the call site. */
 export const uiMessages = {
+    'Venue type': '场所类型',
+    Metro: '地铁',
+    Hospital: '医院',
+    Mall: '商场',
+    'Railway station': '火车站',
+    School: '学校',
+    Other: '其他',
+    'Closing soon': '即将结束营业',
+    'Open now': '营业中',
+    'Closed now': '当前已休息',
     Range: '范围',
     About: '关于',
     'Close range': '关闭范围设置',

@@ -1,14 +1,10 @@
+import { PlaceHours } from '@/features/places/PlaceHours'
 import { useUi } from '@/shared/i18n/ui'
 import { useState } from 'react'
 import type { Marker } from '@/shared/api/markers'
 import { DesignButton, SearchField, CategoryBadge } from '@/shared/ui/design-primitives'
 import { FigmaIcon } from '@/shared/ui/figma-icon'
-import {
-    categoryBadges,
-    distanceLabel,
-    openingHours,
-    distanceMeters,
-} from '@/features/places/model'
+import { categoryBadges, distanceLabel, distanceMeters } from '@/features/places/model'
 import type { PlaceBrowse } from '@/features/places/usePlaceBrowse'
 import { ReadMessage } from '@/features/places/PlaceResults'
 import { useAccountFlow } from '@/features/auth/AccountFlow'
@@ -49,7 +45,7 @@ export function SavedPlaceRow({
                 <span className="card-title">{place.title}</span>
                 <span className="place-meta">
                     {distance && <span>{distance}</span>}
-                    <span>{openingHours(place, browse.language)}</span>
+                    <PlaceHours place={place} language={browse.language} />
                 </span>
             </span>
         </DesignButton>

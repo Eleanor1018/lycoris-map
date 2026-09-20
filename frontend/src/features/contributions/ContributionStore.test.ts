@@ -95,6 +95,7 @@ it('edit proposals preserve source language, privacy and fixed coordinates witho
     expect(api.proposeMarkerEdit.mock.calls[0]![1]).toEqual({
         title: '新标题',
         category: base.category,
+        venueType: 'other',
         description: '',
         language: 'zh',
         isPublic: false,

@@ -1,0 +1,65 @@
+.place-tags {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+}
+.place-tags:empty {
+    display: none;
+}
+.place-tag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: fit-content;
+    max-width: 100%;
+    padding: 4px 11px;
+    border-radius: var(--ui-control-radius);
+    font: 500 14px/20px var(--ui-font-body);
+    border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+    text-align: center;
+}
+.venue-metro {
+    color: #17477e;
+    background: #dbeafe;
+}
+.venue-hospital {
+    color: #245232;
+    background: #d8eddd;
+}
+.venue-mall {
+    color: #53377b;
+    background: #eaddff;
+}
+.venue-railway_station,
+.closing-soon-tag {
+    color: #744400;
+    background: #ffdfb4;
+}
+.venue-school {
+    color: #723955;
+    background: #f8dbea;
+}
+.venue-other {
+    color: #504652;
+    background: #e7e0eb;
+}
+.place-meta .place-hours {
+    font-weight: 500;
+}
+.place-hours-open {
+    color: #245232;
+}
+.place-hours-closing-soon {
+    color: #744400;
+}
+.place-hours-closed {
+    color: #8c3b48;
+}
+.place-hours-scheduled {
+    color: var(--ui-brand);
+}
+.place-meta .place-hours-unknown {
+    font-weight: 400;
+}

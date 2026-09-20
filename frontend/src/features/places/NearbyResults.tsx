@@ -1,8 +1,9 @@
+import { PlaceHours } from '@/features/places/PlaceHours'
 import { useUi } from '@/shared/i18n/ui'
 import type { Marker } from '@/shared/api/markers'
 import { DesignButton } from '@/shared/ui/design-primitives'
 import type { PlaceBrowse } from './usePlaceBrowse'
-import { categoryLabels, distanceLabel, openingHours, publicImageUrl } from './model'
+import { categoryLabels, distanceLabel, publicImageUrl } from './model'
 import { PlaceActions } from './PlaceActions'
 import { ReadMessage } from './PlaceResults'
 import { NearbyWindow } from './NearbyWindow'
@@ -86,7 +87,7 @@ function NearbyPlace({ place, browse, onSelect, mobile }: Props & { place: Marke
                         {distance}
                     </span>
                 )}
-                <span>{openingHours(place, browse.language)}</span>
+                <PlaceHours place={place} language={browse.language} />
             </span>
             {image && (
                 <PlacePhoto className="place-photo" src={image} loading="lazy" variant="thumb" />

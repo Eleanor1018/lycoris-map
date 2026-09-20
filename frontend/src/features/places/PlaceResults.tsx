@@ -1,9 +1,10 @@
+import { PlaceHours } from '@/features/places/PlaceHours'
 import { useUi } from '@/shared/i18n/ui'
 import { useRef, useState } from 'react'
 import type { Marker } from '@/shared/api/markers'
 import { CategoryBadge, DesignButton } from '@/shared/ui/design-primitives'
 import { FigmaIcon } from '@/shared/ui/figma-icon'
-import { categoryBadges, categoryLabels, distanceLabel, openingHours } from './model'
+import { categoryBadges, categoryLabels, distanceLabel } from './model'
 import type { PlaceBrowse, PlaceReadState } from './usePlaceBrowse'
 
 export function ReadMessage({ state, empty = false }: { state: PlaceReadState; empty?: boolean }) {
@@ -218,7 +219,10 @@ function ResultList({
                                                         {distance}
                                                     </span>
                                                 )}
-                                                <span>{openingHours(place, browse.language)}</span>
+                                                <PlaceHours
+                                                    place={place}
+                                                    language={browse.language}
+                                                />
                                             </span>
                                         </span>
                                     </DesignButton>

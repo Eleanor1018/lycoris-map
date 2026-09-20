@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import type { Marker } from '@/shared/api/markers'
+import { venueLabels } from '@/features/places/venue'
+import type { Marker, VenueType } from '@/shared/api/markers'
 import { markerTextSchema, type MarkerText } from '@/shared/api/markerWrites'
 import { DesignButton } from '@/shared/ui/design-primitives'
 import { AccountField } from '@/features/auth/accountFields'
@@ -14,6 +15,7 @@ export function MarkerEditor({ marker, close }: { marker: Marker; close: () => v
     const [draft, setDraft] = useState<MarkerText>({
         title: marker.title,
         category: marker.category,
+        venueType: marker.category === 'accessible_toilet' ? (marker.venueType ?? 'other') : null,
         description: marker.description ?? '',
         isPublic: marker.isPublic,
         openTimeStart: marker.openTimeStart ?? '',
@@ -60,6 +62,10 @@ export function MarkerEditor({ marker, close }: { marker: Marker; close: () => v
                                 setDraft({
                                     ...draft,
                                     category: e.target.value as MarkerText['category'],
+                                    venueType:
+                                        e.target.value === 'accessible_toilet'
+                                            ? (draft.venueType ?? 'other')
+                                            : null,
                                 })
                             }
                         >
@@ -70,6 +76,23 @@ export function MarkerEditor({ marker, close }: { marker: Marker; close: () => v
                             ))}
                         </select>
                     </label>
+                    {draft.category === 'accessible_toilet' && (
+                        <label className="admin-field">
+                            {ui.message('Venue type')}
+                            <select
+                                value={draft.venueType ?? 'other'}
+                                onChange={(e) =>
+                                    setDraft({ ...draft, venueType: e.target.value as VenueType })
+                                }
+                            >
+                                {Object.entries(venueLabels).map(([value, label]) => (
+                                    <option value={value} key={value}>
+                                        {ui.message(label)}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    )}
                     <label className="admin-field">
                         {ui.message('Description')}
                         <textarea

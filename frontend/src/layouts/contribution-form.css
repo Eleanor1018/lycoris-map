@@ -337,3 +337,78 @@
         max-height: calc(var(--map-viewport-height, 100dvh) - 8px);
     }
 }
+
+/* Keep the reference form's spacing; the venue row only appears for toilets. */
+.contribution-venue {
+    position: absolute;
+    top: 226px;
+    left: 16px;
+    width: 280px;
+}
+.contribution-venue .contribution-label {
+    position: static;
+    display: block;
+}
+.contribution-venue select {
+    width: 100%;
+    margin-top: 8px;
+}
+.has-venue.contribution-form {
+    min-height: 828px;
+}
+.has-venue .description-label {
+    top: 306px;
+}
+.has-venue .contribution-description {
+    top: 334px;
+}
+.has-venue .opening-time {
+    top: 518px;
+}
+.has-venue .closing-time {
+    top: 598px;
+}
+.has-venue .upload-label {
+    top: 678px;
+}
+.has-venue .contribution-upload {
+    top: 708px;
+}
+.has-venue.contribution-form-live {
+    padding-top: 766px;
+    min-height: max(828px, 100%);
+}
+.has-venue.contribution-form-mobile {
+    min-height: 838px;
+}
+.has-venue.contribution-form-mobile:not(.contribution-form-live) .contribution-submit {
+    top: 782px;
+}
+.has-venue.contribution-form-mobile .contribution-venue {
+    top: 214px;
+    left: 11px;
+    right: 11px;
+    width: auto;
+}
+.has-venue.contribution-form-mobile .description-label {
+    top: 294px;
+}
+.has-venue.contribution-form-mobile .contribution-description {
+    top: 320px;
+}
+.has-venue.contribution-form-mobile .opening-time {
+    top: 526px;
+}
+.has-venue.contribution-form-mobile .closing-time {
+    top: 607px;
+}
+.has-venue.contribution-form-mobile .upload-label {
+    top: 688px;
+}
+.has-venue.contribution-form-mobile .contribution-upload {
+    top: 718px;
+}
+.has-venue.contribution-form-mobile.contribution-form-live {
+    padding-top: 782px;
+    min-height: 838px;
+}
