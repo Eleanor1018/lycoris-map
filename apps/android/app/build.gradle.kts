@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -21,13 +22,15 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            resValue("string", "app_name", "Lycoris Dev")
         }
         create("qa") {
             initWith(getByName("debug"))
             applicationIdSuffix = ".qa"
             versionNameSuffix = "-qa"
+            resValue("string", "app_name", "Lycoris QA")
             matchingFallbacks += "debug"
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:18186/\"")
+            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:18187/\"")
             buildConfigField("boolean", "TEST_ENVIRONMENT", "true")
         }
         release {
@@ -35,11 +38,20 @@ android {
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+        create("preview") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".preview"
+            versionNameSuffix = "-preview"
+            resValue("string", "app_name", "Lycoris Preview")
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+        }
     }
     testBuildType = "qa"
     buildFeatures {
         compose = true
         buildConfig = true
+        resValues = true
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -48,6 +60,8 @@ android {
     testOptions { unitTests.isIncludeAndroidResources = true }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
+
+ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
 dependencies {
     implementation(libs.androidx.core)
@@ -69,6 +83,11 @@ dependencies {
     implementation(libs.coil.network)
     implementation(libs.coil.svg)
     implementation(libs.datastore)
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+    implementation(libs.work.runtime)
+    implementation(libs.exif)
     debugImplementation(libs.compose.tooling)
     debugImplementation(libs.compose.test.manifest)
     "qaImplementation"(libs.compose.tooling)
@@ -80,4 +99,5 @@ dependencies {
     androidTestImplementation(libs.compose.test)
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.work.testing)
 }
