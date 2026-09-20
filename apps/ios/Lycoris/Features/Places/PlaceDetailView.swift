@@ -80,11 +80,13 @@ struct PlaceDetailView: View {
               Group {
                 if isBookmarked {
                   Image(systemName: "bookmark.fill").resizable().scaledToFit()
+                    .foregroundStyle(.blue)
                 } else {
                   Image("PlaceBookmark").resizable()
                 }
               }.frame(width: 28, height: 28)
                 .frame(minWidth: 44, minHeight: buttonHeight)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain).accessibilityLabel(
               isBookmarked ? "Remove bookmark" : "Bookmark place"

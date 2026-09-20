@@ -72,6 +72,23 @@ pub struct VersionRow {
     pub row_version: i64,
 }
 
+/// A username may contain `@`. Match both namespaces without changing username
+/// case, and count an account only once when its username and email both match.
+pub async fn find_active_by_identity(
+    pool: &sqlx::PgPool,
+    identity: &str,
+) -> Result<Vec<UserRow>, sqlx::Error> {
+    let email = identity.to_lowercase();
+    let (mut candidates, emails) = tokio::try_join!(
+        find_active_by_username(pool, identity),
+        find_active_by_email(pool, &email),
+    )?;
+    candidates.extend(emails);
+    candidates.sort_unstable_by_key(|user| user.id);
+    candidates.dedup_by_key(|user| user.id);
+    Ok(candidates)
+}
+
 pub async fn find_active_by_id<'e, E>(executor: E, id: i32) -> Result<Option<UserRow>, sqlx::Error>
 where
     E: sqlx::PgExecutor<'e>,

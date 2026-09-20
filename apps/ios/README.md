@@ -14,7 +14,9 @@ In Xcode's Run scheme arguments, add `-lycoris-preview` followed by one of `coll
 
 Fixture text, photo and coordinates are only visual reference data. The Figma toilet title, decorative photo and New Jersey map coordinate do not describe a verified real place. See `docs/i3-acceptance.md` and `docs/i4-acceptance.md` for API behavior and validation. Explicit visual previews disable networking and real sharing/navigation.
 
-The initial map camera uses the public New Jersey area shown in the design. It is not the user's current location. Startup requests When In Use location permission and centers on the first valid fix. Denial or an unavailable fix quietly leaves browsing usable; explicit location actions retain their retry/settings feedback. Foreground transitions do not repeat a completed startup request or recenter the map. Granting previously denied location access in Settings resumes the initial fix. Design previews never request location.
+The initial map camera uses the public New Jersey area shown in the design. It is not the user's current location. Startup requests When In Use location permission and uses MapKit native user following after the first valid fix. The location button starts native following immediately when authorized; it does not wait for landmark calibration. A later Core Location fix updates canonical data without replaying the camera after a user pan. Denial or an unavailable fix quietly leaves browsing usable; explicit location actions retain their retry/settings feedback. Foreground transitions do not repeat a completed startup request or recenter the map. Granting previously denied location access in Settings resumes the initial fix. Design previews never request location.
+
+Point loading also starts immediately using the measured mainland display convention, with background landmark verification; a failed verification never suppresses viewport requests or all mainland pins. See `docs/coordinate-alignment.md`. The bottom panel uses the same native Liquid Glass as the map tools (with a solid Reduce Transparency fallback). When collapsed, its search row and surrounding padding support upward dragging; taps still activate search, voice and account controls. Expanded content retains native text editing and scrolling.
 
 ## Toolchain and build
 
@@ -100,7 +102,7 @@ Future phases replace prototype content behind this container. Refer to `docs/de
 
 ## I3 local acceptance
 
-`LivePlaceTests` only runs when `http://127.0.0.1:8080/api/markers/1` identifies the existing **S1 Synthetic Shanghai Center** fixture. Otherwise those tests skip; isolated unit and design interaction tests remain usable without a backend. Live tests perform no backend writes. They exercise permission denial, a temporary simulated Shanghai location (restored afterward), all categories, search, empty results, native sharing dismissal and opening Apple Maps.
+`LivePlaceTests` only runs when `http://127.0.0.1:8080/api/markers/1` identifies the existing **S1 Synthetic Shanghai Center** fixture. Otherwise those tests skip; isolated unit and design interaction tests remain usable without a backend. `LocationFocusFlowTests` additionally forces failed landmark calibration and checks native startup following, panning and locating again without a fixture-backend dependency. Live tests perform no backend writes. They exercise permission denial, a temporary simulated Shanghai location (restored afterward), all categories, search, empty results, native sharing dismissal and opening Apple Maps.
 
 For a manual simulator review, use `-lycoris-test-center` followed by `31.2304,121.4737` in Debug. This only chooses the initial camera; all places still come from the API. The default New Jersey camera has no points in the current Shanghai-only fixture database. Both this argument and all visual preview arguments are ignored by Release.
 

@@ -2,6 +2,42 @@ import XCTest
 
 @MainActor
 final class MapInteractionTests: LocalBackendTestCase {
+  func testCollapsedSearchRowAndPaddingDragWithoutStealingTaps() {
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+      "-lycoris-preview", "collapsed", "-lycoris.language", "en",
+    ]
+    app.launch()
+    let handle = app.buttons["map.panel.handle"]
+    let search = app.textFields["map.search"]
+    XCTAssertTrue(handle.waitForExistence(timeout: 10))
+    attach(app, name: "liquid-glass-collapsed")
+    for fromPadding in [false, true] {
+      XCTAssertEqual(handle.value as? String, "Collapsed")
+      let start =
+        fromPadding
+        ? app.buttons["map.account"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 1.15))
+        : search.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+      start.press(
+        forDuration: 0.1,
+        thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12)))
+      let expanded = XCTNSPredicateExpectation(
+        predicate: NSPredicate(format: "value == %@", "Expanded"), object: handle)
+      XCTAssertEqual(XCTWaiter.wait(for: [expanded], timeout: 4), .completed)
+      XCTAssertFalse(app.keyboards.firstMatch.exists)
+      attach(app, name: fromPadding ? "panel-drag-from-padding" : "panel-drag-from-search")
+      handle.tap()
+    }
+    app.buttons["map.account"].tap()
+    XCTAssertTrue(app.alerts["Not available yet"].waitForExistence(timeout: 3))
+    app.alerts.buttons["OK"].tap()
+    search.tap()
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 3))
+    search.typeText("library")
+    XCTAssertEqual(search.value as? String, "library")
+  }
+
   func testAccessibilityTextKeepsDetailActionsReachable() {
     let app = XCUIApplication()
     app.launchArguments = [

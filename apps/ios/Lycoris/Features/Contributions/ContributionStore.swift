@@ -86,6 +86,7 @@ final class ContributionStore {
   }
 
   func edit(_ id: Int64) async throws {
+    synchronize()
     guard let account, let owner = account.user?.publicId, let token = boundEpoch,
       let origin = account.baseURL?.absoluteString
     else { throw AccountFailure(status: 401) }
@@ -94,7 +95,7 @@ final class ContributionStore {
     let generation = self.generation
     let data = try await account.contributionRequest(
       AccountRequest(path: "api/markers/\(id)", query: ["lang": account.language]), owner: owner,
-      token: token)
+      token: token, waitForAccount: true)
     let marker = try JSONDecoder().decode(Marker.self, from: data)
     guard generation == self.generation, draft == nil, token == boundEpoch,
       owner == account.user?.publicId

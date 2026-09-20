@@ -33,6 +33,107 @@ import Testing
     store.update(fields)
   }
 
+  @Test func coldEditInitializesWithoutOpeningCreateOrSynchronizingFirst() async throws {
+    let api = ContributionFixture()
+    let journal = ContributionJournal(
+      directory: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+    defer { try? journal.clear() }
+    let account = AccountStore(api: api)
+    let store = ContributionStore(journal: journal)
+    store.connect(account, monitorNetwork: false)
+    await account.restore()
+    try await store.edit(55)
+    #expect(store.draft?.original?.id == 55 && store.draft?.fields.title == "Original")
+  }
+
+  @Test func editWaitsForForegroundIdentityRestore() async throws {
+    let api = ContributionFixture()
+    let (account, store, journal) = await setup(api)
+    defer { try? journal.clear() }
+    await api.holdIdentity()
+    let restoring = Task { await account.restore() }
+    for _ in 0..<200 {
+      if await api.identityHeld { break }
+      try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(await api.identityHeld)
+    let editing = Task { try await store.edit(55) }
+    await Task.yield()
+    #expect(store.draft == nil)
+    await api.releaseIdentity()
+    await restoring.value
+    try await editing.value
+    #expect(store.draft?.fields.title == "Original")
+  }
+
+  @Test func closingEditWhileWaitingDoesNotCreateADraftLater() async throws {
+    let api = ContributionFixture()
+    let (account, store, journal) = await setup(api)
+    defer { try? journal.clear() }
+    await api.holdIdentity()
+    let restoring = Task { await account.restore() }
+    for _ in 0..<200 {
+      if await api.identityHeld { break }
+      try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(await api.identityHeld)
+    let editing = Task { try await store.edit(55) }
+    try await Task.sleep(for: .milliseconds(20))
+    editing.cancel()
+    do {
+      try await editing.value
+      Issue.record("Dismissed editing must cancel")
+    } catch { #expect(error is CancellationError) }
+    await api.releaseIdentity()
+    await restoring.value
+    #expect(store.draft == nil)
+    #expect(try journal.load() == nil)
+  }
+
+  @Test func closingEditDuringDetailReadDoesNotSaveADraft() async throws {
+    let api = ContributionFixture()
+    let (_, store, journal) = await setup(api)
+    defer { try? journal.clear() }
+    await api.holdDetail()
+    let editing = Task { try await store.edit(55) }
+    for _ in 0..<200 {
+      if await api.detailHeld { break }
+      try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(await api.detailHeld)
+    editing.cancel()
+    await api.releaseDetail()
+    do {
+      try await editing.value
+      Issue.record("A cancelled detail read must not create an edit")
+    } catch { #expect(error is CancellationError) }
+    #expect(store.draft == nil)
+    #expect(try journal.load() == nil)
+  }
+
+  @Test func accountChangeWhileEditWaitsCannotCreateAnotherOwnersDraft() async throws {
+    let api = ContributionFixture()
+    let (account, store, journal) = await setup(api)
+    defer { try? journal.clear() }
+    await api.holdIdentity()
+    let restoring = Task { await account.restore() }
+    for _ in 0..<200 {
+      if await api.identityHeld { break }
+      try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(await api.identityHeld)
+    let editing = Task { try await store.edit(55) }
+    try await Task.sleep(for: .milliseconds(20))
+    await api.switchOwner("b")
+    await api.releaseIdentity()
+    await restoring.value
+    do {
+      try await editing.value
+      Issue.record("Account changes must cancel the pending edit")
+    } catch { #expect(error is CancellationError) }
+    #expect(account.user?.publicId == "b" && store.draft == nil)
+  }
+
   @Test func lostCreateReceiptRecoversFrozenUUIDAndPayloadAfterRelaunch() async throws {
     let api = ContributionFixture()
     await api.lose("create")
@@ -286,6 +387,14 @@ private actor ContributionFixture: AccountServing {
   private var lost: String?
   private var createRejection: Int?
   private var holdsDetail = false
+  private var holdsIdentity = false
+  private var identityContinuation: CheckedContinuation<Void, Never>?
+  var identityHeld: Bool { identityContinuation != nil }
+  func holdIdentity() { holdsIdentity = true }
+  func releaseIdentity() {
+    identityContinuation?.resume()
+    identityContinuation = nil
+  }
   private var detailContinuation: CheckedContinuation<Void, Never>?
   var detailHeld: Bool { detailContinuation != nil }
   private var ids = Set<String>()
@@ -318,6 +427,10 @@ private actor ContributionFixture: AccountServing {
     if request.path == "api/logout" {
       owner = nil
       return Data()
+    }
+    if request.path == "api/me", holdsIdentity {
+      holdsIdentity = false
+      await withCheckedContinuation { identityContinuation = $0 }
     }
     guard let owner else { throw AccountFailure(status: 401) }
     if request.path == "api/me" {

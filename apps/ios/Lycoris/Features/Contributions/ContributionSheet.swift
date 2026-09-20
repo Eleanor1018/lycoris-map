@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ContributionSheet: View {
   @Bindable var store: ContributionStore
+  var editID: Int64? = nil
   var onPickLocation: () -> Void
   @Environment(\.dismiss) private var dismiss
   @State private var photo: PhotosPickerItem?
@@ -10,6 +11,8 @@ struct ContributionSheet: View {
   @State private var photoError: String?
   @State private var confirmsDiscard = false
   @State private var confirmsResend = false
+  @State private var editLoadAttempt = UUID()
+  @State private var editLoadError: String?
   @FocusState private var focused: Bool
 
   var body: some View {
@@ -93,11 +96,31 @@ struct ContributionSheet: View {
                 .accessibilityIdentifier("contribution.discard")
             }.disabled(store.isWorking || photoLoading)
           }
+        } else if let editLoadError {
+          Section {
+            Text(editLoadError).foregroundStyle(.secondary)
+            Button("Try again") { editLoadAttempt = UUID() }
+              .accessibilityIdentifier("contribution.retryLoad")
+          }
+        } else if editID != nil {
+          Section { ProgressView().accessibilityIdentifier("contribution.loading") }
         }
       }
-      .navigationTitle(store.draft?.original == nil ? "Contribute" : "Edit place")
+      .navigationTitle(editID != nil || store.draft?.original != nil ? "Edit place" : "Contribute")
       .navigationBarTitleDisplayMode(.inline)
       .scrollDismissesKeyboard(.interactively)
+      .task(id: editLoadAttempt) {
+        guard let editID else { return }
+        editLoadError = nil
+        do {
+          try await store.edit(editID)
+        } catch {
+          guard !Task.isCancelled, !(error is CancellationError) else { return }
+          editLoadError =
+            (error as? AccountFailure)?.message
+            ?? String(appLocalized: "Could not load places. Please try again.")
+        }
+      }
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
           Button("Close", systemImage: "xmark") { dismiss() }

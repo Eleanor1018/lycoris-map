@@ -51,11 +51,7 @@ pub async fn login(
         return invalid_credentials();
     }
 
-    let candidates = if identity.contains('@') {
-        users::find_active_by_email(&state.db, &identity.to_lowercase()).await
-    } else {
-        users::find_active_by_username(&state.db, &identity).await
-    };
+    let candidates = users::find_active_by_identity(&state.db, &identity).await;
     // 历史库可能重复；匹配到多个账号时按通用凭据失败处理，绝不选择首个账号。
     let user = match candidates {
         Ok(list) if list.len() == 1 => list.into_iter().next().expect("已确认长度为一"),
