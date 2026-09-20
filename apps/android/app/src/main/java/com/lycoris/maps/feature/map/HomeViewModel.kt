@@ -241,6 +241,7 @@ class HomeViewModel(application: Application, private val saved: SavedStateHandl
     fun message(value: String?) { notices.showAction(value) }
     fun backgroundMessage(value: String) { notices.showBackground(value) }
     fun language(value: Language) = action { container.preferences.setLanguage(value) }
+    fun mapSource(value: com.lycoris.maps.core.data.preferences.MapSource) = action { container.preferences.setMapSource(value) }
     fun radius(value: Int) = action { container.preferences.setRadius(value) }
     private fun action(block: suspend () -> Unit) { actionJob(block) }
     private fun actionJob(block: suspend () -> Unit): Job = viewModelScope.launch {

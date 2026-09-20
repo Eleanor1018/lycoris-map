@@ -5,10 +5,12 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.display.DisplayManager
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.Build
 import android.provider.Settings
 import android.view.Surface
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -21,6 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -35,8 +38,13 @@ import com.lycoris.maps.core.device.VoiceController
 import com.lycoris.maps.core.device.VoiceError
 import com.lycoris.maps.core.device.VoiceState
 import com.lycoris.maps.core.device.VoiceStatus
+import com.lycoris.maps.core.device.QA_LOCAL_NETWORK_PERMISSION
+import com.lycoris.maps.core.device.QA_LOCAL_NETWORK_REQUESTED
+import com.lycoris.maps.core.device.StartupPermission
+import com.lycoris.maps.core.device.StartupPermissionPolicy
 import com.lycoris.maps.core.map.NativeMapState
 import com.lycoris.maps.core.model.Language
+import com.lycoris.maps.BuildConfig
 
 data class DeviceActions(
     val location: LocationState,
@@ -58,6 +66,7 @@ fun rememberDeviceActions(
     onMessage: (String) -> Unit,
     allowInitialCenter: Boolean = true,
     onBackgroundMessage: (String) -> Unit = onMessage,
+    onLocalNetworkGranted: () -> Unit = {},
 ): DeviceActions {
     val context = LocalContext.current
     val activity = remember(context) { context.deviceActivity() }
@@ -74,13 +83,18 @@ fun rememberDeviceActions(
     val message by rememberUpdatedState(onMessage)
     val backgroundMessage by rememberUpdatedState(onBackgroundMessage)
     val transcript by rememberUpdatedState(onTranscript)
+    val localNetworkGranted by rememberUpdatedState(onLocalNetworkGranted)
     var foreground by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
     var initialLocationCentered by rememberSaveable { mutableStateOf(false) }
     var locateRequested by rememberSaveable { mutableStateOf(false) }
     var voiceRequested by remember { mutableStateOf(false) }
-    var microphoneRequestInFlight by remember { mutableStateOf(false) }
-    var locationRequestInFlight by remember { mutableStateOf(false) }
+    // ActivityResultRegistry restores pending dialogs across configuration changes. Preserve
+    // the queue's matching state so a second permission cannot launch over the first one.
+    var microphoneRequestInFlight by rememberSaveable { mutableStateOf(false) }
+    var locationRequestInFlight by rememberSaveable { mutableStateOf(false) }
+    var localNetworkRequestInFlight by rememberSaveable { mutableStateOf(false) }
     var settings by remember { mutableStateOf<DeviceSettings?>(null) }
+    val requiresLocalNetwork = StartupPermissionPolicy.requiresQaLocalNetwork(BuildConfig.TEST_ENVIRONMENT, Build.VERSION.SDK_INT)
 
     val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         locationRequestInFlight = false
@@ -100,6 +114,16 @@ fun rememberDeviceActions(
         if (!granted) {
             voiceRequested = false
             message(currentLanguage.deviceText("未授权麦克风。你可以继续使用文字搜索。", "Microphone access is not allowed. Text search is still available."))
+        }
+    }
+    val localNetworkLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        localNetworkRequestInFlight = false
+        if (requiresLocalNetwork) {
+            if (granted) localNetworkGranted()
+            else backgroundMessage(currentLanguage.deviceText(
+                "未允许本地网络访问，暂时无法连接测试服务。可在应用的系统权限设置中开启。",
+                "Local network access was not allowed. Enable it in app permissions to connect to test services.",
+            ))
         }
     }
 
@@ -143,13 +167,36 @@ fun rememberDeviceActions(
         }
     }
 
-    LaunchedEffect(foreground) {
-        if (foreground && !preferences.getBoolean("location-requested", false)) {
-            preferences.edit().putBoolean("location-requested", true).apply()
-            if (locationController.currentPermission() == LocationPermission.NONE && !locationRequestInFlight) {
+    LaunchedEffect(foreground, locationRequestInFlight, microphoneRequestInFlight, localNetworkRequestInFlight, settings) {
+        val hasLocation = locationController.currentPermission() != LocationPermission.NONE
+        val hasLocalNetwork = requiresLocalNetwork && ContextCompat.checkSelfPermission(context, QA_LOCAL_NETWORK_PERMISSION) == PackageManager.PERMISSION_GRANTED
+        if (foreground) {
+            // Pre-granted installs also count as handled: a later system revocation must not
+            // cause automatic permission loops on every resume.
+            if (hasLocation) preferences.edit().putBoolean("location-requested", true).apply()
+            if (hasLocalNetwork) preferences.edit().putBoolean(QA_LOCAL_NETWORK_REQUESTED, true).apply()
+        }
+        when (StartupPermissionPolicy.next(
+            foreground = foreground,
+            permissionInFlight = locationRequestInFlight || microphoneRequestInFlight || localNetworkRequestInFlight,
+            otherDialogOpen = settings != null,
+            hasLocation = hasLocation,
+            locationRequested = preferences.getBoolean("location-requested", false),
+            requiresQaLocalNetwork = requiresLocalNetwork,
+            hasQaLocalNetwork = hasLocalNetwork,
+            qaLocalNetworkRequested = preferences.getBoolean(QA_LOCAL_NETWORK_REQUESTED, false),
+        )) {
+            StartupPermission.LOCATION -> {
+                preferences.edit().putBoolean("location-requested", true).apply()
                 locationRequestInFlight = true
                 locationLauncher.launch(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION))
             }
+            StartupPermission.QA_LOCAL_NETWORK -> {
+                preferences.edit().putBoolean(QA_LOCAL_NETWORK_REQUESTED, true).apply()
+                localNetworkRequestInFlight = true
+                localNetworkLauncher.launch(QA_LOCAL_NETWORK_PERMISSION)
+            }
+            null -> Unit
         }
     }
     LaunchedEffect(foreground, voiceRequested, microphoneRequestInFlight) {
@@ -234,7 +281,8 @@ fun rememberDeviceActions(
     }
 
     return DeviceActions(location, heading, voice,
-        onLocate = {
+        onLocate = locate@{
+            if (locationRequestInFlight || microphoneRequestInFlight || localNetworkRequestInFlight || settings != null) return@locate
             locateRequested = true
             when {
                 locationController.currentPermission() == LocationPermission.NONE -> {
@@ -252,7 +300,8 @@ fun rememberDeviceActions(
                 else -> locationController.start()
             }
         },
-        onVoice = {
+        onVoice = voice@{
+            if (locationRequestInFlight || microphoneRequestInFlight || localNetworkRequestInFlight || settings != null) return@voice
             if (voiceController.state.value.isActive) {
                 voiceRequested = false
                 voiceController.cancel()

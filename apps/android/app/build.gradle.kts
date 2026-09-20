@@ -1,8 +1,22 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+}
+
+// SDK keys ship in the manifest; restrict them to the Android package and certificate in Google Cloud.
+// The local file is ignored and CI can supply the environment variable without committing a key.
+val mapSecrets = Properties().apply {
+    rootProject.file("local.secrets.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
+}
+val googleMapsApiKey = providers.environmentVariable("LYCORIS_GOOGLE_MAPS_API_KEY")
+    .orElse(providers.gradleProperty("lycoris.googleMapsApiKey")).orNull?.trim()
+    ?: mapSecrets.getProperty("googleMapsApiKey", "").trim()
+require(googleMapsApiKey.isEmpty() || googleMapsApiKey.matches(Regex("[A-Za-z0-9_-]+"))) {
+    "Google Maps key contains invalid characters"
 }
 
 android {
@@ -15,6 +29,8 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders["googleMapsApiKey"] = googleMapsApiKey
+        buildConfigField("boolean", "GOOGLE_MAPS_CONFIGURED", googleMapsApiKey.isNotEmpty().toString())
         buildConfigField("String", "API_BASE_URL", "\"https://api.lycoris-map.com/\"")
         buildConfigField("boolean", "TEST_ENVIRONMENT", "false")
     }
@@ -74,6 +90,7 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.icons)
     implementation(libs.maplibre)
+    implementation(libs.google.maps)
     implementation(libs.coroutines.android)
     implementation(libs.serialization.json)
     implementation(libs.okhttp)
