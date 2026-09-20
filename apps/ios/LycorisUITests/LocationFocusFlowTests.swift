@@ -30,20 +30,20 @@ import XCTest
       allow.tap()
       let map = app.descendants(matching: .any)["map.canvas"].firstMatch
       XCTAssertTrue(map.waitForExistence(timeout: 10))
-      expect(map, contains: ["tracking=1", "calibration=unresolved"])
+      expect(map, contains: ["tracking=1", "calibration=gcj02"])
       expectLocationCentered(in: map, app: app)
       attach(app, name: "startup-native-location-with-failed-calibration")
 
       let start = map.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.3))
       let end = map.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: 0.3))
       start.press(forDuration: 0.1, thenDragTo: end)
-      expect(map, contains: ["tracking=0", "calibration=unresolved"])
+      expect(map, contains: ["tracking=0", "calibration=gcj02"])
       let locate = app.buttons["map.locate"]
       XCTAssertGreaterThanOrEqual(locate.frame.width, 44)
       XCTAssertGreaterThanOrEqual(locate.frame.height, 44)
       // The full control must respond, including its padding around the glyph.
       locate.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.5)).tap()
-      expect(map, contains: ["tracking=1", "calibration=unresolved"])
+      expect(map, contains: ["tracking=1", "calibration=gcj02"])
       expectLocationCentered(in: map, app: app)
       XCTAssertFalse(app.alerts["Location unavailable"].exists)
       attach(app, name: "locate-after-pan-with-failed-calibration")

@@ -78,7 +78,7 @@ struct MapScreen: View {
           ? MapCoordinateResolver(lookup: { nil }) : MapCoordinateResolver(space: .wgs84))
     #else
       _mapCoordinates = State(
-        initialValue: MapCoordinateResolver(space: isPreview ? .wgs84 : .unresolved))
+        initialValue: MapCoordinateResolver(space: isPreview ? .wgs84 : nil))
     #endif
     self.bookmarks = bookmarks
   }
