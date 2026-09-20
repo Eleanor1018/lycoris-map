@@ -3,6 +3,7 @@ package com.lycoris.maps.core.data
 import com.lycoris.maps.core.model.GeoBounds
 import com.lycoris.maps.core.model.Language
 import com.lycoris.maps.core.model.PlaceCategory
+import com.lycoris.maps.core.data.preferences.SearchType
 import com.lycoris.maps.core.network.ApiClients
 import com.lycoris.maps.core.network.ApiFailure
 import com.lycoris.maps.core.network.MemoryCookiePersistence
@@ -14,6 +15,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import okhttp3.Cookie
@@ -96,6 +98,54 @@ class PlaceRepositoryTest {
         val requests = listOf(server.takeRequest(), server.takeRequest()).map { it.requestUrl!! }
         assertEquals(setOf("175.0", "-180.0"), requests.map { it.queryParameter("minLng") }.toSet())
         assertEquals(setOf("180.0", "-175.0"), requests.map { it.queryParameter("maxLng") }.toSet())
+    }
+
+    @Test fun searchTypeRefiltersWithoutRequestsAndLeavesNearbyAndViewportUnchanged() = withRepository { server, repository ->
+        val categories = listOf("accessible_toilet", "baby_room", "friendly_clinic", "custom_category")
+        val response = categories.mapIndexed { index, category ->
+            """{"id":${index + 1},"lat":31.2,"lng":121.5,"category":"$category","title":"Synthetic $index"}"""
+        }.joinToString(",", "[", "]")
+        repeat(3) { server.enqueue(MockResponse().setBody(response)) }
+        repository.loadViewport(bounds, Language.EN).join()
+        repository.loadNearby(31.2, 121.5, 1000, PlaceCategory.BABY_ROOM, Language.EN).join()
+        repository.search("Synthetic", Language.EN, debounceMillis = 0).join()
+        val types = MutableStateFlow(SearchType.ALL)
+        val results = repository.searchResults(types)
+        assertEquals(listOf(1L, 2L, 3L, 4L), results.first().places.map { it.id })
+        for ((type, id) in listOf(SearchType.TOILET to 1L, SearchType.NURSING to 2L, SearchType.MEDICAL to 3L)) {
+            types.value = type
+            val filtered = results.first()
+            assertEquals(listOf(id), filtered.places.map { it.id })
+            assertEquals("Synthetic", filtered.query)
+            assertTrue(filtered.loaded)
+        }
+        types.value = SearchType.ALL
+        assertEquals(4, results.first().places.size)
+        assertEquals(4, repository.search.value.places.size)
+        assertEquals(4, repository.viewport.value.places.size)
+        assertEquals(4, repository.nearby.value.places.size)
+        assertEquals(3, server.requestCount)
+    }
+
+    @Test fun pendingSearchUsesLatestTypeAndPreservesFailureState() = withRepository { server, repository ->
+        val medical = place.replace("\"id\":1", "\"id\":2").replace("baby_room", "friendly_clinic")
+        val types = MutableStateFlow(SearchType.NURSING)
+        val results = repository.searchResults(types)
+        server.enqueue(MockResponse().setBody("[$place,$medical]").setBodyDelay(200, TimeUnit.MILLISECONDS))
+        val request = repository.search("Synthetic", Language.EN, debounceMillis = 0)
+        assertNotNull(server.takeRequest(2, TimeUnit.SECONDS))
+        assertTrue(results.first().loading)
+        types.value = SearchType.MEDICAL
+        request.join()
+        assertEquals(listOf(2L), results.first().places.map { it.id })
+        server.enqueue(MockResponse().setResponseCode(503))
+        repository.search("Synthetic", Language.EN, debounceMillis = 0).join()
+        types.value = SearchType.NURSING
+        val failed = results.first()
+        assertEquals(listOf(1L), failed.places.map { it.id })
+        assertTrue(failed.failure is ApiFailure.Http)
+        assertFalse(failed.loading)
+        assertEquals(2, server.requestCount)
     }
 
     @Test fun coldPrivateDetailWaitsForRestoreAndCannotPoisonCreatedPlaces() = runBlocking {

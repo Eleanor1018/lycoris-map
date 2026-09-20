@@ -17,6 +17,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.lycoris.maps.BuildConfig
 import com.lycoris.maps.core.device.QA_LOCAL_NETWORK_REQUESTED
+import com.lycoris.maps.core.data.preferences.SearchType
+import com.lycoris.maps.core.model.Language
+import kotlinx.coroutines.runBlocking
 import com.lycoris.maps.core.model.PlaceCategory
 import com.lycoris.maps.feature.map.HomeViewModel
 import com.lycoris.maps.feature.map.MainSection
@@ -145,6 +148,39 @@ class AppSmokeTest {
         compose.onNode(isDialog()).assertDoesNotExist()
         withModel { assertEquals(originalRadius, it.preferences.value.radiusMeters) }
         compose.onNode(tab("Settings", "设置")).assertIsSelected()
+    }
+
+    @Test fun searchTypePersistsAcrossRecreationAndAboutShowsInstalledVersion() {
+        val preferences = (context.applicationContext as LycorisApplication).container.preferences
+        compose.onNode(tab("Settings", "设置")).performClick()
+        val original = preferences.state.value.searchType
+        val selected = if (original == SearchType.NURSING) SearchType.MEDICAL else SearchType.NURSING
+        try {
+            compose.onNode(text("Search Type", "搜索类型") and hasClickAction()).performScrollTo().performClick()
+            val radio = SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)
+            SearchType.entries.forEach { type ->
+                compose.onNode(text(type.title(Language.EN), type.title(Language.ZH)) and radio).assertIsDisplayed()
+            }
+            compose.onNode(text(selected.title(Language.EN), selected.title(Language.ZH)) and radio).performClick()
+            compose.waitUntil(5_000) { preferences.state.value.searchType == selected }
+            compose.onNode(isDialog()).assertDoesNotExist()
+            scenario!!.recreate()
+            compose.onNode(tab("Settings", "设置")).assertIsSelected()
+            compose.onNode(text("Search Type", "搜索类型") and hasClickAction()).performScrollTo().performClick()
+            compose.onNode(text(selected.title(Language.EN), selected.title(Language.ZH)) and radio).assertIsSelected()
+            compose.onNode(text("Done", "完成") and hasClickAction()).performClick()
+            compose.onNode(text("About Lycoris Maps", "关于 Lycoris Maps") and hasClickAction()).performScrollTo().performClick()
+            compose.onNodeWithText(BuildConfig.VERSION_NAME).assertIsDisplayed()
+            compose.onNode(text(
+                "A simple map for finding accessible toilets, nursing rooms, and medical institutions.",
+                "一款简洁的地图，帮你找到无障碍卫生间、母婴室和医疗机构。",
+            )).assertIsDisplayed()
+            compose.onNode(text("Done", "完成") and hasClickAction()).performClick()
+            compose.onNode(tab("Settings", "设置")).assertIsSelected()
+        } finally {
+            runBlocking { preferences.setSearchType(original) }
+            compose.waitUntil(5_000) { preferences.state.value.searchType == original }
+        }
     }
 
     @Test fun unavailableOnDeviceSpeechExplainsTheFallbackAndCanBeDismissed() {

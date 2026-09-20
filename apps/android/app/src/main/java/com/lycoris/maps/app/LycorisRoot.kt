@@ -32,7 +32,7 @@ fun LycorisRoot(model: HomeViewModel) {
     val query by model.query.collectAsStateWithLifecycle()
     val notice by model.notice.collectAsStateWithLifecycle()
     val viewport by model.places.viewport.collectAsStateWithLifecycle()
-    val search by model.places.search.collectAsStateWithLifecycle()
+    val search by model.search.collectAsStateWithLifecycle()
     val nearby by model.places.nearby.collectAsStateWithLifecycle()
     val detail by model.places.detail.collectAsStateWithLifecycle()
     val allowInitialCenter by model.allowInitialCenter.collectAsStateWithLifecycle()
@@ -98,6 +98,7 @@ fun LycorisRoot(model: HomeViewModel) {
             model.nearby(category, fix?.latitude ?: map.camera.latitude, fix?.longitude ?: map.camera.longitude)
         }, model::contribute, { setting = "source" }, { setting = it }, preferences.radiusMeters, if (preferences.mapSource == MapSource.GOOGLE) "Google Maps" else "OSM",
         mapSource = preferences.mapSource,
+        searchType = preferences.searchType,
         secondaryTitle = title, secondaryKey = page?.let { if (it == SecondaryPage.DETAIL) "detail:${detail.id}" else if (it == SecondaryPage.ACCOUNT) "account:$accountPage" else it.name }, onCloseSecondary = model::closeSecondary, onBackSecondary = ::close,
         notice = if (picking) { if (zh) "点击地图选择点位位置。" else "Tap the map to choose a place." } else notice,
         onDismissNotice = { if (picking) model.cancelPicking() else model.message(null) },
@@ -154,7 +155,7 @@ fun LycorisRoot(model: HomeViewModel) {
                 SecondaryPage.CONTRIBUTION -> item(key = "contribution-content", contentType = "form") { ContributionPanel(drafts.firstOrNull { it.id == draftId }, preferences.language, model::draftCommand, model.container.contributions) }
                 null -> when (section) {
                     MainSection.EXPLORE -> {
-                        item(key = "positions-title", contentType = "heading") { PanelTitle(if (zh) "点位" else "Positions", chinese = zh) }
+                        item(key = "positions-title", contentType = "heading") { PanelTitle(if (zh) "点位" else "Positions", chinese = zh, startPadding = 30.dp) }
                         placeItems(viewport, model.container.clients, account, zh, model::detail, model::retryViewport)
                     }
                     MainSection.BOOKMARKS -> if (account.user == null) item(key = "bookmark-sign-in", contentType = "account-prompt") {
@@ -169,6 +170,7 @@ fun LycorisRoot(model: HomeViewModel) {
         })
     }
     setting?.let { SettingsDialog(it, preferences, { setting = null }, model::language, model::radius,
+        onSearchType = model::searchType,
         onMapSource = { source -> map.camera = map.snapshotCamera(); model.mapSource(source) },
         googleAvailability = model.container.googleMapsAvailability) }
     webFallback?.let { destination ->
