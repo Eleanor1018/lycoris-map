@@ -18,7 +18,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -36,8 +35,8 @@ class HomeViewModel(application: Application, private val saved: SavedStateHandl
     val page = saved.getStateFlow<SecondaryPage?>("page", null)
     val query = saved.getStateFlow("query", "")
     val nearbyCategory = saved.getStateFlow("nearby", PlaceCategory.ACCESSIBLE_TOILET)
-    private val noticeMutable = MutableStateFlow<String?>(null)
-    val notice: StateFlow<String?> = noticeMutable
+    private val notices = AppNotices()
+    val notice: StateFlow<String?> = notices.state
     private val viewportPolicy = ViewportPolicy()
     private var camera = MapCamera()
     private var bounds: MapBounds? = null
@@ -239,7 +238,8 @@ class HomeViewModel(application: Application, private val saved: SavedStateHandl
         catch (failure: ApiFailure) { throw failure }
         catch (_: Exception) { message(if (preferences.value.language == Language.ZH) "无法保存或提交，请检查网络及本机存储后重试。" else "Could not save or submit. Check your connection and device storage, then retry.") }
     }
-    fun message(value: String?) { noticeMutable.value = value }
+    fun message(value: String?) { notices.showAction(value) }
+    fun backgroundMessage(value: String) { notices.showBackground(value) }
     fun language(value: Language) = action { container.preferences.setLanguage(value) }
     fun radius(value: Int) = action { container.preferences.setRadius(value) }
     private fun action(block: suspend () -> Unit) { actionJob(block) }

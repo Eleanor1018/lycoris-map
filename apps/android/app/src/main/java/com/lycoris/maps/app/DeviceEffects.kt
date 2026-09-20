@@ -57,6 +57,7 @@ fun rememberDeviceActions(
     onTranscript: (String) -> Unit,
     onMessage: (String) -> Unit,
     allowInitialCenter: Boolean = true,
+    onBackgroundMessage: (String) -> Unit = onMessage,
 ): DeviceActions {
     val context = LocalContext.current
     val activity = remember(context) { context.deviceActivity() }
@@ -71,6 +72,7 @@ fun rememberDeviceActions(
     val voice by voiceController.state.collectAsStateWithLifecycle()
     val currentLanguage by rememberUpdatedState(language)
     val message by rememberUpdatedState(onMessage)
+    val backgroundMessage by rememberUpdatedState(onBackgroundMessage)
     val transcript by rememberUpdatedState(onTranscript)
     var foreground by remember { mutableStateOf(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
     var initialLocationCentered by rememberSaveable { mutableStateOf(false) }
@@ -86,8 +88,9 @@ fun rememberDeviceActions(
         if (locationController.currentPermission() != LocationPermission.NONE) {
             if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) locationController.start()
         } else {
+            val report = if (locateRequested) message else backgroundMessage
             locateRequested = false
-            message(currentLanguage.deviceText("未授权定位。你仍然可以移动地图查找点位。", "Location is not allowed. You can still move the map to find places."))
+            report(currentLanguage.deviceText("未授权定位。你仍然可以移动地图查找点位。", "Location is not allowed. You can still move the map to find places."))
         }
     }
     val microphoneLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -168,13 +171,15 @@ fun rememberDeviceActions(
     LaunchedEffect(location.status) {
         when (location.status) {
             LocationStatus.TIMED_OUT -> {
+                val report = if (locateRequested) message else backgroundMessage
                 locateRequested = false
-                message(currentLanguage.deviceText("定位超时，请重试或移动地图。", "Location timed out. Retry or move the map."))
+                report(currentLanguage.deviceText("定位超时，请重试或移动地图。", "Location timed out. Retry or move the map."))
             }
-            LocationStatus.DISABLED -> message(currentLanguage.deviceText("设备定位已关闭。请开启定位，或继续移动地图。", "Device location is turned off. Enable it or continue moving the map."))
+            LocationStatus.DISABLED -> (if (locateRequested) message else backgroundMessage)(currentLanguage.deviceText("设备定位已关闭。请开启定位，或继续移动地图。", "Device location is turned off. Enable it or continue moving the map."))
             LocationStatus.UNAVAILABLE -> {
+                val report = if (locateRequested) message else backgroundMessage
                 locateRequested = false
-                message(currentLanguage.deviceText("暂时无法获取位置，请重试或移动地图。", "Location is currently unavailable. Retry or move the map."))
+                report(currentLanguage.deviceText("暂时无法获取位置，请重试或移动地图。", "Location is currently unavailable. Retry or move the map."))
             }
             else -> Unit
         }

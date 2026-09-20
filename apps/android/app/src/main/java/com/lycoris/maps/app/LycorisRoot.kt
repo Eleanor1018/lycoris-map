@@ -42,7 +42,8 @@ fun LycorisRoot(model: HomeViewModel) {
         (viewport.places + listOfNotNull(detail.place?.takeIf { page == SecondaryPage.DETAIL })).distinctBy { it.id }
     }
     val zh = preferences.language == Language.ZH
-    val devices = rememberDeviceActions(map, preferences.language, { model.setQuery(it); model.search() }, model::message, allowInitialCenter = allowInitialCenter)
+    val devices = rememberDeviceActions(map, preferences.language, { model.setQuery(it); model.search() }, model::message,
+        allowInitialCenter = allowInitialCenter, onBackgroundMessage = model::backgroundMessage)
     var setting by rememberSaveable { mutableStateOf<String?>(null) }
     var accountPage by rememberSaveable { mutableStateOf(AccountPage.LOGIN) }
     val navigation = remember(context) { NavigationLauncher(context) }
@@ -59,7 +60,7 @@ fun LycorisRoot(model: HomeViewModel) {
         previousPage = page
     }
     LaunchedEffect(page) { devices.cancelVoice() }
-    LaunchedEffect(viewport.failure) { viewport.failure?.let { model.message(it.displayMessage(preferences.language)) } }
+    LaunchedEffect(viewport.failure) { viewport.failure?.let { model.backgroundMessage(it.displayMessage(preferences.language)) } }
     LaunchedEffect(detail.place?.id, page, map.ready) {
         if (page == SecondaryPage.DETAIL && map.ready) detail.place?.let { map.moveTo(it.lat, it.lng, map.camera.zoom.coerceAtLeast(15.0)) }
     }

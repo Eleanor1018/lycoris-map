@@ -152,6 +152,10 @@ class AppSmokeTest {
         )
         compose.waitUntil(5_000) { compose.onAllNodes(message).fetchSemanticsNodes().size == 1 }
         compose.onNode(message).assertIsDisplayed()
+        // A delayed viewport/automatic-location error can arrive after the microphone tap.
+        // It must not erase the explicit action's explanation before the user dismisses it.
+        withModel { it.backgroundMessage("Synthetic late map failure") }
+        compose.onNode(message).assertIsDisplayed()
         assertEquals(microphonePermission, context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO))
         compose.onNode(description("Dismiss message", "关闭提示")).performClick()
         compose.onNode(message).assertDoesNotExist()
