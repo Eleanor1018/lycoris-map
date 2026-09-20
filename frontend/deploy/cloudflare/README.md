@@ -112,6 +112,11 @@ mainland coverage data and conversion approximation as the native apps are
 used, including unchanged overseas/Hong Kong/Taipei coordinates. See
 `src/features/map/tencent/LICENSE.txt`. This is not a surveying transformation.
 
+The SDK and projection dataset start loading in parallel only after selecting
+Tencent. Browser caching and the shared SDK promise are reused on subsequent
+selections. This avoids serial module-then-SDK downloads without adding Tencent
+requests to the default OSM startup.
+
 Tencent supports zooms 3–19 in this integration. Pan and pinch remain continuous;
 discrete CSS zoom animation is disabled only while this WebGL provider is active
 to keep markers aligned. Leaving the layer destroys its GPU context and restores

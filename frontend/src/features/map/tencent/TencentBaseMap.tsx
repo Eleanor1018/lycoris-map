@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useMap } from 'react-leaflet'
 import { loadTencentSdk, type TencentMap } from './sdk'
-import { tencentCrs, toTencent } from './coordinates'
 
 const CREDIT = '&copy; <a href="https://map.qq.com/" target="_blank" rel="noopener">腾讯地图</a>'
 
@@ -23,8 +22,10 @@ export default function TencentBaseMap({ onError }: { onError: () => void }) {
         const fail = () => {
             if (!disposed) failure.current()
         }
-        void loadTencentSdk()
-            .then((sdk) => {
+        // Start the vendor SDK alongside the larger projection dataset; neither
+        // is fetched until Tencent is selected, and one cannot delay the other.
+        void Promise.all([loadTencentSdk(), import('./coordinates')])
+            .then(([sdk, { tencentCrs, toTencent }]) => {
                 if (disposed) return
                 const crs = map.options.crs,
                     minZoom = map.options.minZoom

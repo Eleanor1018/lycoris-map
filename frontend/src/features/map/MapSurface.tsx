@@ -1,12 +1,12 @@
 import 'leaflet/dist/leaflet.css'
-import { lazy, Suspense, useCallback, useEffect, useRef, type RefCallback } from 'react'
+import { useCallback, useEffect, useRef, type RefCallback } from 'react'
 import { MapContainer, TileLayer, useMap } from 'react-leaflet'
 import L, { type Map as LeafletMap } from 'leaflet'
 import { MapPlaces, type MapPlacesProps } from './MapPlaces'
 import { usePreferences } from '@/features/preferences/PreferencesProvider'
 import { osmTileUrl, tiandituTileUrl } from './mapSources'
+import TencentBaseMap from './tencent/TencentBaseMap'
 const CENTER: [number, number] = [31.2304, 121.4737]
-const TencentBaseMap = lazy(() => import('./tencent/TencentBaseMap'))
 export function MapSurface({
     onMap,
     onPick,
@@ -48,12 +48,7 @@ function BaseMapLayers({
         actions.current.update({ source: 'osm' })
         actions.current.onSourceError?.('Tencent Maps could not load. Switched to OSM.')
     }, [])
-    if (preferences.source === 'tencent')
-        return (
-            <Suspense fallback={null}>
-                <TencentBaseMap onError={failed} />
-            </Suspense>
-        )
+    if (preferences.source === 'tencent') return <TencentBaseMap onError={failed} />
     if (preferences.source === 'tianditu')
         return (
             <>
