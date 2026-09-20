@@ -672,6 +672,72 @@ async fn duplicate_historical_accounts_are_not_authorized() {
 }
 
 #[tokio::test]
+async fn login_accepts_exact_usernames_and_case_insensitive_email_without_ambiguity() {
+    let env = TestEnv::new().await;
+    let password = "Case-Sensitive-Pass";
+    let hash = PasswordHasher::new(4, 1)
+        .hash(password.to_string())
+        .await
+        .unwrap();
+    insert_user(
+        &env.pool,
+        "User@Handle",
+        "Mixed.Email@Example.COM",
+        &hash,
+        "USER",
+    )
+    .await;
+    for identity in ["User@Handle", " mixed.EMAIL@EXAMPLE.com "] {
+        let response = login(&env, identity, password).await;
+        assert_eq!(response.status, StatusCode::OK);
+        assert!(response.session_cookie().is_some());
+    }
+    for (identity, wrong_password) in [
+        ("user@handle", password),
+        ("mixed.email@example.com", "case-sensitive-pass"),
+    ] {
+        let response = login(&env, identity, wrong_password).await;
+        assert_eq!(response.status, StatusCode::UNAUTHORIZED);
+        assert!(response.session_cookie().is_none());
+    }
+
+    // Both matches may refer to the same row; this remains one identity.
+    insert_user(
+        &env.pool,
+        "same@example.com",
+        "SAME@EXAMPLE.COM",
+        &hash,
+        "USER",
+    )
+    .await;
+    assert_eq!(
+        login(&env, "same@example.com", password).await.status,
+        StatusCode::OK
+    );
+
+    // Never choose between two accounts or use the password to break a collision.
+    insert_user(
+        &env.pool,
+        "collision@example.com",
+        "separate@example.com",
+        &hash,
+        "USER",
+    )
+    .await;
+    insert_user(
+        &env.pool,
+        "different-user",
+        "COLLISION@EXAMPLE.COM",
+        &hash,
+        "USER",
+    )
+    .await;
+    let response = login(&env, "collision@example.com", password).await;
+    assert_eq!(response.status, StatusCode::UNAUTHORIZED);
+    assert!(response.session_cookie().is_none());
+}
+
+#[tokio::test]
 async fn concurrent_registration_creates_exactly_one_account() {
     let env = TestEnv::custom(|config| {
         config.register_rate_limit_max = 100;
