@@ -7,6 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -37,6 +38,14 @@ class NativeMapState {
         internal set
     var ready by mutableStateOf(false)
         internal set
+    internal var styleRevision by mutableIntStateOf(0)
+        private set
+    internal fun didLoadStyle() {
+        // Cached style loads can finish before Compose observes ready=false.
+        // Always signal a new style so overlays reattach to its native sources/layers.
+        styleRevision++
+        ready = true
+    }
     internal fun snapshotCamera(): MapCamera {
         googleMap?.let { google ->
             // A failed remote SDK delegate must not make retry/save/provider-switch crash again.
@@ -97,6 +106,7 @@ fun MapViewHost(
     onUserGesture: () -> Unit = {},
     onTilesLoaded: () -> Unit = {},
     onUnavailable: () -> Unit = {},
+    rasterSourceIds: Set<String> = MapStyles.osmSources,
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -179,25 +189,25 @@ fun MapViewHost(
             mapView.onDestroy()
         }
     }
-    DisposableEffect(styleJson, state.map) {
+    DisposableEffect(styleJson, rasterSourceIds, state.map) {
         val map = state.map
         var active = true
-        var parsedRaster = false
+        val parsedSources = mutableSetOf<String>()
         var rendered = false
-        val fetched = mutableSetOf<List<Int>>()
+        val fetched = mutableSetOf<Pair<String, List<Int>>>()
         val tiles = MapView.OnTileActionListener { operation, x, y, z, wrap, overscaledZ, source ->
-            if (active && source == "osm" && !rendered) {
-                val id = listOf(x, y, z, wrap, overscaledZ)
+            if (active && source in rasterSourceIds && !rendered) {
+                val id = source to listOf(x, y, z, wrap, overscaledZ)
                 when (operation) {
                     TileOperation.LoadFromNetwork, TileOperation.LoadFromCache -> fetched.add(id)
-                    TileOperation.EndParse -> if (id in fetched) parsedRaster = true
+                    TileOperation.EndParse -> if (id in fetched) parsedSources.add(source)
                     TileOperation.Error -> fetched.remove(id)
                     else -> Unit
                 }
             }
         }
         val frame = MapView.OnDidFinishRenderingFrameWithStatsListener { fully, stats ->
-            if (active && !rendered && parsedRaster && fully && stats.numDrawCalls > 0) {
+            if (active && !rendered && rasterSourceIds.isNotEmpty() && parsedSources.containsAll(rasterSourceIds) && fully && stats.numDrawCalls > 0) {
                 rendered = true
                 fetched.clear()
                 mapView.post { if (active && state.map === map) loaded() }
@@ -211,7 +221,7 @@ fun MapViewHost(
         mapView.addOnDidFailLoadingMapListener(failure)
         state.ready = false
         map?.setStyle(Style.Builder().fromJson(styleJson)) {
-            if (active && state.map === map) state.ready = true
+            if (active && state.map === map) state.didLoadStyle()
         }
         onDispose {
             active = false
@@ -221,10 +231,4 @@ fun MapViewHost(
         }
     }
     AndroidView(factory = { mapView }, modifier = modifier)
-}
-
-object MapStyles {
-    val osm = """
-        {"version":8,"sources":{"osm":{"type":"raster","tiles":["https://lycoris-map.com/tiles/osm/{z}/{x}/{y}.png"],"tileSize":256,"maxzoom":19,"attribution":"© OpenStreetMap contributors"}},"layers":[{"id":"background","type":"background","paint":{"background-color":"#F3F0F5"}},{"id":"osm","type":"raster","source":"osm"}]}
-    """.trimIndent()
 }

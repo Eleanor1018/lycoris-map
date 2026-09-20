@@ -42,7 +42,7 @@ Defects found and fixed during testing include first-measurement expansion of th
 ## External limitations
 
 - Computer Use has alternated between an unreadable Android Studio Running Devices floating window and a locked Mac. No native Figma screenshot comparison has been accepted yet. Android Studio is now open on the visible Android worktree; automated tests are not a substitute for a complete visual review.
-- The browser-only Tianditu key returned HTTP 403 / service code 301012 for a native WMTS request. OSM remains available; no browser-header impersonation or embedded Tianditu key is used. The new native Google selector remains disabled until an Android SDK key is configured.
+- The earlier browser-only Tianditu key returned HTTP 403 / service code 301012 for a native WMTS request. The replacement key now loads official WMTS tiles through the native renderer; see the Tianditu follow-up below. Google remains disabled until an Android SDK key is configured.
 - Physical GPS/compass, on-device recognition, navigation-app return, OEM background behavior, signed-release runtime and optimized performance measurements remain unverified.
 - Local release signing is now available (see the signing follow-up below); app-store distribution and website `assetlinks.json` remain unconfigured. The `.preview` package uses a debug certificate and is for evaluation. CI release artifacts remain unsigned.
 
@@ -112,3 +112,19 @@ A new owner-controlled release key was created outside the repository on 2026-09
 `signingReport`, `assembleRelease` and `bundleRelease` passed in 1m10s. `apksigner verify --verbose --print-certs` verified the resulting APK with the intended release certificate; its package is `com.lycoris.maps`, it is not debuggable, and 16 KB ZIP alignment passes. The AAB JAR signature verifies with the same certificate. Debug/QA/Preview retain the original debug certificate. Five isolated Gradle configuration checks passed: absent configuration stays unsigned; an explicitly blank path, missing credentials file, partial fields or missing keystore fails configuration. Those checks did not change developer-device settings.
 
 This establishes local signing and artifact verification, not a store release or signed-release runtime acceptance. CI continues building unsigned release artifacts without private signing credentials. Build evidence is `release-signing-build.log` in the ignored runtime directory.
+
+## Tianditu native raster maps, 2026-09-21
+
+The supplied replacement Tianditu key is configured only in ignored local secrets. Android uses the existing native MapLibre renderer with Tianditu's HTTPS WMTS vector base and Chinese label layers, visible attribution and shared geographic overlays. Official service capabilities declare 256 px Web Mercator tiles, vector levels 1–18 and label levels 1–19. Ordinary native requests returned HTTP 200 PNGs for both layers, without browser-header impersonation. This verifies WMTS access, not authentication of Tianditu's separate Android SDK.
+
+The existing map-source menu now includes Tianditu when configured. Chinese still defaults to configured Tencent and English to OSM; an explicit available provider choice wins across language changes. `LYCORIS_TIANDITU_MAPS_API_KEY` is wired into the workflow as an optional Actions secret, but was not uploaded to GitHub in this task. Repository sources and documentation contain no actual map key.
+
+The new native test exposed a cached-style timing defect: a style could finish reloading before Compose observed `ready=false`, leaving point and location overlays detached. A monotonically increasing style revision now triggers overlay reattachment for every completed style load. The original rendered-marker and location assertions pass with this fix.
+
+- Final QA/Dev build and lint passed; all 137 JVM tests passed with zero failures, errors or skips. Optimized Preview and signed Release APK builds also passed.
+- Pixel 10 Pro API 37.2 passed all 9 selected device tests in 73.517 seconds: both live raster provider tests and seven map-source selector cases. Tianditu checks fetched/parsed center tiles from both sources, fully rendered frames, the production load callback, a synthetic geographic marker and location dot, marker touch selection, background return, and Tianditu → OSM → Tianditu camera retention. These checks do not claim physical-device GPS/compass acceptance.
+- The device proxy remained `null`; no production records, device data, permissions or network settings were changed. QA, Dev and optimized Preview were updated without clearing app data. Dev and Preview report `pageSizeCompat=0`; Preview and Release pass 16 KB ZIP alignment. The Release APK signature matches the certificate in `signing.md`.
+- Android Studio was synced on the visible Android worktree. Computer Use confirmed the enabled Tianditu option and rendered Shanghai roads, Chinese labels and existing place markers in Dev after selecting a public search result. Dev is left on that Tianditu detail view for review; its manual provider selection is now Tianditu. Preview is installed but not separately claimed as manually reviewed.
+- Earlier CI run [35505259363](https://github.com/Eleanor1018/lycoris-map/actions/runs/35505259363) on the preceding signing commit passed its main/API 36 job, but API 26 still failed two rotation/IME cases. Those compatibility failures remain open; the focused Pixel pass is not a complete CI-matrix pass.
+
+Evidence: `tianditu-qa-verified.log`, `tianditu-optimized-verified.log` and `tianditu-pixel-verified.log` in the ignored runtime directory. No Web/iOS source, server deployment or production data was modified.

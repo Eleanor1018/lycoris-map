@@ -27,6 +27,7 @@ fun SettingsDialog(kind: String, preferences: Preferences, onDismiss: () -> Unit
     googleAvailability: GoogleMapsAvailability = GoogleMapsAvailability.NOT_CONFIGURED,
     onSearchType: (SearchType) -> Unit = {},
     tencentAvailable: Boolean = BuildConfig.TENCENT_MAPS_CONFIGURED,
+    tiandituAvailable: Boolean = BuildConfig.TIANDITU_MAPS_CONFIGURED,
 ) {
     val zh = preferences.language == Language.ZH
     when (kind) {
@@ -82,12 +83,14 @@ fun SettingsDialog(kind: String, preferences: Preferences, onDismiss: () -> Unit
                 dismissButton = { TextButton(onDismiss) { Text(if (zh) "取消" else "Cancel") } })
         }
         "source" -> AlertDialog(onDismissRequest = onDismiss, confirmButton = { TextButton(onDismiss) { Text(if (zh) "完成" else "Done") } }, text = {
-            Column {
-                listOf(MapSource.OSM to "OpenStreetMap", MapSource.TENCENT to MapSource.TENCENT.title(preferences.language), MapSource.GOOGLE to "Google Maps").forEach { (source, label) ->
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                listOf(MapSource.OSM to "OpenStreetMap", MapSource.TENCENT to MapSource.TENCENT.title(preferences.language),
+                    MapSource.TIANDITU to MapSource.TIANDITU.title(preferences.language), MapSource.GOOGLE to "Google Maps").forEach { (source, label) ->
                     val enabled = when (source) {
                         MapSource.OSM -> true
                         MapSource.TENCENT -> tencentAvailable
-                        else -> googleAvailability == GoogleMapsAvailability.AVAILABLE
+                        MapSource.TIANDITU -> tiandituAvailable
+                        MapSource.GOOGLE -> googleAvailability == GoogleMapsAvailability.AVAILABLE
                     }
                     val selected = preferences.mapSource == source
                     Row(Modifier.fillMaxWidth().selectable(selected, enabled = enabled, role = Role.RadioButton,
@@ -97,6 +100,7 @@ fun SettingsDialog(kind: String, preferences: Preferences, onDismiss: () -> Unit
                     }
                 }
                 if (!tencentAvailable) Text(if (zh) "腾讯地图暂未配置。" else "Tencent Maps is not configured yet.", style = MaterialTheme.typography.bodySmall)
+                if (!tiandituAvailable) Text(if (zh) "天地图暂未配置。" else "Tianditu is not configured yet.", style = MaterialTheme.typography.bodySmall)
                 when (googleAvailability) {
                     GoogleMapsAvailability.NOT_CONFIGURED -> Text(if (zh) "Google Maps 暂未配置。" else "Google Maps is not configured yet.", style = MaterialTheme.typography.bodySmall)
                     GoogleMapsAvailability.PLAY_SERVICES_UNAVAILABLE -> Text(if (zh) "此设备的 Google Play 服务不可用。" else "Google Play services are unavailable on this device.", style = MaterialTheme.typography.bodySmall)

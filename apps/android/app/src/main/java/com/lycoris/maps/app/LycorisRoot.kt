@@ -106,7 +106,8 @@ fun LycorisRoot(model: HomeViewModel) {
         notice = if (picking) { if (zh) "点击地图选择点位位置。" else "Tap the map to choose a place." } else notice,
         onDismissNotice = { if (picking) model.cancelPicking() else model.message(null) },
         onAttribution = {
-            runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.openstreetmap.org/copyright"))) }
+            val url = if (renderSource == MapSource.TIANDITU) "https://www.tianditu.gov.cn/" else "https://www.openstreetmap.org/copyright"
+            runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
                 .onFailure { model.message(if (zh) "没有可用的浏览器。" else "No browser is available.") }
         },
         onUserGesture = model::mapGesture, onCameraIdle = model::cameraIdle, onMapClick = { lat, lng -> model.pickLocation(lat, lng) },

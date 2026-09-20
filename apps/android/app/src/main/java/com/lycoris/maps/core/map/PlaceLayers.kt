@@ -70,6 +70,7 @@ fun PlaceLayers(
     val selected by rememberUpdatedState(onSelect)
     val map = state.map
     val ready = state.ready
+    val styleRevision = state.styleRevision
     val band = PlaceClustering.zoomBand(state.camera.zoom)
     val bitmaps by produceState<PlaceBitmaps?>(null, context, density) {
         value = try {
@@ -88,7 +89,7 @@ fun PlaceLayers(
         renderer?.listen()
         onDispose { renderer?.dispose() }
     }
-    LaunchedEffect(renderer, ready, bitmaps) {
+    LaunchedEffect(renderer, ready, styleRevision, bitmaps) {
         withContext(Dispatchers.Main.immediate) {
             if (ready) renderer?.attach(bitmaps) else renderer?.invalidateStyle()
         }

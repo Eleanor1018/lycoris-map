@@ -24,6 +24,12 @@ val tencentMapsApiKey = providers.environmentVariable("LYCORIS_TENCENT_MAPS_API_
 require(tencentMapsApiKey.isEmpty() || tencentMapsApiKey.matches(Regex("[A-Za-z0-9_-]+"))) {
     "Tencent Maps key contains invalid characters"
 }
+val tiandituMapsApiKey = providers.environmentVariable("LYCORIS_TIANDITU_MAPS_API_KEY")
+    .orElse(providers.gradleProperty("lycoris.tiandituMapsApiKey")).orNull?.trim()
+    ?: mapSecrets.getProperty("tiandituMapsApiKey", "").trim()
+require(tiandituMapsApiKey.isEmpty() || tiandituMapsApiKey.matches(Regex("[A-Fa-f0-9]{32}"))) {
+    "Tianditu Maps key must contain 32 hexadecimal characters"
+}
 
 // Only a path belongs in local.properties; the key and passwords stay outside source control.
 // CI without this optional configuration continues producing an unsigned release artifact.
@@ -59,6 +65,8 @@ android {
         manifestPlaceholders["googleMapsApiKey"] = googleMapsApiKey
         manifestPlaceholders["tencentMapsApiKey"] = tencentMapsApiKey
         buildConfigField("boolean", "TENCENT_MAPS_CONFIGURED", tencentMapsApiKey.isNotEmpty().toString())
+        buildConfigField("boolean", "TIANDITU_MAPS_CONFIGURED", tiandituMapsApiKey.isNotEmpty().toString())
+        buildConfigField("String", "TIANDITU_MAPS_API_KEY", "\"$tiandituMapsApiKey\"")
         buildConfigField("boolean", "GOOGLE_MAPS_CONFIGURED", googleMapsApiKey.isNotEmpty().toString())
         buildConfigField("String", "API_BASE_URL", "\"https://api.lycoris-map.com/\"")
         buildConfigField("boolean", "TEST_ENVIRONMENT", "false")

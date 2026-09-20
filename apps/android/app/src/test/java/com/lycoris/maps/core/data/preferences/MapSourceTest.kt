@@ -26,4 +26,13 @@ class MapSourceTest {
         assertEquals(MapSource.TENCENT, resolveMapSource("TENCENT", Language.EN, available))
         assertEquals(MapSource.OSM, resolveMapSource(null, Language.ZH, setOf(MapSource.OSM)))
     }
+
+    @Test fun configuredTiandituIsManualOnlyAndSurvivesLanguageChanges() {
+        val withTianditu = available + MapSource.TIANDITU
+        assertEquals(MapSource.TENCENT, resolveMapSource(null, Language.ZH, withTianditu))
+        assertEquals(MapSource.OSM, resolveMapSource(null, Language.EN, withTianditu))
+        for (language in Language.entries) {
+            assertEquals(MapSource.TIANDITU, resolveMapSource("TIANDITU", language, withTianditu))
+        }
+    }
 }
