@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n    id, version, lat, lng, category, title, description, source_language,\n    is_public, username, user_public_id, client_request_id, is_active,\n    open_time_start, open_time_end, review_status, last_edited_by,\n    last_edited_by_public_id, last_edited_by_owner, mark_image, deactivated, created_at, updated_at\nFROM map_markers\nWHERE review_status = 'PENDING'\n  AND deactivated = false\nORDER BY updated_at DESC\n",
+  "query": "SELECT\n    id, version, lat, lng, category, title, description, source_language,\n    is_public, username, user_public_id, client_request_id, is_active,\n    open_time_start, open_time_end, review_status, last_edited_by,\n    last_edited_by_public_id, last_edited_by_owner, mark_image, venue_type, deactivated, created_at, updated_at\nFROM map_markers m\nWHERE m.is_public = true\n  AND m.review_status = 'APPROVED'\n  AND m.deactivated = false\n  AND (\n    lower(m.title) LIKE lower('%' || $1 || '%')\n    OR lower(m.description) LIKE lower('%' || $1 || '%')\n    OR lower(m.category) LIKE lower('%' || $1 || '%')\n    OR m.lat::text LIKE '%' || $1 || '%'\n    OR m.lng::text LIKE '%' || $1 || '%'\n  )\nORDER BY m.id ASC\n",
   "describe": {
     "columns": [
       {
@@ -225,6 +225,17 @@
       },
       {
         "ordinal": 20,
+        "name": "venue_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "venue_type"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
         "name": "deactivated",
         "type_info": "Bool",
         "origin": {
@@ -235,7 +246,7 @@
         }
       },
       {
-        "ordinal": 21,
+        "ordinal": 22,
         "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -246,7 +257,7 @@
         }
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "updated_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -258,7 +269,9 @@
       }
     ],
     "parameters": {
-      "Left": []
+      "Left": [
+        "Text"
+      ]
     },
     "nullable": [
       false,
@@ -281,10 +294,11 @@
       true,
       false,
       true,
+      true,
       false,
       false,
       false
     ]
   },
-  "hash": "48a0d39d3a66067a517887d3942c868dc5f2f1a149b8ee5e52ec0d392f629c93"
+  "hash": "790d6fff6895f6fec350646b9fd5c38ba244af60f70b5586394f9f5ee26916d5"
 }

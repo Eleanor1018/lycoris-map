@@ -3,7 +3,7 @@
 //! 本模块不含业务事务与 SQL：身份由 [`CurrentUser`]/[`AdminUser`]/[`VerifiedAdmin`] 提取后，
 //! 只从 `Identity.user` 当前数据库行构造 [`Actor`]（绝不从请求体填 owner/admin），再调用
 //! 已验收的 [`MarkerWriteService`]。成功 `MarkerRow`/`Vec<MarkerRow>` 一律经
-//! [`MarkerService::localize`] 生成与读取接口同形的 23 字段响应并带语言 `Vary`，
+//! [`MarkerService::localize`] 生成与读取接口同形的 26 字段响应并带语言 `Vary`，
 //! 不直接序列化数据库行。
 //!
 //! 权限：用户写与本人读取用 `CurrentUser`；`GET /api/markers/all` 用 `AdminUser`
@@ -100,7 +100,7 @@ fn empty_ok() -> Response {
     web::empty(StatusCode::OK)
 }
 
-/// 把单行本地化为 23 字段响应（带语言 `Vary`）。
+/// 把单行本地化为 26 字段响应（带语言 `Vary`）。
 async fn localize_one(state: &AppState, row: MarkerRow, lang: &'static str) -> Response {
     match state.markers.localize(vec![row], lang).await {
         Ok(dtos) => match dtos.into_iter().next() {
@@ -111,7 +111,7 @@ async fn localize_one(state: &AppState, row: MarkerRow, lang: &'static str) -> R
     }
 }
 
-/// 把多行本地化为 23 字段响应数组（带语言 `Vary`）。
+/// 把多行本地化为 26 字段响应数组（带语言 `Vary`）。
 async fn localize_many(state: &AppState, rows: Vec<MarkerRow>, lang: &'static str) -> Response {
     match state.markers.localize(rows, lang).await {
         Ok(dtos) => json_markers(&dtos),
@@ -298,7 +298,7 @@ async fn admin_pending(
     }
 }
 
-/// GET /api/admin/markers/pending-edits：普通 JSON，18 字段提案 DTO。
+/// GET /api/admin/markers/pending-edits：普通 JSON，19 字段提案 DTO。
 async fn admin_pending_edits(State(state): State<AppState>, admin: VerifiedAdmin) -> Response {
     match state
         .markers_write

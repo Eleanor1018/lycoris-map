@@ -21,6 +21,21 @@ pub const MSG_PROPOSAL_ALREADY_HANDLED: &str = "该提案已处理";
 pub const MSG_STALE_VERSION: &str = "点位已更新或提案缺少版本信息，请按最新内容重新提交后审核";
 /// 新建点位的 `markImage` 只允许 null/空白；图片必须经上传提案与审核关联。
 pub const MSG_MARK_IMAGE_UPLOAD_ONLY: &str = "markImage 只能为空，请通过图片上传提交";
+/// 非无障碍卫生间类别携带场所标签；或标签值不在白名单内。
+pub const MSG_VENUE_TYPE_INVALID: &str = "venueType 不合法";
+
+/// 受控场所标签取值（`accessible_toilet` 专属，与 `0005_marker_venue_type.sql` 的 CHECK 一致）。
+pub const VENUE_TYPES: [&str; 6] = [
+    "metro",
+    "hospital",
+    "mall",
+    "railway_station",
+    "school",
+    "other",
+];
+
+/// 新建无障碍卫生间未显式传标签时的默认值。
+pub const DEFAULT_VENUE_TYPE: &str = "other";
 
 /// 已认证身份。
 ///
@@ -68,6 +83,8 @@ pub struct MarkerCreateRequest {
     pub open_time_end: Option<String>,
     pub client_request_id: Option<String>,
     pub mark_image: Option<String>,
+    /// 场所标签；仅 `category == accessible_toilet` 允许，缺省为 `other`。
+    pub venue_type: Option<String>,
 }
 
 /// `PATCH /api/markers/{id}` 与管理员 PATCH 请求体，字段与 Java `MarkerUpdateRequest` 一致。
@@ -82,6 +99,8 @@ pub struct MarkerUpdateRequest {
     pub is_active: Option<bool>,
     pub open_time_start: Option<String>,
     pub open_time_end: Option<String>,
+    /// 场所标签；语义见 [`MarkerCreateRequest::venue_type`]。
+    pub venue_type: Option<String>,
 }
 
 /// `marker_edit_proposals` 中与审核/列表相关的列。
@@ -103,6 +122,7 @@ pub struct EditProposalRow {
     pub is_active: bool,
     pub open_time_start: Option<String>,
     pub open_time_end: Option<String>,
+    pub venue_type: Option<String>,
     pub proposer_username: String,
     pub proposer_public_id: Option<String>,
     pub proposer_is_owner: bool,
@@ -128,6 +148,7 @@ pub struct EditProposalDto {
     pub is_active: bool,
     pub open_time_start: Option<String>,
     pub open_time_end: Option<String>,
+    pub venue_type: Option<String>,
     pub proposer_username: String,
     pub proposer_public_id: Option<String>,
     pub proposer_is_owner: bool,
@@ -151,6 +172,7 @@ impl From<EditProposalRow> for EditProposalDto {
             is_active: row.is_active,
             open_time_start: row.open_time_start,
             open_time_end: row.open_time_end,
+            venue_type: row.venue_type,
             proposer_username: row.proposer_username,
             proposer_public_id: row.proposer_public_id,
             proposer_is_owner: row.proposer_is_owner,

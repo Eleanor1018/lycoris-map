@@ -28,7 +28,7 @@ const CONTROL_TITLE: &str = "中\"文\\\n😀";
 const CONTROL_DESCRIPTION: &str = "line\t\u{1f}";
 const CONTROL_TITLE_HASH: &str = "69041ef21862545c32d414958ea2e68ef0287b0b67807d93ebfce3179dae8e87";
 
-const MARKER_KEYS: [&str; 24] = [
+const MARKER_KEYS: [&str; 26] = [
     "id",
     "version",
     "lat",
@@ -46,6 +46,8 @@ const MARKER_KEYS: [&str; 24] = [
     "deactivated",
     "openTimeStart",
     "openTimeEnd",
+    "venueType",
+    "hoursTimezone",
     "reviewStatus",
     "lastEditedBy",
     "lastEditedByPublicId",

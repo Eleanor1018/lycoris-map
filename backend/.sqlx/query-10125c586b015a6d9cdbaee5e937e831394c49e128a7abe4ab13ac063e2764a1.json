@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n    id, version, lat, lng, category, title, description, source_language,\n    is_public, username, user_public_id, client_request_id, is_active,\n    open_time_start, open_time_end, review_status, last_edited_by,\n    last_edited_by_public_id, last_edited_by_owner, mark_image, deactivated, created_at, updated_at\nFROM map_markers\nWHERE id = ANY($1::int8[])\nORDER BY id ASC\n",
+  "query": "SELECT\n    id, version, lat, lng, category, title, description, source_language,\n    is_public, username, user_public_id, client_request_id, is_active,\n    open_time_start, open_time_end, review_status, last_edited_by,\n    last_edited_by_public_id, last_edited_by_owner, mark_image, venue_type, deactivated, created_at, updated_at\nFROM map_markers\nWHERE user_public_id = $1\n  AND client_request_id = $2\n",
   "describe": {
     "columns": [
       {
@@ -225,6 +225,17 @@
       },
       {
         "ordinal": 20,
+        "name": "venue_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "venue_type"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
         "name": "deactivated",
         "type_info": "Bool",
         "origin": {
@@ -235,7 +246,7 @@
         }
       },
       {
-        "ordinal": 21,
+        "ordinal": 22,
         "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -246,7 +257,7 @@
         }
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "updated_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -259,7 +270,8 @@
     ],
     "parameters": {
       "Left": [
-        "Int8Array"
+        "Text",
+        "Text"
       ]
     },
     "nullable": [
@@ -283,10 +295,11 @@
       true,
       false,
       true,
+      true,
       false,
       false,
       false
     ]
   },
-  "hash": "8e2be712d55ac75bc4842b0e28ed711ad9705dfdcc3fbce5d63c3a1d3e9e5a21"
+  "hash": "10125c586b015a6d9cdbaee5e937e831394c49e128a7abe4ab13ac063e2764a1"
 }

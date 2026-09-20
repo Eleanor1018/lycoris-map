@@ -310,6 +310,7 @@ impl MarkerService {
                     description,
                     content_language,
                     is_active,
+                    self.zone.name(),
                 )
             })
             .collect())
