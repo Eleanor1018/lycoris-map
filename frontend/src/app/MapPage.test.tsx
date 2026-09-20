@@ -475,7 +475,7 @@ it.each([false, true])(
         const osm = within(popup).getByRole('radio', { name: 'OSM' })
         expect(osm).toBeChecked()
         expect(osm).toHaveFocus()
-        expect(within(popup).getAllByRole('radio')).toHaveLength(2)
+        expect(within(popup).getAllByRole('radio')).toHaveLength(3)
         expect(within(popup).queryByRole('radio', { name: 'Google Maps' })).not.toBeInTheDocument()
         fireEvent.click(within(popup).getByRole('radio', { name: '天地图' }))
         await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())

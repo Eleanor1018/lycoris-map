@@ -1,19 +1,22 @@
 import 'leaflet/dist/leaflet.css'
-import { useEffect, type RefCallback } from 'react'
+import { useCallback, useEffect, useRef, type RefCallback } from 'react'
 import { MapContainer, TileLayer, useMap } from 'react-leaflet'
 import L, { type Map as LeafletMap } from 'leaflet'
 import { MapPlaces, type MapPlacesProps } from './MapPlaces'
 import { usePreferences } from '@/features/preferences/PreferencesProvider'
 import { osmTileUrl, tiandituTileUrl } from './mapSources'
+import TencentBaseMap from './tencent/TencentBaseMap'
 const CENTER: [number, number] = [31.2304, 121.4737]
 export function MapSurface({
     onMap,
     onPick,
     places,
+    onSourceError,
 }: {
     onMap: RefCallback<LeafletMap>
     onPick?: ((point: { lat: number; lng: number }) => void) | undefined
     places?: MapPlacesProps | undefined
+    onSourceError?: ((message: string) => void) | undefined
 }) {
     return (
         <MapContainer
@@ -26,15 +29,26 @@ export function MapSurface({
             className="product-map"
             attributionControl
         >
-            <BaseMapLayers />
+            <BaseMapLayers onSourceError={onSourceError} />
             <MapLifecycle />
             <MapPick onPick={onPick} />
             {places && <MapPlaces {...places} />}
         </MapContainer>
     )
 }
-function BaseMapLayers() {
-    const { preferences } = usePreferences()
+function BaseMapLayers({
+    onSourceError,
+}: {
+    onSourceError: ((message: string) => void) | undefined
+}) {
+    const { preferences, update } = usePreferences()
+    const actions = useRef({ update, onSourceError })
+    actions.current = { update, onSourceError }
+    const failed = useCallback(() => {
+        actions.current.update({ source: 'osm' })
+        actions.current.onSourceError?.('Tencent Maps could not load. Switched to OSM.')
+    }, [])
+    if (preferences.source === 'tencent') return <TencentBaseMap onError={failed} />
     if (preferences.source === 'tianditu')
         return (
             <>

@@ -5,12 +5,14 @@ import { useUi } from '@/shared/i18n/ui'
 import { DesignButton, IconButton } from '@/shared/ui/design-primitives'
 import osmPreview from '@/assets/map-sources/osm.webp'
 import tiandituPreview from '@/assets/map-sources/tianditu.webp'
+import tencentPreview from '@/assets/map-sources/tencent.png'
 import { isMapSourceAvailable, mapSourceNames } from './mapSources'
 import './map-source-picker.css'
 
 const sources = [
     { id: 'osm', preview: osmPreview },
     { id: 'tianditu', preview: tiandituPreview },
+    { id: 'tencent', preview: tencentPreview },
 ] as const
 
 export function MapSourceOptions({ onSelect }: { onSelect?: (() => void) | undefined }) {
@@ -58,6 +60,10 @@ export function MapSourceOptions({ onSelect }: { onSelect?: (() => void) | undef
                 {' · '}
                 <a href="https://map.tianditu.gov.cn/" target="_blank" rel="noreferrer">
                     天地图
+                </a>
+                {' · '}
+                <a href="https://map.qq.com/" target="_blank" rel="noreferrer">
+                    腾讯地图
                 </a>
             </p>
         </div>

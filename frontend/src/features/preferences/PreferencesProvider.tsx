@@ -30,8 +30,10 @@ export function parsePreferences(raw: string | null): Preferences {
                     ? (value.category as SearchCategory)
                     : 'accessible_toilet',
             source:
-                'source' in value && value.source === 'tianditu' && isMapSourceAvailable('tianditu')
-                    ? 'tianditu'
+                'source' in value &&
+                (value.source === 'tianditu' || value.source === 'tencent') &&
+                isMapSourceAvailable(value.source)
+                    ? value.source
                     : 'osm',
         }
     } catch {

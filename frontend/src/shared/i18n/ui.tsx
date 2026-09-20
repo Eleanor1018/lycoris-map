@@ -91,6 +91,7 @@ export const uiMessages = {
     'Map Source': '地图来源',
     'Map Type': '地图模式',
     'Not available yet': '暂未接入',
+    'Tencent Maps could not load. Switched to OSM.': '腾讯地图加载失败，已切换回 OSM。',
     'About Lycoris Maps': '关于 Lycoris Maps',
     Language: '语言',
     English: 'English',

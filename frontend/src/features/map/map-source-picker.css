@@ -20,6 +20,12 @@
     transform-origin: var(--radix-popover-content-transform-origin);
     animation: map-source-in 140ms ease-out;
 }
+.tencent-basemap {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+}
 .map-source-title {
     margin: 0 0 16px;
     text-align: center;
