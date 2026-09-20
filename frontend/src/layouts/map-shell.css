@@ -1,8 +1,21 @@
 .map-shell {
-    position: relative;
+    /* Pinned at the layout origin so no outer html/document scroll can reveal
+       the body behind it. `--map-viewport-offset-top` is the visual viewport's
+       pan inside the layout viewport (keyboard): the shell keeps its top at 0
+       and only grows taller, so its bottom edge lands on the visual bottom and
+       the offset is never applied twice. Non-map pages have neither variable
+       and keep the plain 100dvh fallback. */
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
     width: 100%;
-    height: 100dvh;
+    height: calc(var(--map-viewport-height, 100dvh) + var(--map-viewport-offset-top, 0px));
+    /* The shell only clips: `clip` (with `hidden` as the older-browser fallback)
+       cannot be scrolled programmatically, so focus()/scrollIntoView() inside the
+       sheet can no longer scroll the map itself. Scrolling stays on .sheet-scroll. */
     overflow: hidden;
+    overflow: clip;
     isolation: isolate;
     background: white;
 }
@@ -277,7 +290,7 @@
     top: 136px;
     left: 16px;
     width: 288px;
-    max-height: calc(100dvh - 136px - 22px);
+    max-height: calc(var(--map-viewport-height, 100dvh) - 136px - 22px);
 }
 .desktop-panel .voice-search-error {
     position: absolute;
@@ -605,12 +618,16 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: calc(100dvh - 46px);
+    /* Same snapshot as the shell: the sheet is capped to the visible height so
+       its fully expanded top stays 46px below the visible top edge. */
+    height: calc(var(--map-viewport-height, 100dvh) - 46px);
     border-radius: 10px 10px 0 0;
     background: var(--ui-nav-surface);
     box-shadow: 0 0 6px #00000021;
     z-index: 10;
+    /* Clip only; .sheet-scroll owns the actual scrolling. */
     overflow: hidden;
+    overflow: clip;
 }
 .sheet-handle {
     position: absolute;
@@ -705,7 +722,7 @@
     right: var(--mobile-content-inset);
 }
 .mobile-search-content .voice-search-body {
-    max-height: calc(100dvh - 206px - 22px);
+    max-height: calc(var(--map-viewport-height, 100dvh) - 206px - 22px);
 }
 .mobile-search input {
     font-size: 16px;
@@ -891,6 +908,13 @@
     width: 28px;
     height: 28px;
 }
+/* Widen the tap target to 44px without moving the 28px icon or the right-aligned
+   layout: a transparent pseudo-element extends the hit area symmetrically. */
+.mobile-bookmark::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+}
 .map-shell[data-mobile='true'] .map-tools {
     right: 10px;
     background: #f7f7f6;
@@ -910,16 +934,16 @@
     transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .map-shell[data-mobile='true'] {
-    --sheet-height: min(158px, calc(100dvh - 46px));
+    --sheet-height: min(158px, calc(var(--map-viewport-height, 100dvh) - 46px));
 }
 .map-shell[data-mobile='true'][data-snap='half'] {
-    --sheet-height: min(326px, calc(100dvh - 46px));
+    --sheet-height: min(326px, calc(var(--map-viewport-height, 100dvh) - 46px));
 }
 .map-shell[data-mobile='true'][data-snap='full'] {
-    --sheet-height: calc(100dvh - 46px);
+    --sheet-height: calc(var(--map-viewport-height, 100dvh) - 46px);
 }
 .map-shell[data-mobile='true'][data-panel='details'] {
-    --sheet-height: min(433px, calc(100dvh - 46px));
+    --sheet-height: min(433px, calc(var(--map-viewport-height, 100dvh) - 46px));
 }
 @media (max-width: 374px) {
     .mobile-sheet .category-card {

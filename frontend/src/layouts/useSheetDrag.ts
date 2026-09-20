@@ -100,6 +100,12 @@ export function useSheetDrag({
         if (!element || !(target instanceof Element)) return
         if (target.closest('input, textarea, select, [contenteditable="true"], [role="slider"]'))
             return
+        // Let ordinary controls handle their own interaction: a button/link tap
+        // must not become a sheet drag, where a few pixels of finger movement
+        // would preventDefault the click. The handle stays draggable, and taps
+        // on titles/blank space still drag.
+        const control = target.closest('button, a, [role="button"], label')
+        if (control && !target.closest('.sheet-handle')) return
         suppressClickUntil.current = 0
         const viewport = element.parentElement?.getBoundingClientRect()
         const box = element.getBoundingClientRect()
@@ -278,6 +284,14 @@ export function useSheetDrag({
             clearTimeout(settling.current)
             delete element.dataset.settling
         }
+        // A layout change (URL bar, rotation, keyboard) invalidates the captured
+        // physicalHeight; drop any in-progress drag instead of fighting the new
+        // shell size. Pinch zoom is left to the browser, so skip while scaled.
+        const viewport = window.visualViewport
+        const layoutChanged = () => {
+            if (viewport && Math.abs(viewport.scale - 1) >= 0.01) return
+            cancel()
+        }
         element.addEventListener('touchstart', touchStart, { passive: true })
         element.addEventListener('touchmove', touchMove, { passive: false })
         element.addEventListener('touchend', touchEnd)
@@ -290,6 +304,8 @@ export function useSheetDrag({
         element.addEventListener('transitionend', settled)
         window.addEventListener('blur', cancel)
         window.addEventListener('resize', cancel)
+        viewport?.addEventListener('resize', layoutChanged)
+        viewport?.addEventListener('scroll', layoutChanged)
         return () => {
             cancel()
             clearTimeout(settling.current)
@@ -306,6 +322,8 @@ export function useSheetDrag({
             element.removeEventListener('transitionend', settled)
             window.removeEventListener('blur', cancel)
             window.removeEventListener('resize', cancel)
+            viewport?.removeEventListener('resize', layoutChanged)
+            viewport?.removeEventListener('scroll', layoutChanged)
         }
     }, [sheet])
 }

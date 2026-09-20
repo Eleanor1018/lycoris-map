@@ -120,19 +120,14 @@ export function MobileSheet({
         if (voiceBody) observer.observe(voiceBody)
         return () => observer.disconnect()
     }, [liveDetail, mainMenu, voice, onDetailHeight, onMenuHeight, onNearbyHeight])
+    // Keep the focused field visible while the visual viewport moves for the
+    // keyboard. The shell owns the sizing: it grows by the keyboard pan, so the
+    // sheet does not recompute any height or subtract the pan here.
     useEffect(() => {
-        const element = sheet.current,
-            viewport = window.visualViewport
-        if (!composing || !element || !viewport) return
+        const element = sheet.current
+        if (!composing || !element) return
         let frame = 0
-        const resize = () => {
-            const normalScale = Math.abs(viewport.scale - 1) < 0.05
-            const height = normalScale ? viewport.height : window.innerHeight
-            const offset = normalScale
-                ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
-                : 0
-            element.style.setProperty('--contribution-viewport-height', `${height}px`)
-            element.style.setProperty('--contribution-keyboard-offset', `${offset}px`)
+        const reveal = () => {
             cancelAnimationFrame(frame)
             frame = requestAnimationFrame(() => {
                 const active = document.activeElement
@@ -144,15 +139,15 @@ export function MobileSheet({
                     active.scrollIntoView?.({ block: 'nearest' })
             })
         }
-        resize()
-        viewport.addEventListener('resize', resize)
-        viewport.addEventListener('scroll', resize)
+        element.addEventListener('focusin', reveal)
+        const viewport = window.visualViewport
+        viewport?.addEventListener('resize', reveal)
+        viewport?.addEventListener('scroll', reveal)
         return () => {
             cancelAnimationFrame(frame)
-            viewport.removeEventListener('resize', resize)
-            viewport.removeEventListener('scroll', resize)
-            element.style.removeProperty('--contribution-viewport-height')
-            element.style.removeProperty('--contribution-keyboard-offset')
+            element.removeEventListener('focusin', reveal)
+            viewport?.removeEventListener('resize', reveal)
+            viewport?.removeEventListener('scroll', reveal)
         }
     }, [composing])
     const cycle = () =>
