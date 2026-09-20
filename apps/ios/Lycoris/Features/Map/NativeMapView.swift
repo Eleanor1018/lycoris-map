@@ -87,6 +87,9 @@ struct NativeMapView: UIViewRepresentable {
     Self.updateMargins(
       UIEdgeInsets(top: topInset, left: 10, bottom: bottomInset, right: 10), on: map)
     map.showsUserLocation = showsUserLocation
+    if !showsUserLocation && map.userTrackingMode != .none {
+      map.setUserTrackingMode(.none, animated: false)
+    }
     coordinator.updateHeading(on: map)
     let existing = Dictionary(
       uniqueKeysWithValues: map.annotations.compactMap { annotation -> (String, PlaceAnnotation)? in
@@ -172,6 +175,8 @@ struct NativeMapView: UIViewRepresentable {
 
     func prepareForCoordinateSpaceChange(on map: MKMapView) {
       lastViewport = nil
+      // MapKit owns the blue-dot coordinate; calibration must never replay its focus.
+      guard parent.focus?.target != .userLocation else { return }
       // Also record deferred focuses: a late calibration must not undo a pan/zoom
       // made while the first mainland location was waiting for its projection.
       guard let last = lastFocusCamera else { return }
@@ -187,15 +192,38 @@ struct NativeMapView: UIViewRepresentable {
 
     func applyFocus(on map: MKMapView) {
       guard let focus = parent.focus, focusID != focus.id else { return }
-      focusID = focus.id
-      if let coordinate = parent.coordinateSpace.coordinate(for: focus.point) {
-        map.setCamera(
-          MKMapCamera(
-            lookingAtCenter: coordinate,
-            fromDistance: focus.distance, pitch: 0, heading: map.camera.heading),
-          animated: parent.animated)
+      switch focus.target {
+      case .userLocation:
+        guard parent.showsUserLocation else { return }
+        focusID = focus.id
+        lastFocusCamera = nil
+        // Native follow waits for MapKit's own fix and uses the blue dot's display
+        // coordinate. It must work even when landmark search is offline/unresolved.
+        map.setUserTrackingMode(.follow, animated: parent.animated)
+      case .point(let point):
+        focusID = focus.id
+        map.setUserTrackingMode(.none, animated: false)
+        if let coordinate = parent.coordinateSpace.coordinate(for: point) {
+          map.setCamera(
+            MKMapCamera(
+              lookingAtCenter: coordinate,
+              fromDistance: focus.distance, pitch: 0, heading: map.camera.heading),
+            animated: parent.animated)
+        }
+        lastFocusCamera = map.camera.copy() as? MKMapCamera
       }
-      lastFocusCamera = map.camera.copy() as? MKMapCamera
+      updateLocationTestState(on: map)
+    }
+
+    private func updateLocationTestState(on map: MKMapView) {
+      #if LYCORIS_LOCAL_TESTS
+        guard
+          ProcessInfo.processInfo.arguments.contains("-lycoris-test-map-calibration-unavailable")
+        else { return }
+        // No coordinates or test diagnostics are exposed by Debug/Release builds.
+        map.accessibilityValue =
+          "tracking=\(map.userTrackingMode.rawValue); calibration=\(parent.coordinateSpace)"
+      #endif
     }
 
     func updateHeading(on map: MKMapView) {
@@ -219,10 +247,16 @@ struct NativeMapView: UIViewRepresentable {
 
     func mapViewDidChangeVisibleRegion(_ mapView: MKMapView) {
       updateHeadingView(on: mapView, animated: false)
+      updateLocationTestState(on: mapView)
     }
 
     func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
       updateHeadingView(on: mapView, animated: false)
+      updateLocationTestState(on: mapView)
+    }
+
+    func mapView(_ mapView: MKMapView, didChange mode: MKUserTrackingMode, animated: Bool) {
+      updateLocationTestState(on: mapView)
     }
 
     func mapView(_ mapView: MKMapView, didAdd views: [MKAnnotationView]) {
@@ -369,6 +403,12 @@ struct NativeMapView: UIViewRepresentable {
 
   static func updateMargins(_ insets: UIEdgeInsets, on map: MKMapView) {
     guard map.layoutMargins != insets else { return }
+    if map.userTrackingMode != .none {
+      // Let MapKit keep the blue dot in the unobscured region. An explicit
+      // camera correction here would compete with native user following.
+      map.layoutMargins = insets
+      return
+    }
     guard map.bounds.width > 0, map.bounds.height > 0 else {
       map.layoutMargins = insets
       return

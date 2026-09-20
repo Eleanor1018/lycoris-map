@@ -159,6 +159,90 @@ struct AccountTests {
     #expect(store.message == String(appLocalized: "Password changed. Please log in again."))
   }
 
+  @Test func loginTrimsIdentityWithoutChangingUsernameOrPasswordCase() async {
+    let api = AccountFixture()
+    let store = AccountStore(api: api)
+    #expect(
+      await store.authenticate(
+        username: "  User@Handle  ", email: "", password: "  Case Sensitive  ", register: false))
+    #expect(await api.loginFields == ["username": "User@Handle", "password": "  Case Sensitive  "])
+  }
+
+  @Test func bookmarkRespondsBeforePreflightAndDoesNotWaitForLibraryRefresh() async throws {
+    let api = AccountFixture()
+    let store = AccountStore(api: api)
+    await store.restore()
+    await store.loadLibrary()
+    let marker = try #require(store.bookmarks.first)
+    await api.hold("GET api/me")
+    let saving = Task { await store.toggleBookmark(1) }
+    try await waitFor { await api.hasPending }
+    #expect(!store.isBookmarked(1) && store.bookmarks.isEmpty)
+    await api.holdFavorites()
+    let createdReads = await api.createdReads
+    await api.release()
+    await saving.value
+    await api.waitUntilHeld()
+    #expect(!store.isBusy && !store.isBookmarked(1))
+    #expect(await api.createdReads == createdReads)
+    await api.releaseFavorites(empty: true)
+    await store.toggleBookmark(1, marker: marker)
+    #expect(store.isBookmarked(1) && store.bookmarks.first?.id == 1)
+  }
+
+  @Test func failedBookmarkWriteRollsBackAndAccountChangeNeverWritesAsSomeoneElse() async {
+    let api = AccountFixture()
+    let store = AccountStore(api: api)
+    await store.restore()
+    await store.loadLibrary()
+    await api.rejectFavorite(503)
+    await store.toggleBookmark(1)
+    #expect(store.isBookmarked(1) && store.bookmarks.first?.id == 1 && store.message != nil)
+    await api.switchUser("account-b")
+    await store.toggleBookmark(1)
+    #expect(store.user?.publicId == "account-b" && !store.isBookmarked(1))
+    #expect(await api.favoriteWrites == 1)
+  }
+
+  @Test func bookmarkStatusIsReadyBeforeCreatedPlacesFinishLoading() async throws {
+    let api = AccountFixture()
+    let store = AccountStore(api: api)
+    await api.hold("GET api/markers/me/created")
+    await store.restore()
+    try await waitFor { await api.hasPending }
+    #expect(store.isBookmarked(1))
+    #expect(!store.bookmarkStatusLoading && store.libraryLoading)
+    await api.release()
+  }
+
+  @Test func staleLibraryCannotUndoAnAcknowledgedBookmarkChange() async throws {
+    let api = AccountFixture()
+    let store = AccountStore(api: api)
+    await store.restore()
+    await store.loadLibrary()
+    await api.holdFavorites()
+    let oldRead = Task { await store.loadLibrary() }
+    await api.waitUntilHeld()
+    await store.toggleBookmark(1)
+    await api.releaseFavorites()
+    await oldRead.value
+    #expect(!store.isBookmarked(1) && store.bookmarks.isEmpty)
+  }
+
+  @Test func failedRefreshKeepsSuccessfulBookmarkAndExpiryClearsIt() async throws {
+    let api = AccountFixture()
+    let store = AccountStore(api: api)
+    await store.restore()
+    await store.loadLibrary()
+    await api.rejectFavoritesRead(503)
+    await store.toggleBookmark(1)
+    try await waitFor { store.libraryMessage != nil }
+    #expect(!store.isBookmarked(1) && store.bookmarks.isEmpty && !store.isBusy)
+    await api.setFailure(401)
+    await store.restore()
+    #expect(store.user == nil && !store.isBookmarked(1))
+  }
+
   @Test func passwordAndProfileLimitsMatchRustUnits() {
     #expect(AccountValidation.password("😀😀"))
     #expect(!AccountValidation.password("😀"))
@@ -201,6 +285,13 @@ private actor AccountFixture: AccountServing {
   var failure: Int?
   var logoutFails = false
   var favorite = true
+  var favoriteFailure: Int?
+  var favoritesReadFailure: Int?
+  var favoriteWrites = 0
+  var createdReads = 0
+  var loginFields: [String: String]?
+  func rejectFavorite(_ status: Int) { favoriteFailure = status }
+  func rejectFavoritesRead(_ status: Int) { favoritesReadFailure = status }
   var shouldHold = false
   var held: CheckedContinuation<Data, Never>?
   var ready: CheckedContinuation<Void, Never>?
@@ -226,8 +317,8 @@ private actor AccountFixture: AccountServing {
     if held != nil { return }
     await withCheckedContinuation { ready = $0 }
   }
-  func releaseFavorites() {
-    held?.resume(returning: Data(Self.markers.utf8))
+  func releaseFavorites(empty: Bool = false) {
+    held?.resume(returning: Data((empty ? "[]" : Self.markers).utf8))
     held = nil
   }
   static let markers =
@@ -257,6 +348,7 @@ private actor AccountFixture: AccountServing {
           .utf8)
     case "api/login":
       let fields = try JSONDecoder().decode([String: String].self, from: request.body!)
+      loginFields = fields
       identity = fields["username"]
       return try await send(AccountRequest(path: "api/me"))
     case "api/logout":
@@ -268,6 +360,7 @@ private actor AccountFixture: AccountServing {
       identity = nil
       return Data(#"{"code":0,"data":null}"#.utf8)
     case "api/markers/me/favorites/details":
+      if let favoritesReadFailure { throw AccountFailure(status: favoritesReadFailure) }
       if libraryExpired { throw AccountFailure(status: 401) }
       if shouldHold {
         shouldHold = false
@@ -278,13 +371,17 @@ private actor AccountFixture: AccountServing {
         }
       }
       return Data((identity == "account-a" && favorite ? Self.markers : "[]").utf8)
-    case "api/markers/me/created": return Data("[]".utf8)
+    case "api/markers/me/created":
+      createdReads += 1
+      return Data("[]".utf8)
     case "api/markers/1":
       return Data(
         #"{"id":1,"version":1,"lat":31,"lng":121,"category":"accessible_toilet","title":"Owned place","contentLanguage":"en","isPublic":false,"reviewStatus":"PENDING","markImage":"/uploads/markers/fixture.jpg"}"#
           .utf8)
     case "uploads/markers/fixture.jpg": return Data([1, 2, 3])
     case "api/markers/1/favorite":
+      favoriteWrites += 1
+      if let favoriteFailure { throw AccountFailure(status: favoriteFailure) }
       favorite = request.method == "POST"
       return Data()
     default: throw AccountFailure(status: 404)

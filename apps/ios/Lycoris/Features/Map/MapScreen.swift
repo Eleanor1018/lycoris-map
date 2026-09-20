@@ -12,7 +12,6 @@ struct MapScreen: View {
   @State private var showsVoiceSearch = false
   @State private var voiceTask: Task<Void, Never>?
   @Environment(\.openURL) private var openURL
-  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @State private var detent: MapPanelDetent
   @State private var store: PlaceStore
@@ -30,7 +29,6 @@ struct MapScreen: View {
   @State private var queuedContribution: ContributionIntent?
   @State private var chooseLocationAfterDismiss = false
   @State private var contributionError: String?
-  @State private var editLoadTask: Task<Void, Never>?
   @State private var modal: MapModal?
   @State private var pendingBookmark: Int64?
   @State private var bookmarkIntent = UUID()
@@ -71,10 +69,14 @@ struct MapScreen: View {
     #if LYCORIS_LOCAL_TESTS
       // Hermetic fixture runs have an explicit datum. Live provider calibration is
       // verified separately, not allowed to make fixture tests depend on Apple search.
-      _mapCoordinates = State(initialValue: MapCoordinateResolver(space: .wgs84))
+      let calibrationUnavailable = ProcessInfo.processInfo.arguments.contains(
+        "-lycoris-test-map-calibration-unavailable")
+      _mapCoordinates = State(
+        initialValue: calibrationUnavailable
+          ? MapCoordinateResolver(lookup: { nil }) : MapCoordinateResolver(space: .wgs84))
     #else
       _mapCoordinates = State(
-        initialValue: MapCoordinateResolver(space: isPreview ? .wgs84 : .unresolved))
+        initialValue: MapCoordinateResolver(space: isPreview ? .wgs84 : nil))
     #endif
     self.bookmarks = bookmarks
   }
@@ -143,24 +145,8 @@ struct MapScreen: View {
             width: layout.viewport.width - layout.horizontalInset(at: panelTop) * 2,
             height: panelHeight
           )
-          .background {
-            if reduceTransparency {
-              panelShape.fill(Color(.secondarySystemBackground))
-            } else {
-              panelShape.fill(.ultraThinMaterial)
-            }
-          }
-          .background {
-            panelShape
-              .fill(Color("PanelTint").opacity(0.4 * layout.collapsedProgress(at: panelTop)))
-          }
-          .overlay {
-            panelShape
-              .strokeBorder(.white.opacity(0.28), lineWidth: 0.5)
-              .allowsHitTesting(false)
-          }
           .clipShape(panelShape)
-          .shadow(color: .black.opacity(0.12), radius: 16, y: 4)
+          .modifier(MapPanelSurface(shape: panelShape))
           .position(x: layout.viewport.width / 2, y: panelTop + panelHeight / 2)
           .opacity(selectingLocation ? 0 : 1)
           .allowsHitTesting(!selectingLocation)
@@ -172,7 +158,7 @@ struct MapScreen: View {
               Button("Cancel") {
                 selectingLocation = false
                 pickedLocation = nil
-                if contribution.draft?.editable == true { modal = .contribution }
+                if contribution.draft?.editable == true { modal = .contribution() }
               }
               .buttonStyle(.glass).controlSize(.large)
               .accessibilityIdentifier("contribution.cancel-location")
@@ -286,8 +272,8 @@ struct MapScreen: View {
         AccountSheet(
           store: account, destination: destination, onAuthenticated: resumeAuthenticatedAction,
           onSelect: selectAccountPlace)
-      case .contribution:
-        ContributionSheet(store: contribution) {
+      case .contribution(let editID):
+        ContributionSheet(store: contribution, editID: editID) {
           chooseLocationAfterDismiss = true
           modal = nil
         }
@@ -377,7 +363,6 @@ struct MapScreen: View {
     .onChange(of: account.epoch) { _, _ in
       contribution.synchronize()
       if account.user == nil {
-        editLoadTask?.cancel()
         selectingLocation = false
         pickedLocation = nil
         chooseLocationAfterDismiss = false
@@ -386,7 +371,6 @@ struct MapScreen: View {
     }
     .onChange(of: account.user?.publicId) { old, new in
       if old != nil, old != new {
-        editLoadTask?.cancel()
         selectingLocation = false
         pickedLocation = nil
         chooseLocationAfterDismiss = false
@@ -490,7 +474,7 @@ struct MapScreen: View {
           onNavigate: { navigate(selectedPlace) },
           onEdit: { if let id = Int64(selectedPlace.id) { beginContribution(.edit(id)) } },
           isBookmarked: Int64(selectedPlace.id).map(account.isBookmarked) ?? false,
-          bookmarkBusy: account.isBusy || account.libraryLoading || account.isChecking,
+          bookmarkBusy: account.isBusy || account.bookmarkStatusLoading,
           onBookmark: { bookmark(selectedPlace) },
           authenticatedPhoto: account.selectedMarker != nil,
           photo: account.selectedPhoto, photoFailed: account.photoFailed,
@@ -510,6 +494,11 @@ struct MapScreen: View {
         )
         .padding(.horizontal, 14)
         .padding(.bottom, detent == .collapsed ? 14 : detent == .nearby ? 7 : 11)
+        .contentShape(Rectangle())
+        // The floating search row is the collapsed panel's drag surface. Once
+        // open, leave text editing and content scrolling to their native controls.
+        .highPriorityGesture(
+          panelDrag(layout: layout), including: detent == .collapsed ? .all : .subviews)
 
         if showsVoiceSearch {
           VoiceSearchControls(
@@ -597,25 +586,27 @@ struct MapScreen: View {
       @unknown default: break
       }
     }
-    .highPriorityGesture(
-      DragGesture(minimumDistance: 10, coordinateSpace: .global)
-        .updating($dragTranslation) { value, translation, _ in
-          if abs(value.translation.height) > abs(value.translation.width) {
-            translation = value.translation.height
-          }
-        }
-        .onChanged { value in
-          guard abs(value.translation.height) > abs(value.translation.width) else { return }
-          isSearchFocused = false
-        }
-        .onEnded { value in
-          guard abs(value.translation.height) > abs(value.translation.width) else { return }
-          let target = layout.nearest(
-            to: layout.top(for: detent) + value.predictedEndTranslation.height)
-          movePanel(to: target)
-        }
-    )
+    .highPriorityGesture(panelDrag(layout: layout))
 
+  }
+
+  private func panelDrag(layout: PanelLayout) -> some Gesture {
+    DragGesture(minimumDistance: 10, coordinateSpace: .global)
+      .updating($dragTranslation) { value, translation, _ in
+        if abs(value.translation.height) > abs(value.translation.width) {
+          translation = value.translation.height
+        }
+      }
+      .onChanged { value in
+        guard abs(value.translation.height) > abs(value.translation.width) else { return }
+        isSearchFocused = false
+      }
+      .onEnded { value in
+        guard abs(value.translation.height) > abs(value.translation.width) else { return }
+        let target = layout.nearest(
+          to: layout.top(for: detent) + value.predictedEndTranslation.height)
+        movePanel(to: target)
+      }
   }
 
   private func selectPlace(_ place: PlacePresentation) {
@@ -650,6 +641,7 @@ struct MapScreen: View {
   }
 
   private func locate() {
+    mapCoordinates.resolveIfNeeded(retryPending: true)
     requestLocation(showFailure: true)
   }
 
@@ -667,12 +659,18 @@ struct MapScreen: View {
       return
     }
     let token = store.beginLocationRequest()
+    location.refreshAuthorization()
+    let followsImmediately = showFailure && location.isAuthorized
+    if followsImmediately { store.followUserLocation(token: token) }
     location.request { result in
       if case .failure(.denied) = result { awaitsLocationAuthorization = true }
       guard store.acceptsLocation(token) else { return }
       if !showFailure && (modal != nil || selectingLocation || isSearchFocused) { return }
       switch result {
-      case .success(let point): store.locate(point, token: token)
+      case .success(let point):
+        // A manual tap has already started native following. A later Core Location
+        // fix updates canonical data without pulling back a map the user has panned.
+        store.locate(point, token: token, focusMap: !followsImmediately)
       case .failure(let failure):
         guard showFailure else { return }
         locationDenied = failure == .denied
@@ -737,7 +735,7 @@ struct MapScreen: View {
       return
     }
     Task {
-      await account.toggleBookmark(id)
+      await account.toggleBookmark(id, marker: account.selectedMarker ?? store.selectedMarker)
       showsAccountError = account.message != nil
     }
   }
@@ -773,7 +771,6 @@ struct MapScreen: View {
 
   private func beginContribution(_ intent: ContributionIntent) {
     cancelVoiceSearch()
-    editLoadTask?.cancel()
     guard !store.isPreview else {
       showsUnavailableAction = true
       return
@@ -786,24 +783,14 @@ struct MapScreen: View {
     contribution.synchronize()
     isSearchFocused = false
     if let draft = contribution.draft, draft.phase != .complete {
-      modal = .contribution
+      modal = .contribution()
       return
     }
     switch intent {
     case .create:
       enterLocationSelection()
     case .edit(let id):
-      editLoadTask = Task {
-        do {
-          try await contribution.edit(id)
-          modal = .contribution
-        } catch {
-          guard !Task.isCancelled, !(error is CancellationError) else { return }
-          contributionError =
-            (error as? AccountFailure)?.message
-            ?? String(appLocalized: "Could not load places. Please try again.")
-        }
-      }
+      modal = .contribution(editID: id)
     }
   }
 
@@ -833,7 +820,7 @@ struct MapScreen: View {
       try contribution.move(to: point)
       selectingLocation = false
       pickedLocation = nil
-      modal = .contribution
+      modal = .contribution()
     } catch {
       contributionError = String(appLocalized: "Could not save the contribution on this device.")
     }
@@ -886,7 +873,7 @@ private enum ContributionIntent {
 private enum MapModal: Identifiable {
   case account(AccountDestination)
   case share(PlacePresentation)
-  case contribution
+  case contribution(editID: Int64? = nil)
   case settings(SettingsDestination)
   case mapAppearance(GeoPoint?)
   case link(PlaceLink)
@@ -894,7 +881,7 @@ private enum MapModal: Identifiable {
     switch self {
     case .account: "account"
     case .share(let place): "share-\(place.id)"
-    case .contribution: "contribution"
+    case .contribution(let id): "contribution-\(id.map(String.init) ?? "new")"
     case .settings(let destination): "settings-\(destination.rawValue)"
     case .mapAppearance: "map-appearance"
     case .link(let link): "link-\(link.id)"

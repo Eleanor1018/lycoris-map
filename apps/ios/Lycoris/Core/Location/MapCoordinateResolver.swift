@@ -1,26 +1,29 @@
 import MapKit
 import Observation
 
-/// MapKit has no public provider/datum flag. Calibrate its public POI coordinates
-/// against one fixed landmark, never the user's location. See coordinate-alignment.md.
+/// Start with the mainland display convention verified on this app's MapKit
+/// renderer. Public-landmark calibration may refine it, but cannot block browsing.
+/// Outside the mainland coverage mask the adapter always keeps WGS84 unchanged.
 @MainActor @Observable
 final class MapCoordinateResolver {
   private(set) var space: MapCoordinateSpace
   private var task: Task<Void, Never>?
   private var generation = UUID()
   private var retryRequested = false
+  private var isCalibrated: Bool
   private let lookup: @MainActor () async -> MapCoordinateSpace?
 
   init(
-    space: MapCoordinateSpace = .unresolved,
+    space: MapCoordinateSpace? = nil,
     lookup: (@MainActor () async -> MapCoordinateSpace?)? = nil
   ) {
-    self.space = space
+    self.space = space ?? .gcj02
+    self.isCalibrated = space != nil && space != .unresolved
     self.lookup = lookup ?? Self.lookup
   }
 
   func resolveIfNeeded(retryPending: Bool = false) {
-    guard space == .unresolved else { return }
+    guard !isCalibrated else { return }
     guard task == nil else {
       retryRequested = retryRequested || retryPending
       return
@@ -30,7 +33,10 @@ final class MapCoordinateResolver {
     task = Task { [weak self] in
       let result = await lookup()
       guard !Task.isCancelled, let self, generation == token else { return }
-      if let result { space = result }
+      if let result, result != .unresolved {
+        space = result
+        isCalibrated = true
+      }
       task = nil
       let shouldRetry = retryRequested
       retryRequested = false

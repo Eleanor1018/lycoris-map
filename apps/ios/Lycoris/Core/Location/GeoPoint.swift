@@ -76,7 +76,21 @@ struct MapViewport: Equatable, Sendable {
 }
 
 struct MapFocus: Equatable {
+  enum Target: Equatable {
+    case point(GeoPoint)
+    case userLocation
+  }
+
   let id = UUID()
-  let point: GeoPoint
-  var distance: Double = 2_000
+  let target: Target
+  var distance: Double
+
+  init(point: GeoPoint, distance: Double = 2_000) {
+    self.init(target: .point(point), distance: distance)
+  }
+
+  init(target: Target, distance: Double = 2_000) {
+    self.target = target
+    self.distance = distance
+  }
 }
