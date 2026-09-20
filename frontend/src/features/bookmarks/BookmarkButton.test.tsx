@@ -114,3 +114,70 @@ it('shows an already-saved server place as filled on load', async () => {
     expect(button()).toHaveAttribute('aria-label', 'Remove bookmark')
     expect(iconSrc()).toBe(filledIcon)
 })
+
+it('accepts the save tap while the first favorites read is slow', async () => {
+    const { read, write } = signedIn([])
+    read.mockImplementationOnce(
+        (signal) =>
+            new Promise<number[]>((_resolve, reject) => {
+                signal.addEventListener('abort', () =>
+                    reject(new DOMException('Cancelled', 'AbortError')),
+                )
+            }),
+    )
+    renderButton()
+    await waitFor(() => expect(read).toHaveBeenCalledOnce())
+    fireEvent.click(button())
+    await waitFor(() => expect(write).toHaveBeenCalledWith(1, true, expect.anything()))
+    await waitFor(() => expect(button()).toHaveAttribute('aria-pressed', 'true'))
+})
+
+it('saves an unsaved place with one tap even if the initial favorites read failed', async () => {
+    const { read, write } = signedIn([])
+    read.mockRejectedValueOnce(new Error('temporary read failure'))
+    renderButton()
+    await screen.findByText('Could not refresh bookmarks. You can still change this bookmark.')
+    fireEvent.click(button())
+    await waitFor(() => expect(write).toHaveBeenCalledWith(1, true, expect.anything()))
+    await waitFor(() => expect(button()).toHaveAttribute('aria-pressed', 'true'))
+})
+
+it('submits an idempotent save once when the tap is repeated while pending', async () => {
+    let release!: () => void
+    const response = new Promise<void>((resolve) => {
+        release = resolve
+    })
+    const { read, write } = signedIn([])
+    renderButton()
+    await readyToSave(read)
+    write.mockImplementationOnce(() => response)
+    fireEvent.click(button())
+    await waitFor(() => expect(write).toHaveBeenCalledTimes(1))
+    fireEvent.click(button())
+    await waitFor(() => expect(button()).toHaveAttribute('aria-busy', 'true'))
+    expect(write).toHaveBeenCalledTimes(1)
+    release()
+    await waitFor(() => expect(button()).toHaveAttribute('aria-pressed', 'true'))
+    expect(write).toHaveBeenCalledTimes(1)
+})
+
+it('recovers after an offline save failure and saves on the next tap', async () => {
+    const { read, write } = signedIn([])
+    let attempts = 0
+    write.mockImplementation(async (_id, saved) => {
+        attempts += 1
+        if (attempts === 1) throw new Error('offline')
+        if (saved) return
+    })
+    renderButton()
+    await readyToSave(read)
+    fireEvent.click(button())
+    await screen.findByText('Could not update this bookmark. Please try again.')
+    expect(button()).toHaveAttribute('aria-pressed', 'false')
+    expect(iconSrc()).toBe(outlineIcon)
+    // The button is usable again and the second intent is an explicit save.
+    fireEvent.click(button())
+    await waitFor(() => expect(button()).toHaveAttribute('aria-pressed', 'true'))
+    expect(write).toHaveBeenLastCalledWith(1, true, expect.anything())
+    expect(write).toHaveBeenCalledTimes(2)
+})

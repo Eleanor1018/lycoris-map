@@ -193,6 +193,9 @@ export const uiMessages = {
     'Log in to view your bookmarks.': '登录后查看收藏。',
     'Could not load your places. Try again.': '无法加载你的点位，请重试。',
     'Could not load bookmarks. Click the bookmark to retry.': '收藏加载失败，请点击收藏按钮重试。',
+    'Could not refresh bookmarks. You can still change this bookmark.':
+        '收藏刷新失败，你仍可修改此收藏。',
+    'Could not update this bookmark. Please try again.': '收藏更新失败，请重试。',
     'Bookmarked places': '收藏的点位',
     'Login to bookmark points or contribute.': '登录后收藏点位或参与贡献。',
     'Login to bookmark points': '登录后收藏点位',
