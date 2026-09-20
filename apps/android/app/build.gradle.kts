@@ -99,5 +99,7 @@ dependencies {
     androidTestImplementation(libs.compose.test)
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.runner)
+    // Compose's older transitive Espresso uses reflection removed in Android 17.
+    androidTestImplementation(libs.androidx.test.espresso)
     androidTestImplementation(libs.work.testing)
 }

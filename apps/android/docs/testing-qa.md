@@ -98,6 +98,28 @@ the fixed instrumentation runner targets `com.lycoris.maps.qa`. SDK tools are di
 `ANDROID_SDK_ROOT` / `ANDROID_HOME`, `local.properties`, or standard SDK directories. Explicit
 `--adb /path/to/adb --aapt2 /path/to/aapt2` overrides are available.
 
+Android 17 (SDK 37) blocks local-network connections for apps targeting SDK 37 until
+`ACCESS_LOCAL_NETWORK` is granted; this can appear as a TCP timeout. The permission is declared
+only in `src/qa/AndroidManifest.xml`, because only QA connects to the host-loopback gateway.
+Preview and release use public HTTPS and do not declare this permission. See Android's
+[local network permission documentation](https://developer.android.com/privacy-and-security/local-network-permission).
+
+After the isolated environment and fixed APK identities pass preflight, the runner captures the
+selected device's SDK and numeric current Android user. Installation and instrumentation explicitly
+target that same user. On SDK 37 or newer it reads the installed QA package's runtime permission
+entry for that user, including grant state and flags. Missing, ambiguous or unrecognized state
+stops the run; it is never interpreted as a denial. An already-granted permission is left alone.
+An unfixed denied permission is temporarily granted only to `com.lycoris.maps.qa` for that user,
+then revoked in `finally`, including test failures, timeouts after granting and keyboard interrupts.
+The original grant state and flags must match after cleanup before the runner can print `passed`.
+Fixed permissions are not overridden; no global network, app-compat setting, other permission,
+other package or other user's permission is changed. SDK 26–36 do not take this permission path.
+
+Cleanup failures return nonzero even if the test and database checks passed. If the device is
+disconnected or the host process is forcibly killed, automatic cleanup cannot be guaranteed;
+inspect the exact QA package and Android user reported in the private log before retrying.
+These temporary test grants do not validate the end-user permission prompt or permission matrix.
+
 The script reads only the generated Alice account from ignored `app/build/qa/credentials.json`;
 the file must have mode `0600` and contain its seeded public ID. Do not put a password on the command
 line. Credentials are POSIX-quoted and piped to a noninteractive device shell, rather than included
@@ -141,8 +163,12 @@ Offline safety checks require no device, Docker or backend:
 python3 -B -m unittest discover -s apps/android/scripts -p 'qa_device_test_test.py' -v
 ```
 
-The runner's seven offline checks cover shell quoting, log redaction, private Alice selection,
+The runner's offline checks cover shell quoting, log redaction, private Alice selection,
 failed/skipped instrumentation rejection, receipt validation, and the read-only uniqueness oracle.
+Permission regressions also cover multi-user state parsing, QA-only manifest scope, preflight order,
+already-granted preservation, SDK 26–36 no-op behavior, fixed/unknown state rejection, foreground-user
+changes, failed or interrupted tests, uncertain grants, cleanup failures and success reporting only
+after verified restoration. They simulate commands and do not invoke adb or a backend.
 The underlying opt-in Android test and manual database oracle passed on 2026-09-20 (one created
 marker, one photo proposal, 763045 uploaded bytes and cleared staging). The reusable runner must
 also be executed on the chosen emulator to validate its full orchestration; offline checks alone

@@ -2,6 +2,8 @@
 """Opt in to one guarded native QA integration test on an explicitly selected device."""
 
 import argparse
+from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import http.client
 import json
@@ -24,6 +26,7 @@ STATE = ANDROID / "app/build/qa"
 APP_ID = "com.lycoris.maps.qa"
 TEST_ID = APP_ID + ".test"
 RUNNER = TEST_ID + "/androidx.test.runner.AndroidJUnitRunner"
+LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
 TEST_CLASS = "com.lycoris.maps.feature.contributions.QaBackendIntegrationTest"
 TEST_METHOD = "realRustSessionFavoritesIdempotentCreationAndResumableImage"
 RECEIPT_KEYS = (
@@ -176,12 +179,104 @@ def checked_apks(aapt2, log):
         match = re.search(r"^package: name='([^']+)'", badging, flags=re.MULTILINE)
         if not match or match.group(1) != application_id:
             raise QaDeviceFailure("APK manifest package is not the required QA application.")
+        if application_id == APP_ID and not re.search(
+                r"^uses-permission: name='" + re.escape(LOCAL_NETWORK_PERMISSION) + r"'(?:\s|$)",
+                badging, re.MULTILINE):
+            raise QaDeviceFailure("Rebuild the QA APK with its QA-only local network permission.")
     return [item[0] for item in expected]
 
 
-def instrument_command(username, password):
+def device_number(prefix, log, arguments, label, minimum=0):
+    value = log.run([*prefix, "shell", "-T", *arguments], label).strip()
+    if not re.fullmatch(r"0|[1-9][0-9]{0,8}", value) or int(value) < minimum:
+        raise QaDeviceFailure("Cannot determine the selected device's SDK or current Android user.")
+    return int(value)
+
+
+def current_user(prefix, log):
+    return device_number(prefix, log, ["am", "get-current-user"], "Read selected Android user")
+
+
+@dataclass(frozen=True)
+class RuntimePermissionState:
+    granted: bool
+    flags: frozenset
+
+
+def local_network_state(dump, user_id):
+    """Read exactly one installed QA package/user/runtime entry; absence is not denial."""
+    lines = dump.splitlines()
+
+    def section(items, pattern):
+        matches = [i for i, line in enumerate(items) if re.fullmatch(pattern, line)]
+        if len(matches) != 1:
+            raise QaDeviceFailure("Cannot unambiguously read the QA local network permission state.")
+        start = matches[0]
+        indent = len(items[start]) - len(items[start].lstrip())
+        end = next((i for i in range(start + 1, len(items)) if items[i].strip()
+                    and len(items[i]) - len(items[i].lstrip()) <= indent), len(items))
+        return items[start], items[start + 1:end]
+
+    _, package = section(lines, r"\s+Package \[" + re.escape(APP_ID) + r"\] \([^\r\n]+\):")
+    header, user = section(package, r"\s+User " + str(user_id) + r":.*")
+    if re.findall(r"\binstalled=(true|false)\b", header) != ["true"]:
+        raise QaDeviceFailure("The QA app is not installed for the selected Android user.")
+    _, permissions = section(user, r"\s+runtime permissions:")
+    matching = [line.strip() for line in permissions if line.strip().startswith(LOCAL_NETWORK_PERMISSION + ":")]
+    if len(matching) != 1:
+        raise QaDeviceFailure("The selected user's QA local network permission is missing or ambiguous.")
+    match = re.fullmatch(re.escape(LOCAL_NETWORK_PERMISSION) + r": granted=(true|false), flags=\[([ A-Z0-9_|]*)\]", matching[0])
+    if not match:
+        raise QaDeviceFailure("Unrecognized QA local network permission state.")
+    flags = frozenset(item.strip() for item in match.group(2).split("|") if item.strip())
+    if any(not re.fullmatch(r"[A-Z][A-Z0-9_]*", flag) for flag in flags):
+        raise QaDeviceFailure("Unrecognized QA local network permission flags.")
+    return RuntimePermissionState(match.group(1) == "true", flags)
+
+
+@contextmanager
+def temporary_local_network_permission(prefix, log, sdk, user_id):
+    if sdk < 37:
+        yield
+        return
+
+    def read_state():
+        return local_network_state(log.run([*prefix, "shell", "-T", "dumpsys", "package", APP_ID],
+                                          "Read QA local network permission"), user_id)
+
+    def change(operation):
+        log.run([*prefix, "shell", "-T", "pm", operation, "--user", str(user_id), APP_ID,
+                 LOCAL_NETWORK_PERMISSION], "QA local network permission " + operation)
+
+    original = read_state()
+    if not original.granted and original.flags & {"SYSTEM_FIXED", "POLICY_FIXED", "USER_FIXED"}:
+        raise QaDeviceFailure("The QA local network permission is fixed; no permission was changed.")
+    attempted = False
+    try:
+        if not original.granted:
+            # Set before adb: a timeout can happen after Android has already applied the grant.
+            attempted = True
+            change("grant")
+            if read_state() != RuntimePermissionState(True, original.flags):
+                raise QaDeviceFailure("Temporary QA local network permission was not confirmed.")
+        if current_user(prefix, log) != user_id:
+            raise QaDeviceFailure("The active Android user changed; refusing to run instrumentation.")
+        yield
+    finally:
+        try:
+            if attempted:
+                # The explicit original user is retained even if the foreground user changed.
+                change("revoke")
+            if read_state() != original:
+                raise QaDeviceFailure("QA local network permission restoration could not be verified.")
+            log.write("QA local network permission restored for Android user " + str(user_id) + ".")
+        except (Exception, KeyboardInterrupt):
+            raise QaDeviceFailure("QA local network permission restoration failed; this run is not successful. Inspect the selected QA package/user before retrying.") from None
+
+
+def instrument_command(username, password, user_id):
     # POSIX quoting also covers spaces, quotes, $, and backticks. adb receives no secret in its host argv.
-    arguments = ["am", "instrument", "-w", "-r", "-e", "class", TEST_CLASS,
+    arguments = ["am", "instrument", "--user", str(user_id), "-w", "-r", "-e", "class", TEST_CLASS,
                  "-e", "lycorisQaUsername", username, "-e", "lycorisQaPassword", password, RUNNER]
     return shlex.join(arguments) + "\n"
 
@@ -273,21 +368,31 @@ def main(argv=None):
         prefix = [adb, "-s", args.serial]
         if log.run([*prefix, "get-state"], "Verify selected device").strip() != "device":
             raise QaDeviceFailure("The selected device is not ready.")
+        sdk = device_number(prefix, log, ["getprop", "ro.build.version.sdk"], "Read selected Android SDK", minimum=26)
+        user_id = current_user(prefix, log)
         for apk in apks:
-            installed = log.run([*prefix, "install", "-r", str(apk)], "Install fixed QA APK", timeout=120)
+            installed = log.run([*prefix, "install", "--user", str(user_id), "-r", str(apk)], "Install fixed QA APK", timeout=120)
             if not re.search(r"^Success\s*$", installed, re.MULTILINE):
                 raise QaDeviceFailure("QA APK installation was not confirmed.")
+        for application_id in (APP_ID, TEST_ID):
+            packages = log.run([*prefix, "shell", "-T", "pm", "list", "packages", "--user", str(user_id), application_id],
+                               "Verify QA installation for selected Android user")
+            if "package:" + application_id not in packages.splitlines():
+                raise QaDeviceFailure("A required QA package is missing for the selected Android user.")
         inventory = log.run([*prefix, "shell", "-T", "pm", "list", "instrumentation"], "Verify installed QA instrumentation")
         expected = f"instrumentation:{RUNNER} (target={APP_ID})"
         if expected not in inventory.splitlines():
             raise QaDeviceFailure("Installed QA instrumentation targets the wrong application.")
-        stage = "instrumentation"
-        output = log.run([*prefix, "shell", "-T", "sh"], "Run guarded live QA integration",
-                         input_text=instrument_command(user["username"], user["password"]), timeout=300)
-        receipt = parse_instrumentation(output, user["publicId"])
-        stage = "database-oracle"
-        oracle = database_oracle(receipt)
-        log.write("Read-only QA oracle: " + json.dumps(oracle, separators=(",", ":")))
+        stage = "local-network-permission"
+        with temporary_local_network_permission(prefix, log, sdk, user_id):
+            stage = "instrumentation"
+            output = log.run([*prefix, "shell", "-T", "sh"], "Run guarded live QA integration",
+                             input_text=instrument_command(user["username"], user["password"], user_id), timeout=300)
+            receipt = parse_instrumentation(output, user["publicId"])
+            stage = "database-oracle"
+            oracle = database_oracle(receipt)
+            log.write("Read-only QA oracle: " + json.dumps(oracle, separators=(",", ":")))
+            stage = "local-network-permission-restoration"
         summary = {"status": "passed", "tests": 1, "creationCount": oracle["creationCount"],
                    "proposalCount": oracle["proposalCount"], "uploadedBytes": oracle["totalBytes"],
                    "log": str(log.path.relative_to(ANDROID))}
