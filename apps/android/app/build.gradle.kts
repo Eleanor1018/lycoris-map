@@ -18,6 +18,12 @@ val googleMapsApiKey = providers.environmentVariable("LYCORIS_GOOGLE_MAPS_API_KE
 require(googleMapsApiKey.isEmpty() || googleMapsApiKey.matches(Regex("[A-Za-z0-9_-]+"))) {
     "Google Maps key contains invalid characters"
 }
+val tencentMapsApiKey = providers.environmentVariable("LYCORIS_TENCENT_MAPS_API_KEY")
+    .orElse(providers.gradleProperty("lycoris.tencentMapsApiKey")).orNull?.trim()
+    ?: mapSecrets.getProperty("tencentMapsApiKey", "").trim()
+require(tencentMapsApiKey.isEmpty() || tencentMapsApiKey.matches(Regex("[A-Za-z0-9_-]+"))) {
+    "Tencent Maps key contains invalid characters"
+}
 
 android {
     namespace = "com.lycoris.maps"
@@ -30,6 +36,8 @@ android {
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["googleMapsApiKey"] = googleMapsApiKey
+        manifestPlaceholders["tencentMapsApiKey"] = tencentMapsApiKey
+        buildConfigField("boolean", "TENCENT_MAPS_CONFIGURED", tencentMapsApiKey.isNotEmpty().toString())
         buildConfigField("boolean", "GOOGLE_MAPS_CONFIGURED", googleMapsApiKey.isNotEmpty().toString())
         buildConfigField("String", "API_BASE_URL", "\"https://api.lycoris-map.com/\"")
         buildConfigField("boolean", "TEST_ENVIRONMENT", "false")
@@ -91,6 +99,8 @@ dependencies {
     implementation(libs.compose.icons)
     implementation(libs.maplibre)
     implementation(libs.google.maps)
+    implementation(libs.tencent.maps)
+    implementation(libs.tencent.foundation)
     implementation(libs.coroutines.android)
     implementation(libs.serialization.json)
     implementation(libs.okhttp)

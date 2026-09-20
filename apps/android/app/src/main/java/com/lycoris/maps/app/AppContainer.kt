@@ -19,7 +19,9 @@ class AppContainer(context: Context) {
         "LycorisAndroid/${BuildConfig.VERSION_NAME} (+https://lycoris-map.com)", BuildConfig.TEST_ENVIRONMENT)
     val accounts = AccountRepository(clients, scope)
     val googleMapsAvailability = com.lycoris.maps.core.map.GoogleMapsAvailability.check(context)
-    val preferences = PreferencesRepository(context, scope, tiandituAvailable = false, googleAvailable = googleMapsAvailability == com.lycoris.maps.core.map.GoogleMapsAvailability.AVAILABLE)
+    val preferences = PreferencesRepository(context, scope, tiandituAvailable = false,
+        googleAvailable = googleMapsAvailability == com.lycoris.maps.core.map.GoogleMapsAvailability.AVAILABLE,
+        tencentAvailable = BuildConfig.TENCENT_MAPS_CONFIGURED)
     private val database = ContributionDatabase.open(context)
     private val drafts = RoomDraftStore(database.drafts())
     private val locks = DraftLocks()

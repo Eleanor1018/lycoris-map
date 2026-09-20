@@ -77,7 +77,7 @@ fun GoogleMapViewHost(
         }
     }
     if (mapView == null) {
-        LaunchedEffect(state) { if (state.map == null) state.ready = false; unavailable() }
+        LaunchedEffect(state) { if (state.map == null && state.tencentMap == null) state.ready = false; unavailable() }
         Box(modifier)
         return
     }
@@ -96,7 +96,7 @@ fun GoogleMapViewHost(
         fun fail() {
             if (!alive || failed) return
             failed = true
-            if (state.googleMap === ownedMap && state.map == null) state.ready = false
+            if (state.googleMap === ownedMap && state.map == null && state.tencentMap == null) state.ready = false
             unavailable()
         }
         fun applyPadding() {
@@ -105,7 +105,7 @@ fun GoogleMapViewHost(
         }
         fun emitCamera() {
             val map = ownedMap ?: return
-            if (!alive || failed || state.googleMap !== map || state.map != null || mapView.width <= 0 || mapView.height <= 0) return
+            if (!alive || failed || state.googleMap !== map || state.map != null || state.tencentMap != null || mapView.width <= 0 || mapView.height <= 0) return
             state.camera = map.cameraPosition.toNativeCamera()
             val bounds = map.projection.visibleRegion.latLngBounds
             idle(state.camera, MapBounds(bounds.southwest.latitude, bounds.northeast.latitude,
@@ -182,7 +182,7 @@ fun GoogleMapViewHost(
             mapView.removeOnLayoutChangeListener(layout)
             ownedMap?.let { map ->
                 if (state.googleMap === map) {
-                    if (state.map == null) {
+                    if (state.map == null && state.tencentMap == null) {
                         runCatching { state.camera = map.cameraPosition.toNativeCamera() }
                         state.ready = false
                     }
@@ -207,7 +207,7 @@ fun GoogleMapViewHost(
 
     // Sheet/inset changes move the SDK's logo, copyright and compass, never hide them.
     AndroidView(factory = { mapView }, modifier = modifier, update = { view ->
-        attachedMap[0]?.takeIf { state.ready && state.googleMap === it && state.map == null }?.let { map ->
+        attachedMap[0]?.takeIf { state.ready && state.googleMap === it && state.map == null && state.tencentMap == null }?.let { map ->
             try {
                 paddingController.apply(map, view.height, context.resources.displayMetrics.density, topPaddingPx, bottomPaddingPx)
             } catch (_: RuntimeException) { state.ready = false; unavailable() }

@@ -31,6 +31,8 @@ data class MapBounds(val south: Double, val north: Double, val west: Double, val
 class NativeMapState {
     internal var map by mutableStateOf<MapLibreMap?>(null)
     internal var googleMap by mutableStateOf<GoogleMap?>(null)
+    internal var tencentMap by mutableStateOf<com.tencent.tencentmap.mapsdk.maps.TencentMap?>(null)
+    internal var tencentCoordinates by mutableStateOf<TencentCoordinates?>(null)
     var camera by mutableStateOf(MapCamera())
         internal set
     var ready by mutableStateOf(false)
@@ -39,6 +41,9 @@ class NativeMapState {
         googleMap?.let { google ->
             // A failed remote SDK delegate must not make retry/save/provider-switch crash again.
             return try { google.cameraPosition.toNativeCamera() } catch (_: RuntimeException) { camera }
+        }
+        tencentMap?.let { tencent ->
+            return try { tencentCoordinates?.camera(tencent.cameraPosition) ?: camera } catch (_: RuntimeException) { camera }
         }
         val current = map?.cameraPosition ?: return camera
         val target = current.target ?: return camera
@@ -60,6 +65,12 @@ class NativeMapState {
                 camera = destination
                 ready = false
             }
+            return
+        }
+        tencentMap?.let { tencent ->
+            val position = tencentCoordinates?.camera(destination, tencent.minZoomLevel, tencent.maxZoomLevel) ?: return
+            try { tencent.moveCamera(com.tencent.tencentmap.mapsdk.maps.CameraUpdateFactory.newCameraPosition(position)) }
+            catch (_: RuntimeException) { camera = destination; ready = false }
             return
         }
         if (map == null) { camera = destination; return }
@@ -114,11 +125,11 @@ fun MapViewHost(
                 map.uiSettings.attributionGravity = android.view.Gravity.TOP or android.view.Gravity.START
                 map.uiSettings.setAttributionMargins(8, (122 * resources.displayMetrics.density).toInt(), 0, 0)
                 map.addOnCameraMoveStartedListener { reason ->
-                    if (!alive[0] || state.map !== map || state.googleMap != null) return@addOnCameraMoveStartedListener
+                    if (!alive[0] || state.map !== map || state.googleMap != null || state.tencentMap != null) return@addOnCameraMoveStartedListener
                     if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) gesture()
                 }
                 map.addOnCameraIdleListener {
-                    if (!alive[0] || state.map !== map || state.googleMap != null) return@addOnCameraIdleListener
+                    if (!alive[0] || state.map !== map || state.googleMap != null || state.tencentMap != null) return@addOnCameraIdleListener
                     val camera = map.cameraPosition
                     val point = camera.target ?: return@addOnCameraIdleListener
                     state.camera = MapCamera(point.latitude, point.longitude, camera.zoom, camera.bearing, camera.tilt)
@@ -126,7 +137,7 @@ fun MapViewHost(
                     idle(state.camera, MapBounds(bounds.latitudeSouth, bounds.latitudeNorth, bounds.longitudeWest, bounds.longitudeEast))
                 }
                 map.addOnMapClickListener { point ->
-                    if (alive[0] && state.map === map && state.googleMap == null) clicked(point.latitude, point.longitude)
+                    if (alive[0] && state.map === map && state.googleMap == null && state.tencentMap == null) clicked(point.latitude, point.longitude)
                     false
                 }
             }
@@ -157,7 +168,7 @@ fun MapViewHost(
             context.applicationContext.unregisterComponentCallbacks(memory)
             lifecycle.removeObserver(observer)
             if (state.map === ownedMap[0]) {
-                if (state.googleMap == null) {
+                    if (state.googleMap == null && state.tencentMap == null) {
                     state.camera = state.snapshotCamera()
                     state.ready = false
                 }
@@ -214,6 +225,6 @@ fun MapViewHost(
 
 object MapStyles {
     val osm = """
-        {"version":8,"sources":{"osm":{"type":"raster","tiles":["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],"tileSize":256,"maxzoom":19,"attribution":"© OpenStreetMap contributors"}},"layers":[{"id":"background","type":"background","paint":{"background-color":"#F3F0F5"}},{"id":"osm","type":"raster","source":"osm"}]}
+        {"version":8,"sources":{"osm":{"type":"raster","tiles":["https://lycoris-map.com/tiles/osm/{z}/{x}/{y}.png"],"tileSize":256,"maxzoom":19,"attribution":"© OpenStreetMap contributors"}},"layers":[{"id":"background","type":"background","paint":{"background-color":"#F3F0F5"}},{"id":"osm","type":"raster","source":"osm"}]}
     """.trimIndent()
 }

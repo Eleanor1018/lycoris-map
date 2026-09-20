@@ -86,3 +86,17 @@ Android Settings now follows the iOS ordering and includes Search Type and About
 - Computer Use subsequently returned `noWindowsAvailable` for coordinate clicks while still providing Android Studio screenshots. The remaining manual About/expanded Positions checks could not be completed in this session; automated functional checks above passed. No full visual-acceptance claim is made.
 
 Local command evidence is in `settings-followup-build.log` and `settings-followup-pixel.log` under the ignored runtime directory. No emulator data was cleared; device proxy, production records and server configuration were unchanged.
+
+## OSM Worker and native Tencent Maps
+
+Android now uses the Web deployment's `https://lycoris-map.com/tiles/osm/{z}/{x}/{y}.png` route. A direct host request with proxies disabled returned HTTP 200, a 256×256 PNG and `X-Lycoris-Tile-Source: osm-worker` / cache HIT. Existing disk caching and visible OSM attribution remain in place.
+
+Tencent uses its official native Android SDK, with shared Figma marker assets, category clusters, foreground location/heading and WGS84 application state. GCJ-02 conversion is restricted to the provider boundary. Switching providers retains camera position/scale. Chinese defaults to Tencent when configured, English to OSM; only explicit choices write the provider key, so manual choices survive language changes and restarts. Existing saved choices are preserved. A separate first-use privacy choice gates SDK initialization. The key is in ignored local configuration; the workflow can read `LYCORIS_TENCENT_MAPS_API_KEY`, but this follow-up did not create that GitHub repository secret.
+
+- Final build: `:app:testQaUnitTest :app:lintQa :app:assembleQa :app:assembleQaAndroidTest :app:assemblePreview :app:assembleDebug :app:assembleRelease` passed in 4m57s. All 134 JVM tests passed with no failures/errors/skips.
+- Final Pixel 10 Pro API 37.2 run: 10 focused instrumentation cases passed in 184.428s. These include real Tencent SDK authentication/loading, a visible synthetic marker with geographic-coordinate checks, background return, Tencent → offline OSM → Tencent switching, repeated camera conversion, provider-selector availability, and the real Worker-backed OSM viewport/background-render test.
+- The emulator proxy remained `null`; no network permissions or device proxy were changed for these online checks. Tencent used a synthetic Shanghai viewport, no account records or live device fix. OSM's native loader reported fetched/parsed center tiles and fully rendered frames; cache-origin semantics remain documented in the test.
+- Debug, QA and optimized Preview were installed on Pixel without clearing data. Dev and Preview report `pageSizeCompat=0`. All ten packaged 64-bit libraries in each checked APK have ELF load alignment of at least 16 KB; Preview ZIP alignment passes. Tencent's official lite foundation avoids the optional full-foundation Bugly x86_64 binary with 4 KB alignment.
+- Android Studio was synced in the visible worktree and launched the updated Dev build. Computer Use confirmed rendered OSM and the enabled Tencent option alongside OSM and unavailable Google Maps. Dev's existing provider/language preferences and Tencent privacy choice were left unchanged. Tencent's full visual comparison and physical-device heading remain separate from the automated SDK evidence above.
+
+Evidence: `tencent-verified-build.log`, `tencent-pixel-final.log` in the ignored runtime directory. No Web/iOS source, server deployment or production data was changed.

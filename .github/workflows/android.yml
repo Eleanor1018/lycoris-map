@@ -28,6 +28,8 @@ jobs:
     name: Build and synthetic tests
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      LYCORIS_TENCENT_MAPS_API_KEY: ${{ secrets.LYCORIS_TENCENT_MAPS_API_KEY }}
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

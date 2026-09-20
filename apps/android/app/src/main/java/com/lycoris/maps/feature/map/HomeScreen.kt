@@ -47,6 +47,7 @@ import com.lycoris.maps.core.map.NativeMapState
 import com.lycoris.maps.core.map.MapBounds
 import com.lycoris.maps.core.map.MapCamera
 import com.lycoris.maps.core.map.GoogleMapViewHost
+import com.lycoris.maps.core.map.TencentMapViewHost
 import com.lycoris.maps.core.data.preferences.MapSource
 import com.lycoris.maps.core.data.preferences.SearchType
 import com.lycoris.maps.core.model.Language
@@ -157,6 +158,12 @@ fun HomeScreen(
                     topPaddingPx = with(density) { (topInset + searchHeight + 8.dp).roundToPx() },
                     bottomPaddingPx = with(density) { bottom.roundToPx() } + visibleHeight.toInt(),
                     onTilesLoaded = { mapLoad = MapLoad.LOADED }, onUnavailable = { mapLoad = MapLoad.FAILED })
+            } else if (mapSource == MapSource.TENCENT) {
+                TencentMapViewHost(Modifier.fillMaxSize(), state = map,
+                    onCameraIdle = onCameraIdle, onMapClick = onMapClick, onUserGesture = onUserGesture,
+                    topPaddingPx = with(density) { (topInset + searchHeight + 8.dp).roundToPx() },
+                    bottomPaddingPx = with(density) { bottom.roundToPx() } + visibleHeight.toInt(),
+                    onTilesLoaded = { mapLoad = MapLoad.LOADED }, onUnavailable = { mapLoad = MapLoad.FAILED })
             } else {
                 MapViewHost(Modifier.fillMaxSize(), state = map, onCameraIdle = onCameraIdle,
                     onMapClick = onMapClick, onUserGesture = onUserGesture,
@@ -178,7 +185,7 @@ fun HomeScreen(
             MapTool("locate", if (chinese) "定位" else "Locate me", onLocate,
                 Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = bottom + visibleDp + 20.dp), large = true)
         }
-        if (mapSource != MapSource.GOOGLE && maxHeight - bottom - visibleDp > topInset + 70.dp) {
+        if (mapSource == MapSource.OSM && maxHeight - bottom - visibleDp > topInset + 70.dp) {
             Box(Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = bottom + visibleDp)
                 .widthIn(max = (maxWidth - 82.dp).coerceAtLeast(1.dp)).heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onAttribution), contentAlignment = Alignment.BottomStart) {
                 Text("© OpenStreetMap contributors", Modifier.background(Color.White.copy(alpha = 0.86f)).padding(horizontal = 4.dp, vertical = 2.dp),

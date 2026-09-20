@@ -20,6 +20,26 @@ import org.junit.Test
 class MapSourceDialogTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun configuredTencentCanBeSelectedWithoutGoogleServices() {
+        var selected: MapSource? = null
+        var dismissed = false
+        compose.setContent {
+            MaterialTheme { SettingsDialog("source", Preferences(Language.ZH), { dismissed = true }, {}, {},
+                onMapSource = { selected = it }, tencentAvailable = true,
+                googleAvailability = GoogleMapsAvailability.PLAY_SERVICES_UNAVAILABLE) }
+        }
+        compose.onNodeWithText("腾讯地图").assertIsEnabled().performClick()
+        compose.runOnIdle { assertEquals(MapSource.TENCENT, selected); assertTrue(dismissed) }
+    }
+
+    @Test fun unconfiguredTencentDoesNotOfferAnUnusableChoice() {
+        compose.setContent {
+            MaterialTheme { SettingsDialog("source", Preferences(Language.EN), {}, {}, {}, tencentAvailable = false) }
+        }
+        compose.onNodeWithText("Tencent Maps").assertIsNotEnabled()
+        compose.onNodeWithText("OpenStreetMap").assertIsEnabled().assertIsSelected()
+    }
+
     @Test fun missingKeyKeepsOsmUsableAndExplainsGoogleAvailability() {
         compose.setContent {
             MaterialTheme { SettingsDialog("source", Preferences(Language.EN), {}, {}, {},

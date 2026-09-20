@@ -248,6 +248,7 @@ class HomeViewModel(application: Application, private val saved: SavedStateHandl
     fun backgroundMessage(value: String) { notices.showBackground(value) }
     fun language(value: Language) = action { container.preferences.setLanguage(value) }
     fun searchType(value: SearchType) = action { container.preferences.setSearchType(value) }
+    fun acceptTencentPrivacy() = action { container.preferences.acceptTencentPrivacy() }
     fun mapSource(value: com.lycoris.maps.core.data.preferences.MapSource) = action { container.preferences.setMapSource(value) }
     fun radius(value: Int) = action { container.preferences.setRadius(value) }
     private fun action(block: suspend () -> Unit) { actionJob(block) }
