@@ -114,7 +114,7 @@ struct MapScreen: View {
           topInset: layout.topInset, bottomInset: mapBottomInset,
           appearance: preferences.mapAppearance,
           coordinateSpace: mapCoordinates.space,
-          places: mapPlaces, focus: store.focus,
+          places: mapPlaces, language: preferences.language, focus: store.focus,
           showsUserLocation: !store.isPreview && location.hasRequestedLocation
             && location.isAuthorized, isActive: scenePhase == .active, animated: !reduceMotion,
           isSelectingLocation: selectingLocation, selectedLocation: pickedLocation,
@@ -148,6 +148,12 @@ struct MapScreen: View {
           .clipShape(panelShape)
           .modifier(MapPanelSurface(shape: panelShape))
           .position(x: layout.viewport.width / 2, y: panelTop + panelHeight / 2)
+          .opacity(selectingLocation ? 0 : 1)
+          .allowsHitTesting(!selectingLocation)
+          .accessibilityHidden(selectingLocation)
+
+        grabberButton(layout: layout, panelTop: panelTop)
+          .position(x: layout.viewport.width / 2, y: layout.grabberCenterY(at: panelTop))
           .opacity(selectingLocation ? 0 : 1)
           .allowsHitTesting(!selectingLocation)
           .accessibilityHidden(selectingLocation)
@@ -441,6 +447,7 @@ struct MapScreen: View {
       keyboardHeight = 0
     }
     .environment(\.locale, preferences.language.locale)
+    .environment(\.lycorisAppLanguage, preferences.language)
   }
 
   private func applyPreferences() {
@@ -452,7 +459,7 @@ struct MapScreen: View {
 
   private func panel(layout: PanelLayout, height: CGFloat) -> some View {
     VStack(spacing: 0) {
-      grabber(layout: layout)
+      grabberPlaceholder(layout: layout)
       if let selectedPlace {
         PlaceDetailView(
           place: selectedPlace, bottomInset: layout.bottomInset,
@@ -489,8 +496,20 @@ struct MapScreen: View {
             if store.isPreview { showsUnavailableAction = true } else { modal = .account(.profile) }
           },
           onVoiceSearch: {
-            if showsVoiceSearch { finishVoiceSearch() } else { startVoiceSearch() }
-          }, voiceActive: showsVoiceSearch
+            switch VoiceSearchButtonState(
+              isVoicePanelOpen: showsVoiceSearch, state: voice.state)
+            {
+            case .start:
+              startVoiceSearch()
+            case .stop:
+              finishVoiceSearch()
+            case .recognizing:
+              break
+            case .close:
+              cancelVoiceSearch()
+            }
+          }, voiceActive: showsVoiceSearch, voiceState: voice.state,
+          language: preferences.language
         )
         .padding(.horizontal, 14)
         .padding(.bottom, detent == .collapsed ? 14 : detent == .nearby ? 7 : 11)
@@ -558,25 +577,45 @@ struct MapScreen: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
   }
 
-  private func grabber(layout: PanelLayout) -> some View {
+  /// In-panel transparent placeholder that reserves the original 44→14pt layout
+  /// space and draws nothing. It is not an accessibility element; the real handle
+  /// is a sibling and draws the visible capsule.
+  private func grabberPlaceholder(layout: PanelLayout) -> some View {
     let progress = layout.collapsedProgress(
       at: layout.clampedTop(layout.top(for: detent) + dragTranslation))
+    return Color.clear
+      .frame(maxWidth: .infinity)
+      .frame(height: 44 - 30 * progress)
+      .accessibilityHidden(true)
+      .allowsHitTesting(false)
+  }
+
+  /// The real 44pt handle Button. It lives outside the panel's clipShape as a
+  /// root-ZStack sibling so it stays fully tappable while collapsed; its bottom
+  /// edge aligns with the in-panel placeholder and it overhangs 30pt upward.
+  private func grabberButton(layout: PanelLayout, panelTop: CGFloat) -> some View {
+    let progress = layout.collapsedProgress(at: panelTop)
     return Button {
       movePanel(to: detent == .collapsed ? .nearby : detent == .nearby ? .expanded : .collapsed)
     } label: {
       Capsule().fill(.secondary.opacity(0.4))
         .frame(width: 48, height: 4)
-        // At rest the search row has 14pt above and below. Restore the full
-        // handle area continuously as the floating search panel is pulled up.
-        .frame(maxWidth: .infinity).frame(height: 44 - 30 * progress)
+        // The visible capsule keeps its exact old position within the 44pt
+        // button: 15*progress below centre puts it at the placeholder midline.
+        .offset(y: 15 * progress)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+    .frame(width: layout.grabberWidth(at: panelTop), height: PanelLayout.grabberRealHeight)
+    // Make the whole 44pt frame tappable, not only the 4pt capsule glyph.
+    .contentShape(Rectangle())
     .accessibilityLabel("Map panel")
     .accessibilityValue(
       selectedPlace != nil && detent == .nearby ? Text("Place details") : detent.accessibilityName
     )
     .accessibilityIdentifier("map.panel.handle")
+    .accessibilitySortPriority(2)
     .accessibilityAdjustableAction { direction in
       let states = MapPanelDetent.allCases
       guard let index = states.firstIndex(of: detent) else { return }
@@ -587,7 +626,6 @@ struct MapScreen: View {
       }
     }
     .highPriorityGesture(panelDrag(layout: layout))
-
   }
 
   private func panelDrag(layout: PanelLayout) -> some Gesture {

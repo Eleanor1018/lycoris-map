@@ -64,4 +64,35 @@ struct PanelLayout {
 
   func bottomGap(at top: CGFloat) -> CGFloat { max(bottomInset, 29) * collapsedProgress(at: top) }
   func height(at top: CGFloat) -> CGFloat { viewport.height - top - bottomGap(at: top) }
+
+  // MARK: - Grabber geometry
+
+  /// The real, tappable handle is always 44pt tall. The visible in-panel
+  /// placeholder shrinks continuously (44 → 14) as the panel collapses so the
+  /// search row keeps 14pt above and below at rest.
+  static let grabberRealHeight: CGFloat = 44
+  static let grabberPlaceholderCollapsedHeight: CGFloat = 14
+
+  /// Height of the in-panel transparent placeholder that reserves the original
+  /// 44→14pt layout space.
+  func grabberPlaceholderHeight(at top: CGFloat) -> CGFloat {
+    let progress = collapsedProgress(at: top)
+    return Self.grabberRealHeight
+      - (Self.grabberRealHeight - Self.grabberPlaceholderCollapsedHeight) * progress
+  }
+
+  /// Center y of the real 44pt handle Button, in the same (offset) coordinate
+  /// space as `top(for:)`. Its bottom edge aligns with the placeholder's bottom
+  /// edge, so at rest it extends 30pt above the panel onto the map.
+  func grabberCenterY(at top: CGFloat) -> CGFloat {
+    top + grabberPlaceholderHeight(at: top) - Self.grabberRealHeight / 2
+  }
+
+  /// Hit width of the real handle: full panel width when expanded, narrowing to
+  /// 88pt when collapsed so the 30pt map overhang does not reach the nearby tools.
+  func grabberWidth(at top: CGFloat) -> CGFloat {
+    let progress = collapsedProgress(at: top)
+    let panelWidth = viewport.width - horizontalInset(at: top) * 2
+    return panelWidth * (1 - progress) + 88 * progress
+  }
 }

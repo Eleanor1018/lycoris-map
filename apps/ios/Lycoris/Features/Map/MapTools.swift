@@ -18,7 +18,11 @@ struct MapTools: View {
         .accessibilityLabel("Map Style").accessibilityIdentifier("map.appearance")
         .matchedTransitionSource(id: "map-appearance", in: appearanceTransition)
         Button(action: locate) {
-          Image(systemName: "location").font(.title3).foregroundStyle(Color.accentColor)
+          // A fixed size keeps this tool glyph inside its 48pt cell at the
+          // largest accessibility text sizes, matching the other image tools.
+          Image(systemName: "location")
+            .font(.system(size: 20, weight: .regular))
+            .foregroundStyle(Color.accentColor)
             .frame(width: 48, height: 48).contentShape(Rectangle())
         }.accessibilityLabel("Current location").accessibilityIdentifier("map.locate")
       }

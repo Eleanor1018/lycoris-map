@@ -29,7 +29,10 @@ struct PlaceDetailView: View {
             .accessibilityIdentifier("place.title")
             .accessibilityAddTraits(.isHeader).accessibilityFocused($titleFocused)
           Button(action: onEdit) {
-            Image("PlaceEdit").resizable().frame(width: 20, height: 20)
+            // Template rendering follows the label's primary foreground so the
+            // black SVG stays visible in dark mode.
+            Image("PlaceEdit").renderingMode(.template).resizable().frame(width: 20, height: 20)
+              .foregroundStyle(.primary)
               .frame(width: 44, height: 44)
               .contentShape(Rectangle())
           }
@@ -72,17 +75,25 @@ struct PlaceDetailView: View {
             dynamicTypeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 14))
           actionLayout {
-            actionLabel("Share", image: "PlaceShare", size: 20, action: onShare)
-              .buttonStyle(.glass)
-            actionLabel("Navigate", image: "PlaceNavigate", size: 24, action: onNavigate)
-              .buttonStyle(.glassProminent)
+            actionLabel(
+              "Share", image: "PlaceShare", size: 20, identifier: "place.share", action: onShare
+            )
+            .buttonStyle(.glass)
+            actionLabel(
+              "Navigate", image: "PlaceNavigate", size: 24, identifier: "place.navigate",
+              action: onNavigate
+            )
+            .buttonStyle(.glassProminent)
             Button(action: onBookmark ?? onUnavailableAction) {
               Group {
                 if isBookmarked {
                   Image(systemName: "bookmark.fill").resizable().scaledToFit()
                     .foregroundStyle(.blue)
                 } else {
-                  Image("PlaceBookmark").resizable()
+                  // Template rendering follows the label's primary foreground so
+                  // the black SVG stays visible in dark mode.
+                  Image("PlaceBookmark").renderingMode(.template).resizable()
+                    .foregroundStyle(.primary)
                 }
               }.frame(width: 28, height: 28)
                 .frame(minWidth: 44, minHeight: buttonHeight)
@@ -110,17 +121,21 @@ struct PlaceDetailView: View {
   }
 
   private func actionLabel(
-    _ title: LocalizedStringKey, image: String, size: CGFloat, action: @escaping () -> Void
+    _ title: LocalizedStringKey, image: String, size: CGFloat, identifier: String,
+    action: @escaping () -> Void
   ) -> some View {
     Button(action: action) {
       HStack(spacing: 6) {
         Text(title).font(.body.weight(.medium))
           .lineLimit(1).minimumScaleFactor(0.85)
-        Image(image).resizable().frame(width: size, height: size)
+        // Template rendering inherits the button style's foreground: primary on
+        // the glass Share button, white on the prominent blue Navigate button.
+        Image(image).renderingMode(.template).resizable().frame(width: size, height: size)
       }
       .frame(maxWidth: .infinity, minHeight: max(32, buttonHeight - 16))
       .contentShape(Capsule())
     }
     .buttonBorderShape(.capsule)
+    .accessibilityIdentifier(identifier)
   }
 }
