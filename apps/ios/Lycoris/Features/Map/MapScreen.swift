@@ -29,7 +29,6 @@ struct MapScreen: View {
   @State private var queuedContribution: ContributionIntent?
   @State private var chooseLocationAfterDismiss = false
   @State private var contributionError: String?
-  @State private var editLoadTask: Task<Void, Never>?
   @State private var modal: MapModal?
   @State private var pendingBookmark: Int64?
   @State private var bookmarkIntent = UUID()
@@ -159,7 +158,7 @@ struct MapScreen: View {
               Button("Cancel") {
                 selectingLocation = false
                 pickedLocation = nil
-                if contribution.draft?.editable == true { modal = .contribution }
+                if contribution.draft?.editable == true { modal = .contribution() }
               }
               .buttonStyle(.glass).controlSize(.large)
               .accessibilityIdentifier("contribution.cancel-location")
@@ -273,8 +272,8 @@ struct MapScreen: View {
         AccountSheet(
           store: account, destination: destination, onAuthenticated: resumeAuthenticatedAction,
           onSelect: selectAccountPlace)
-      case .contribution:
-        ContributionSheet(store: contribution) {
+      case .contribution(let editID):
+        ContributionSheet(store: contribution, editID: editID) {
           chooseLocationAfterDismiss = true
           modal = nil
         }
@@ -364,7 +363,6 @@ struct MapScreen: View {
     .onChange(of: account.epoch) { _, _ in
       contribution.synchronize()
       if account.user == nil {
-        editLoadTask?.cancel()
         selectingLocation = false
         pickedLocation = nil
         chooseLocationAfterDismiss = false
@@ -373,7 +371,6 @@ struct MapScreen: View {
     }
     .onChange(of: account.user?.publicId) { old, new in
       if old != nil, old != new {
-        editLoadTask?.cancel()
         selectingLocation = false
         pickedLocation = nil
         chooseLocationAfterDismiss = false
@@ -477,7 +474,7 @@ struct MapScreen: View {
           onNavigate: { navigate(selectedPlace) },
           onEdit: { if let id = Int64(selectedPlace.id) { beginContribution(.edit(id)) } },
           isBookmarked: Int64(selectedPlace.id).map(account.isBookmarked) ?? false,
-          bookmarkBusy: account.isBusy || account.libraryLoading || account.isChecking,
+          bookmarkBusy: account.isBusy || account.bookmarkStatusLoading,
           onBookmark: { bookmark(selectedPlace) },
           authenticatedPhoto: account.selectedMarker != nil,
           photo: account.selectedPhoto, photoFailed: account.photoFailed,
@@ -738,7 +735,7 @@ struct MapScreen: View {
       return
     }
     Task {
-      await account.toggleBookmark(id)
+      await account.toggleBookmark(id, marker: account.selectedMarker ?? store.selectedMarker)
       showsAccountError = account.message != nil
     }
   }
@@ -774,7 +771,6 @@ struct MapScreen: View {
 
   private func beginContribution(_ intent: ContributionIntent) {
     cancelVoiceSearch()
-    editLoadTask?.cancel()
     guard !store.isPreview else {
       showsUnavailableAction = true
       return
@@ -787,24 +783,14 @@ struct MapScreen: View {
     contribution.synchronize()
     isSearchFocused = false
     if let draft = contribution.draft, draft.phase != .complete {
-      modal = .contribution
+      modal = .contribution()
       return
     }
     switch intent {
     case .create:
       enterLocationSelection()
     case .edit(let id):
-      editLoadTask = Task {
-        do {
-          try await contribution.edit(id)
-          modal = .contribution
-        } catch {
-          guard !Task.isCancelled, !(error is CancellationError) else { return }
-          contributionError =
-            (error as? AccountFailure)?.message
-            ?? String(appLocalized: "Could not load places. Please try again.")
-        }
-      }
+      modal = .contribution(editID: id)
     }
   }
 
@@ -834,7 +820,7 @@ struct MapScreen: View {
       try contribution.move(to: point)
       selectingLocation = false
       pickedLocation = nil
-      modal = .contribution
+      modal = .contribution()
     } catch {
       contributionError = String(appLocalized: "Could not save the contribution on this device.")
     }
@@ -887,7 +873,7 @@ private enum ContributionIntent {
 private enum MapModal: Identifiable {
   case account(AccountDestination)
   case share(PlacePresentation)
-  case contribution
+  case contribution(editID: Int64? = nil)
   case settings(SettingsDestination)
   case mapAppearance(GeoPoint?)
   case link(PlaceLink)
@@ -895,7 +881,7 @@ private enum MapModal: Identifiable {
     switch self {
     case .account: "account"
     case .share(let place): "share-\(place.id)"
-    case .contribution: "contribution"
+    case .contribution(let id): "contribution-\(id.map(String.init) ?? "new")"
     case .settings(let destination): "settings-\(destination.rawValue)"
     case .mapAppearance: "map-appearance"
     case .link(let link): "link-\(link.id)"

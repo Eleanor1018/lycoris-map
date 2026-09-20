@@ -37,7 +37,7 @@ final class PlaceStore {
   private(set) var lastRequestID: String?
   private(set) var language: String
   private(set) var radius = 1000
-  private var selectedMarker: Marker?
+  private(set) var selectedMarker: Marker?
   private var viewportTask: Task<Void, Never>?
   private var browseTask: Task<Void, Never>?
   private var detailTask: Task<Void, Never>?
