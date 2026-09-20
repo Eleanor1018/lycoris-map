@@ -6,7 +6,7 @@ import type { Language } from '@/shared/i18n'
 import { resolveTitle, type SyntheticMarker } from './syntheticMarkers'
 import { toLeafletTuple } from './coords'
 
-const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+const TILE_URL = '/tiles/osm/{z}/{x}/{y}.png'
 const OSM_ATTRIBUTION =
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 

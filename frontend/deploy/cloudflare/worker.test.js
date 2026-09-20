@@ -2,6 +2,129 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import worker from './_worker.js'
 
+test('OSM requests use a fixed upstream, preserve attribution headers and never leak session credentials', async (t) => {
+    t.mock.method(globalThis, 'fetch', async (request, options) => {
+        assert.equal(request.url, 'https://tile.openstreetmap.org/14/13720/6693.png')
+        assert.equal(request.headers.get('Cookie'), null)
+        assert.equal(request.headers.get('Authorization'), null)
+        assert.equal(request.headers.get('Cache-Control'), null)
+        assert.equal(request.headers.get('Pragma'), null)
+        assert.equal(request.headers.get('Referer'), 'https://lycoris-map.com/')
+        assert.match(request.headers.get('User-Agent'), /^LycorisMaps\/1\.0 /)
+        assert.deepEqual(options, { redirect: 'manual', cf: { cacheEverything: true } })
+        return new Response('tile', {
+            headers: {
+                'Content-Type': 'image/png',
+                'Cache-Control': 'max-age=24845',
+                ETag: '"tile-v1"',
+                Age: '7',
+                'CF-Cache-Status': 'HIT',
+                'Set-Cookie': 'provider=never-forward',
+            },
+        })
+    })
+    const result = await worker.fetch(
+        new Request('https://lycoris-map.com/tiles/osm/14/13720/6693.png', {
+            headers: {
+                Cookie: 'session=secret',
+                Authorization: 'Bearer secret',
+                Referer: 'https://lycoris-map.com/',
+                'Cache-Control': 'no-cache',
+                Pragma: 'no-cache',
+            },
+        }),
+        {},
+    )
+    assert.equal(await result.text(), 'tile')
+    assert.equal(result.headers.get('Cache-Control'), 'max-age=24845')
+    assert.equal(result.headers.get('ETag'), '"tile-v1"')
+    assert.equal(result.headers.get('Age'), '7')
+    assert.equal(result.headers.get('Set-Cookie'), null)
+    assert.equal(result.headers.get('X-Lycoris-Tile-Cache'), 'HIT')
+})
+
+test('OSM rejects unsupported coordinates, cache-busting queries, methods and arbitrary proxy targets', async (t) => {
+    const fetch = t.mock.method(globalThis, 'fetch', () => {
+        throw Error('must not fetch')
+    })
+    for (const path of [
+        '/tiles/osm',
+        '/tiles/osm/20/0/0.png',
+        '/tiles/osm/0/1/0.png',
+        '/tiles/osm/14/0/16384.png',
+        '/tiles/osm/01/0/0.png',
+        '/tiles/osm/1/-1/0.png',
+        '/tiles/osm/0/0/0.png?url=https://example.com',
+        '/tiles/osm/https://example.com',
+    ]) {
+        const response = await worker.fetch(new Request(`https://lycoris-map.com${path}`), {})
+        assert.equal(response.status, 404, path)
+        assert.equal(response.headers.get('Cache-Control'), 'no-store')
+    }
+    const post = await worker.fetch(
+        new Request('https://lycoris-map.com/tiles/osm/0/0/0.png', { method: 'POST' }),
+        {},
+    )
+    assert.equal(post.status, 405)
+    assert.equal(post.headers.get('Allow'), 'GET, HEAD')
+    assert.equal(fetch.mock.callCount(), 0)
+})
+
+test('OSM preserves conditional and HEAD responses for browser caching', async (t) => {
+    t.mock.method(globalThis, 'fetch', async (request) => {
+        if (request.method === 'HEAD')
+            return new Response(null, {
+                headers: { 'Content-Type': 'image/png', 'Content-Length': '37809' },
+            })
+        assert.equal(request.headers.get('If-None-Match'), '"tile-v1"')
+        assert.equal(request.headers.get('If-Modified-Since'), 'Sun, 20 Sep 2026 00:00:00 GMT')
+        return new Response(null, {
+            status: 304,
+            headers: { ETag: '"tile-v1"', 'Cache-Control': 'max-age=3600' },
+        })
+    })
+    const url = 'https://lycoris-map.com/tiles/osm/0/0/0.png'
+    const head = await worker.fetch(new Request(url, { method: 'HEAD' }), {})
+    assert.equal(head.headers.get('Content-Length'), '37809')
+    assert.equal(await head.text(), '')
+    const conditional = await worker.fetch(
+        new Request(url, {
+            headers: {
+                'If-None-Match': '"tile-v1"',
+                'If-Modified-Since': 'Sun, 20 Sep 2026 00:00:00 GMT',
+            },
+        }),
+        {},
+    )
+    assert.equal(conditional.status, 304)
+    assert.equal(conditional.headers.get('Cache-Control'), 'max-age=3600')
+})
+
+test('OSM upstream outages, redirects and error images never become successful cached map tiles', async (t) => {
+    let response
+    t.mock.method(globalThis, 'fetch', async () => {
+        if (!response) throw Error('timeout')
+        return response
+    })
+    for (const upstream of [
+        undefined,
+        new Response('denied', { status: 403, headers: { 'Content-Type': 'image/png' } }),
+        new Response('blocked', {
+            headers: { 'Content-Type': 'image/png', 'x-blocked': 'policy' },
+        }),
+        new Response('error', { headers: { 'Content-Type': 'text/html' } }),
+        new Response(null, { status: 302, headers: { Location: 'https://example.com' } }),
+    ]) {
+        response = upstream
+        const result = await worker.fetch(
+            new Request('https://lycoris-map.com/tiles/osm/0/0/0.png'),
+            {},
+        )
+        assert.equal(result.status, 502)
+        assert.equal(result.headers.get('Cache-Control'), 'no-store')
+    }
+})
+
 test('static pages and admin deep links stay on Pages', async () => {
     for (const path of ['/', '/admin/review', '/assets/app.js', '/api-not-a-route']) {
         const request = new Request(`https://lycoris-map.com${path}`)

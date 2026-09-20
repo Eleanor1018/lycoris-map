@@ -4,7 +4,7 @@ import { MapContainer, TileLayer, useMap } from 'react-leaflet'
 import L, { type Map as LeafletMap } from 'leaflet'
 import { MapPlaces, type MapPlacesProps } from './MapPlaces'
 import { usePreferences } from '@/features/preferences/PreferencesProvider'
-import { tiandituTileUrl } from './mapSources'
+import { osmTileUrl, tiandituTileUrl } from './mapSources'
 const CENTER: [number, number] = [31.2304, 121.4737]
 export function MapSurface({
     onMap,
@@ -62,7 +62,7 @@ function BaseMapLayers() {
     return (
         <TileLayer
             key="osm"
-            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+            url={osmTileUrl}
             maxNativeZoom={19}
             maxZoom={19}
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'

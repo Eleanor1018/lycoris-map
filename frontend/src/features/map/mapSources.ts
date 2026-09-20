@@ -1,5 +1,7 @@
 export type MapSource = 'osm' | 'tianditu'
 
+export const osmTileUrl = '/tiles/osm/{z}/{x}/{y}.png'
+
 export const mapSourceNames: Record<MapSource, string> = {
     osm: 'OSM',
     tianditu: '天地图',
