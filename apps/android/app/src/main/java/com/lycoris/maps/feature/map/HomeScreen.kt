@@ -36,6 +36,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,6 +48,8 @@ import com.lycoris.maps.core.map.MapBounds
 import com.lycoris.maps.core.map.MapCamera
 import com.lycoris.maps.core.map.GoogleMapViewHost
 import com.lycoris.maps.core.data.preferences.MapSource
+import com.lycoris.maps.core.data.preferences.SearchType
+import com.lycoris.maps.core.model.Language
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -96,6 +99,7 @@ fun HomeScreen(
     panelContent: LazyListScope.() -> Unit = {},
     mapLayers: @Composable () -> Unit = {},
     mapSource: MapSource = MapSource.OSM,
+    searchType: SearchType = SearchType.ALL,
 ) {
     var reload by remember { mutableIntStateOf(0) }
     var mapLoad by remember(mapSource, reload) { mutableStateOf(MapLoad.LOADING) }
@@ -217,7 +221,7 @@ fun HomeScreen(
                         }, chinese = chinese, startPadding = if (section == MainSection.BOOKMARKS) 30.dp else 41.dp)
                         when (section) {
                             MainSection.EXPLORE -> NearbyCategories(chinese, onNearby)
-                            MainSection.SETTINGS -> SettingsRows(chinese, radius, mapSourceName, onSetting)
+                            MainSection.SETTINGS -> SettingsRows(chinese, radius, mapSourceName, searchType, onSetting)
                             MainSection.BOOKMARKS -> Unit
                         }
                         if (section != MainSection.BOOKMARKS) Spacer(Modifier.height(18.dp))
@@ -311,11 +315,13 @@ fun NearbyCategories(chinese: Boolean, onClick: (String) -> Unit) {
 }
 
 @Composable
-private fun SettingsRows(chinese: Boolean, radius: Int, mapSourceName: String, onSetting: (String) -> Unit) {
+private fun SettingsRows(chinese: Boolean, radius: Int, mapSourceName: String, searchType: SearchType, onSetting: (String) -> Unit) {
     val rows = listOf(
         Triple("language", if (chinese) "语言" else "Choose Language", if (chinese) "简体中文" else "English"),
+        Triple("searchType", if (chinese) "搜索类型" else "Search Type", searchType.title(if (chinese) Language.ZH else Language.EN)),
         Triple("range", if (chinese) "搜索范围" else "Searching Range", if (radius % 1000 == 0) "${radius / 1000}km" else "${radius}m"),
         Triple("source", if (chinese) "地图来源" else "Map Source", mapSourceName),
+        Triple("about", if (chinese) "关于 Lycoris Maps" else "About Lycoris Maps", ""),
     )
     Column(Modifier.padding(horizontal = 30.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         rows.forEachIndexed { index, (key, label, value) ->
@@ -323,7 +329,7 @@ private fun SettingsRows(chinese: Boolean, radius: Int, mapSourceName: String, o
                 .clickable(role = Role.Button, onClick = { onSetting(key) }).padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Text(label, Modifier.weight(1f), fontSize = 17.sp)
-                Text(value, Modifier.padding(start = 8.dp), fontSize = 17.sp, color = LycorisColors.SecondaryText)
+                if (value.isNotEmpty()) Text(value, Modifier.weight(1f).padding(start = 8.dp), fontSize = 17.sp, textAlign = TextAlign.End, color = LycorisColors.SecondaryText)
                 Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.padding(start = 4.dp).size(20.dp), tint = LycorisColors.Plum)
             }
         }

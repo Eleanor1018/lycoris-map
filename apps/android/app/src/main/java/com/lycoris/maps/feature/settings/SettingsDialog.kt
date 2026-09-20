@@ -1,6 +1,8 @@
 package com.lycoris.maps.feature.settings
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -13,6 +15,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.lycoris.maps.core.data.preferences.Preferences
 import com.lycoris.maps.core.data.preferences.MapSource
+import com.lycoris.maps.core.data.preferences.SearchType
+import com.lycoris.maps.BuildConfig
 import com.lycoris.maps.core.map.GoogleMapsAvailability
 import com.lycoris.maps.core.data.preferences.parseRadius
 import com.lycoris.maps.core.model.Language
@@ -21,6 +25,7 @@ import com.lycoris.maps.core.model.Language
 fun SettingsDialog(kind: String, preferences: Preferences, onDismiss: () -> Unit, onLanguage: (Language) -> Unit, onRadius: (Int) -> Unit,
     onMapSource: (MapSource) -> Unit = {},
     googleAvailability: GoogleMapsAvailability = GoogleMapsAvailability.NOT_CONFIGURED,
+    onSearchType: (SearchType) -> Unit = {},
 ) {
     val zh = preferences.language == Language.ZH
     when (kind) {
@@ -36,6 +41,35 @@ fun SettingsDialog(kind: String, preferences: Preferences, onDismiss: () -> Unit
                 }
             }
         })
+        "searchType" -> AlertDialog(onDismissRequest = onDismiss,
+            title = { Text(if (zh) "搜索类型" else "Search Type") },
+            confirmButton = { TextButton(onDismiss) { Text(if (zh) "完成" else "Done") } }, text = {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
+                    SearchType.entries.forEach { type ->
+                        val selected = preferences.searchType == type
+                        Row(Modifier.fillMaxWidth().selectable(selected, role = Role.RadioButton,
+                            onClick = { onSearchType(type); onDismiss() }).padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected, onClick = null)
+                            Text(type.title(preferences.language), Modifier.padding(12.dp))
+                        }
+                    }
+                }
+            })
+        "about" -> AlertDialog(onDismissRequest = onDismiss,
+            title = { Text(if (zh) "关于 Lycoris Maps" else "About Lycoris Maps") },
+            confirmButton = { TextButton(onDismiss) { Text(if (zh) "完成" else "Done") } }, text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("Lycoris Maps", Modifier.weight(1f))
+                        Text(BuildConfig.VERSION_NAME)
+                    }
+                    Text(if (zh) "一款简洁的地图，帮你找到无障碍卫生间、母婴室和医疗机构。"
+                        else "A simple map for finding accessible toilets, nursing rooms, and medical institutions.")
+                    Text(if (zh) "Lycoris 分享链接可在 App 中打开点位，是否可见取决于你的访问权限。"
+                        else "Shared Lycoris links can open places in the app. Place availability depends on your access.")
+                }
+            })
         "range" -> {
             var input by rememberSaveable { mutableStateOf(preferences.radiusMeters.toString()) }
             val parsed = parseRadius(input)

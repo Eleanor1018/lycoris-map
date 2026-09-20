@@ -17,13 +17,14 @@ import java.util.Locale
 
 private val Context.lycorisPreferences by preferencesDataStore("lycoris_settings")
 enum class MapSource { OSM, TIANDITU, GOOGLE }
-data class Preferences(val language: Language = if (Locale.getDefault().language == "zh") Language.ZH else Language.EN, val radiusMeters: Int = 1000, val mapSource: MapSource = MapSource.OSM)
+data class Preferences(val language: Language = if (Locale.getDefault().language == "zh") Language.ZH else Language.EN, val radiusMeters: Int = 1000, val mapSource: MapSource = MapSource.OSM, val searchType: SearchType = SearchType.ALL)
 
 class PreferencesRepository(context: Context, scope: CoroutineScope, private val tiandituAvailable: Boolean, private val googleAvailable: Boolean = false) {
     private val store = context.applicationContext.lycorisPreferences
     private val language = stringPreferencesKey("language")
     private val radius = intPreferencesKey("radius_meters")
     private val source = stringPreferencesKey("map_source")
+    private val searchType = stringPreferencesKey("search_type")
     val state = store.data.catch { if (it is IOException) emit(emptyPreferences()) else throw it }.map { values ->
         Preferences(
             Language.entries.firstOrNull { it.tag == values[language] } ?: Preferences().language,
@@ -33,10 +34,12 @@ class PreferencesRepository(context: Context, scope: CoroutineScope, private val
                 MapSource.TIANDITU.name -> if (tiandituAvailable) MapSource.TIANDITU else MapSource.OSM
                 else -> MapSource.OSM
             },
+            SearchType.fromStored(values[searchType]),
         )
     }.stateIn(scope, SharingStarted.Eagerly, Preferences())
 
     suspend fun setLanguage(value: Language) { store.edit { it[language] = value.tag } }
+    suspend fun setSearchType(value: SearchType) { store.edit { it[searchType] = value.storedValue } }
     suspend fun setRadius(value: Int) { require(value in 1..50000); store.edit { it[radius] = value } }
     suspend fun setMapSource(value: MapSource) {
         require(value == MapSource.OSM || (value == MapSource.TIANDITU && tiandituAvailable) ||

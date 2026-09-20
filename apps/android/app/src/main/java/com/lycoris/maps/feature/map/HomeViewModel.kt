@@ -6,6 +6,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.lycoris.maps.app.LycorisApplication
 import com.lycoris.maps.core.data.PlaceRepository
+import com.lycoris.maps.core.data.PlaceListState
+import com.lycoris.maps.core.data.preferences.SearchType
 import com.lycoris.maps.core.map.MapBounds
 import com.lycoris.maps.core.map.MapCamera
 import com.lycoris.maps.core.map.ViewportPolicy
@@ -19,6 +21,8 @@ import kotlinx.coroutines.delay
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -31,6 +35,8 @@ class HomeViewModel(application: Application, private val saved: SavedStateHandl
     val preferences = container.preferences.state
     val accounts = container.accounts
     val places = PlaceRepository(container.clients.publicApi, viewModelScope, accounts)
+    val search = places.searchResults(preferences.map { it.searchType }.distinctUntilChanged())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, PlaceListState())
     val section = saved.getStateFlow("section", MainSection.EXPLORE)
     val page = saved.getStateFlow<SecondaryPage?>("page", null)
     val query = saved.getStateFlow("query", "")
@@ -241,6 +247,7 @@ class HomeViewModel(application: Application, private val saved: SavedStateHandl
     fun message(value: String?) { notices.showAction(value) }
     fun backgroundMessage(value: String) { notices.showBackground(value) }
     fun language(value: Language) = action { container.preferences.setLanguage(value) }
+    fun searchType(value: SearchType) = action { container.preferences.setSearchType(value) }
     fun mapSource(value: com.lycoris.maps.core.data.preferences.MapSource) = action { container.preferences.setMapSource(value) }
     fun radius(value: Int) = action { container.preferences.setRadius(value) }
     private fun action(block: suspend () -> Unit) { actionJob(block) }

@@ -1,5 +1,6 @@
 package com.lycoris.maps.core.data
 
+import com.lycoris.maps.core.data.preferences.SearchType
 import com.lycoris.maps.core.model.GeoBounds
 import com.lycoris.maps.core.model.Language
 import com.lycoris.maps.core.model.Marker
@@ -18,6 +19,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -101,6 +104,13 @@ class PlaceRepository(
         requestList(searchChannel, query.trim(), language, debounceMillis = debounceMillis) {
             if (query.isBlank()) emptyList() else publicApi.search(query.trim(), language.tag).requireBody()
         }
+
+    // Search returns the complete result set. Keep it intact so changing the preference
+    // re-filters existing and in-flight results without new requests or affecting Nearby.
+    fun searchResults(types: Flow<SearchType>): Flow<PlaceListState> = combine(search, types) { result, type ->
+        val category = type.category
+        if (category == null) result else result.copy(places = result.places.filter { it.placeCategory == category })
+    }
 
     fun loadNearby(lat: Double, lng: Double, radiusMeters: Int, category: PlaceCategory, language: Language): Job =
         requestList(nearbyChannel, "$lat|$lng|$radiusMeters|${category.wireValue}", language) {
