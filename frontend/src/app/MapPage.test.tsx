@@ -214,7 +214,8 @@ it('copies only a public place link, offers navigation apps without auto-opening
     expect(links.map((link) => link.textContent)).toEqual([
         'Apple Maps',
         'Google Maps',
-        'Baidu Maps',
+        'AMap',
+        'Tencent Maps',
     ])
     expect(links[0]).toHaveAttribute(
         'href',
@@ -226,7 +227,11 @@ it('copies only a public place link, offers navigation apps without auto-opening
     )
     expect(links[2]).toHaveAttribute(
         'href',
-        'https://api.map.baidu.com/direction?origin=%E6%88%91%E7%9A%84%E4%BD%8D%E7%BD%AE&destination=latlng%3A31.2304%2C121.4737%7Cname%3ASynthetic+place+1&mode=walking&coord_type=wgs84&output=html&src=webapp.lycoris.maps',
+        'https://uri.amap.com/marker?position=121.4737%2C31.2304&name=Synthetic+place+1&coordinate=wgs84&src=lycoris-map&callnative=1',
+    )
+    expect(links[3]).toHaveAttribute(
+        'href',
+        'https://apis.map.qq.com/uri/v1/routeplan?type=walk&to=Synthetic+place+1&tocoord=31.2304%2C121.4737&coord_type=1&referer=Lycoris+Maps',
     )
     for (const link of links) expect(link).toHaveAttribute('rel', 'noopener noreferrer')
     // Escape closes the menu and returns focus to the trigger.
@@ -347,7 +352,7 @@ it('shares the selected Nearby item, uses its destination and hides a failed ima
     const navigate = within(item).getByRole('button', { name: 'Navigate' })
     fireEvent.click(navigate)
     const chooser = screen.getByRole('dialog', { name: 'Choose a navigation app' })
-    expect(within(chooser).getAllByRole('link')).toHaveLength(3)
+    expect(within(chooser).getAllByRole('link')).toHaveLength(4)
     for (const link of within(chooser).getAllByRole('link'))
         expect(link).toHaveAttribute('rel', 'noopener noreferrer')
     fireEvent.keyDown(chooser, { key: 'Escape' })

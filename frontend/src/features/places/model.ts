@@ -63,14 +63,12 @@ export function navigationUrl(place: LatLng): string {
     return url.href
 }
 
-export type NavigationApp = 'apple' | 'google' | 'baidu'
-export const navigationApps = ['apple', 'google', 'baidu'] as const
+export type NavigationApp = 'apple' | 'google' | 'amap' | 'tencent'
+export const navigationApps = ['apple', 'google', 'amap', 'tencent'] as const
 
 /**
- * Destination-only walking links for each navigation app. Latitude precedes
- * longitude in every URL. No function includes the user's precise origin, and
- * Baidu is told explicitly that the coordinates are WGS84. Apple Maps is the
- * first offered option; Google is only ever a deliberate user choice.
+ * Destination-only links. AMap takes longitude first; the other providers take
+ * latitude first. The navigation app determines the user's origin itself.
  */
 export function appleMapsUrl(place: LatLng): string {
     assertLatLng(place)
@@ -84,20 +82,40 @@ export function googleMapsUrl(place: LatLng): string {
     return navigationUrl(place)
 }
 
-export function baiduMapsUrl(place: LatLng & { title: string }): string {
+/**
+ * AMap's point entry accepts WGS84 and opens the destination with navigation
+ * available there. Its route URI expects GCJ02, so use the point entry to avoid
+ * offsetting raw GPS coordinates: https://lbs.amap.com/api/uri-api/guide/mobile-web/point.
+ */
+export function amapMapsUrl(place: LatLng & { title: string }): string {
     assertLatLng(place)
-    const url = new URL('https://api.map.baidu.com/direction')
-    url.searchParams.set('origin', '我的位置')
-    url.searchParams.set('destination', `latlng:${place.lat},${place.lng}|name:${place.title}`)
-    url.searchParams.set('mode', 'walking')
-    url.searchParams.set('coord_type', 'wgs84')
-    url.searchParams.set('output', 'html')
-    url.searchParams.set('src', 'webapp.lycoris.maps')
+    const url = new URL('https://uri.amap.com/marker')
+    url.searchParams.set('position', `${place.lng},${place.lat}`)
+    url.searchParams.set('name', place.title)
+    url.searchParams.set('coordinate', 'wgs84')
+    url.searchParams.set('src', 'lycoris-map')
+    url.searchParams.set('callnative', '1')
+    return url.href
+}
+
+/**
+ * Tencent converts GPS coordinates when coord_type=1. Omitting from/fromcoord
+ * lets the phone locate its origin: https://lbs.qq.com/webApi/uriV1/uriGuide/uriWebRoute.
+ */
+export function tencentMapsUrl(place: LatLng & { title: string }): string {
+    assertLatLng(place)
+    const url = new URL('https://apis.map.qq.com/uri/v1/routeplan')
+    url.searchParams.set('type', 'walk')
+    url.searchParams.set('to', place.title)
+    url.searchParams.set('tocoord', `${place.lat},${place.lng}`)
+    url.searchParams.set('coord_type', '1')
+    url.searchParams.set('referer', 'Lycoris Maps')
     return url.href
 }
 
 export function navigationAppUrl(app: NavigationApp, place: LatLng & { title: string }): string {
     if (app === 'apple') return appleMapsUrl(place)
-    if (app === 'baidu') return baiduMapsUrl(place)
+    if (app === 'amap') return amapMapsUrl(place)
+    if (app === 'tencent') return tencentMapsUrl(place)
     return googleMapsUrl(place)
 }

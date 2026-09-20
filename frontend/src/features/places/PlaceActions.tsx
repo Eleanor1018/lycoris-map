@@ -12,7 +12,8 @@ import './navigation-chooser.css'
 const navigationOptions: { app: NavigationApp; label: UiKey }[] = [
     { app: 'apple', label: 'Apple Maps' },
     { app: 'google', label: 'Google Maps' },
-    { app: 'baidu', label: 'Baidu Maps' },
+    { app: 'amap', label: 'AMap' },
+    { app: 'tencent', label: 'Tencent Maps' },
 ]
 
 export function PlaceActions({
