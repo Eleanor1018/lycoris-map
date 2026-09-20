@@ -60,7 +60,7 @@ from language, SIM or region settings. Repeated calls share one in-flight lookup
 connectivity recovery/foreground/manual retry queues at most one retry if the
 old attempt fails afterward. Cancellation invalidates late results.
 
-Until resolved, mainland markers and camera focuses are deferred; map-picked
+Until resolved, mainland markers and **place-coordinate** camera focuses are deferred; map-picked
 coordinates cannot be saved or used as a nearby-search origin. Selecting a map
 location or requesting nearby/directions exposes a native retry message. Other
 regions remain usable. A late calibration refreshes projections and viewport
@@ -82,3 +82,40 @@ different datum would need a separate data audit; this change does not guess or
 rewrite its original meaning.
 
 Formula and data notices are bundled in `Resources/MapCoordinates-LICENSE.txt`.
+
+## 2026-09-20 — user-location regression correction
+
+The previous calibration gate also blocked the generic focus created from a
+successful GPS fix. If landmark search failed or could not be classified, tapping
+Locate silently consumed the focus while leaving the camera unchanged. Earlier
+UI fixtures forced a resolved WGS84 mode and missed this failure path.
+
+`MapFocus.Target` now separates a canonical place coordinate from a native
+`userLocation` intent. Locate and location-anchored Nearby use MapKit `.follow`;
+MapKit waits for its own user-location fix and centers the blue dot in its native
+display space. This requires no landmark lookup, coordinate transform or backend
+response. Authorized manual Locate starts following immediately while Core
+Location separately refreshes canonical data. A late canonical fix cannot replay
+that camera intent after a pan. Place selection stops native following and keeps
+the existing coordinate adapter. Calibration completion never replays native
+user following, and revocation invalidates location focus and callbacks.
+While native following is active, inset updates leave camera positioning to
+MapKit instead of applying the free-browsing camera compensation. The Locate
+button now has the same explicit 48-by-48-point rectangular hit area as its
+neighboring controls; previously its accessibility frame covered only the glyph.
+
+The new regression first failed against the old implementation (no native follow
+request after a successful mainland fix). Unit coverage now includes unresolved
+and both resolved spaces, permission gating, place selection, stale callbacks,
+late calibration and Nearby origins. `LocationFocusFlowTests` deliberately keeps
+calibration unresolved and checks tracking plus the actual native blue-dot
+annotation frame at startup and after panning and tapping Locate's padding. A
+delegate-time `isUserLocationVisible` snapshot preceded annotation layout, so
+the UI assertion reads the rendered annotation rather than caching visibility.
+Its failure injection and coordinate-free
+accessibility diagnostics are compiled only into the isolated Test configuration.
+
+Verification: 25 unit tests across LocationFocus, MapCoordinate, MapViewport and
+PlaceData passed, along with the startup/pan/Locate UI regression on iPhone 17
+(iOS 26.5 Simulator). The UI test restores its synthetic location afterward and
+performs no backend writes.

@@ -64,6 +64,7 @@ final class PlaceStore {
 
   func revokeLocation() {
     userLocation = nil
+    if focus?.target == .userLocation { focus = nil }
     locationGeneration = UUID()
     if case .nearby(let category, _, true) = browse {
       if let center = viewport?.center {
@@ -203,7 +204,7 @@ final class PlaceStore {
     pendingNearby = nil
     userLocation = point
     browse = .nearby(category: category, center: point, located: true)
-    focus = MapFocus(point: point)
+    focus = MapFocus(target: .userLocation)
     loadResults(.nearby(point, category, radius: radius))
   }
 
@@ -218,10 +219,15 @@ final class PlaceStore {
     focus = MapFocus(point: point)
   }
 
-  func locate(_ point: GeoPoint, token: UUID) {
+  func followUserLocation(token: UUID) {
+    guard acceptsLocation(token) else { return }
+    focus = MapFocus(target: .userLocation)
+  }
+
+  func locate(_ point: GeoPoint, token: UUID, focusMap: Bool = true) {
     guard acceptsLocation(token) else { return }
     userLocation = point
-    focus = MapFocus(point: point)
+    if focusMap { followUserLocation(token: token) }
   }
 
   func select(_ place: PlacePresentation) {

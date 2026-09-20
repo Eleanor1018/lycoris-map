@@ -19,7 +19,7 @@ struct MapTools: View {
         .matchedTransitionSource(id: "map-appearance", in: appearanceTransition)
         Button(action: locate) {
           Image(systemName: "location").font(.title3).foregroundStyle(Color.accentColor)
-            .frame(width: 48, height: 48)
+            .frame(width: 48, height: 48).contentShape(Rectangle())
         }.accessibilityLabel("Current location").accessibilityIdentifier("map.locate")
       }
       .glassEffect(in: .rect(cornerRadius: 24))

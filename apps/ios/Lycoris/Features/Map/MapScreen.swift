@@ -71,7 +71,11 @@ struct MapScreen: View {
     #if LYCORIS_LOCAL_TESTS
       // Hermetic fixture runs have an explicit datum. Live provider calibration is
       // verified separately, not allowed to make fixture tests depend on Apple search.
-      _mapCoordinates = State(initialValue: MapCoordinateResolver(space: .wgs84))
+      let calibrationUnavailable = ProcessInfo.processInfo.arguments.contains(
+        "-lycoris-test-map-calibration-unavailable")
+      _mapCoordinates = State(
+        initialValue: calibrationUnavailable
+          ? MapCoordinateResolver(lookup: { nil }) : MapCoordinateResolver(space: .wgs84))
     #else
       _mapCoordinates = State(
         initialValue: MapCoordinateResolver(space: isPreview ? .wgs84 : .unresolved))
@@ -650,6 +654,7 @@ struct MapScreen: View {
   }
 
   private func locate() {
+    mapCoordinates.resolveIfNeeded(retryPending: true)
     requestLocation(showFailure: true)
   }
 
@@ -667,12 +672,18 @@ struct MapScreen: View {
       return
     }
     let token = store.beginLocationRequest()
+    location.refreshAuthorization()
+    let followsImmediately = showFailure && location.isAuthorized
+    if followsImmediately { store.followUserLocation(token: token) }
     location.request { result in
       if case .failure(.denied) = result { awaitsLocationAuthorization = true }
       guard store.acceptsLocation(token) else { return }
       if !showFailure && (modal != nil || selectingLocation || isSearchFocused) { return }
       switch result {
-      case .success(let point): store.locate(point, token: token)
+      case .success(let point):
+        // A manual tap has already started native following. A later Core Location
+        // fix updates canonical data without pulling back a map the user has panned.
+        store.locate(point, token: token, focusMap: !followsImmediately)
       case .failure(let failure):
         guard showFailure else { return }
         locationDenied = failure == .denied
