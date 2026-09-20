@@ -9,7 +9,12 @@ import org.maplibre.android.module.http.HttpRequestUtil
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-class LycorisApplication : Application() {
+class LycorisApplication : Application(), androidx.work.Configuration.Provider {
+    override val workManagerConfiguration: androidx.work.Configuration
+        get() = androidx.work.Configuration.Builder()
+            .setWorkerFactory(com.lycoris.maps.feature.contributions.ContributionWorkerFactory { container.contributionEngine })
+            .build()
+    val container by lazy { AppContainer(this) }
     override fun onCreate() {
         super.onCreate()
         MapLibre.getInstance(this)

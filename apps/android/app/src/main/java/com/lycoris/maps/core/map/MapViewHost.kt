@@ -32,6 +32,11 @@ class NativeMapState {
         internal set
     var ready by mutableStateOf(false)
         internal set
+    internal fun snapshotCamera(): MapCamera {
+        val current = map?.cameraPosition ?: return camera
+        val target = current.target ?: return camera
+        return MapCamera(target.latitude, target.longitude, current.zoom, current.bearing, current.tilt)
+    }
     fun moveTo(latitude: Double, longitude: Double, zoom: Double = camera.zoom) {
         if (!latitude.isFinite() || !longitude.isFinite() || latitude !in -90.0..90.0 || longitude !in -180.0..180.0) return
         val next = CameraPosition.Builder().target(LatLng(latitude, longitude)).zoom(zoom)
@@ -42,7 +47,7 @@ class NativeMapState {
 
 @Composable
 fun rememberNativeMapState(): NativeMapState = rememberSaveable(saver = listSaver(
-    save = { listOf(it.camera.latitude, it.camera.longitude, it.camera.zoom, it.camera.bearing, it.camera.tilt) },
+    save = { it.snapshotCamera().let { camera -> listOf(camera.latitude, camera.longitude, camera.zoom, camera.bearing, camera.tilt) } },
     restore = { values -> NativeMapState().also { it.camera = MapCamera(values[0], values[1], values[2], values[3], values[4]) } },
 )) { NativeMapState() }
 
@@ -54,28 +59,33 @@ fun MapViewHost(
     styleJson: String = MapStyles.osm,
     onCameraIdle: (MapCamera, MapBounds) -> Unit = { _, _ -> },
     onMapClick: (Double, Double) -> Unit = { _, _ -> },
+    onUserGesture: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val idle by rememberUpdatedState(onCameraIdle)
     val clicked by rememberUpdatedState(onMapClick)
-    val currentStyle by rememberUpdatedState(styleJson)
+    val gesture by rememberUpdatedState(onUserGesture)
+    val alive = remember(context) { booleanArrayOf(true) }
     val mapView = remember(context) {
         MapView(context).apply {
             onCreate(Bundle())
             getMapAsync { map ->
+                if (!alive[0]) return@getMapAsync
                 state.map = map
                 val restored = state.camera
                 map.cameraPosition = CameraPosition.Builder()
                     .target(LatLng(restored.latitude, restored.longitude)).zoom(restored.zoom)
                     .bearing(restored.bearing).tilt(restored.tilt).build()
-                map.setStyle(Style.Builder().fromJson(currentStyle)) { state.ready = true }
                 map.uiSettings.isLogoEnabled = false
                 map.uiSettings.isAttributionEnabled = true
                 map.uiSettings.isCompassEnabled = true
                 // Attribution stays above the persistent bottom panels (not beneath them).
                 map.uiSettings.attributionGravity = android.view.Gravity.TOP or android.view.Gravity.START
                 map.uiSettings.setAttributionMargins(8, (122 * resources.displayMetrics.density).toInt(), 0, 0)
+                map.addOnCameraMoveStartedListener { reason ->
+                    if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) gesture()
+                }
                 map.addOnCameraIdleListener {
                     val camera = map.cameraPosition
                     val point = camera.target ?: return@addOnCameraIdleListener
@@ -83,7 +93,7 @@ fun MapViewHost(
                     val bounds = map.projection.visibleRegion.latLngBounds
                     idle(state.camera, MapBounds(bounds.latitudeSouth, bounds.latitudeNorth, bounds.longitudeWest, bounds.longitudeEast))
                 }
-                map.addOnMapClickListener { point -> clicked(point.latitude, point.longitude); true }
+                map.addOnMapClickListener { point -> clicked(point.latitude, point.longitude); false }
             }
         }
     }
@@ -99,10 +109,21 @@ fun MapViewHost(
             if (shouldResume && !resumed) { mapView.onResume(); resumed = true }
         }
         val observer = LifecycleEventObserver { _, _ -> sync() }
+        val memory = object : android.content.ComponentCallbacks2 {
+            override fun onConfigurationChanged(configuration: android.content.res.Configuration) = Unit
+            override fun onLowMemory() { if (alive[0]) mapView.onLowMemory() }
+            override fun onTrimMemory(level: Int) { if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) onLowMemory() }
+        }
+        context.applicationContext.registerComponentCallbacks(memory)
         lifecycle.addObserver(observer)
         sync()
         onDispose {
+            alive[0] = false
+            context.applicationContext.unregisterComponentCallbacks(memory)
             lifecycle.removeObserver(observer)
+            state.map?.cameraPosition?.let { camera -> camera.target?.let { target ->
+                state.camera = MapCamera(target.latitude, target.longitude, camera.zoom, camera.bearing, camera.tilt)
+            } }
             if (resumed) mapView.onPause()
             if (started) mapView.onStop()
             mapView.onDestroy()
@@ -110,10 +131,14 @@ fun MapViewHost(
             state.ready = false
         }
     }
-    androidx.compose.runtime.LaunchedEffect(styleJson, state.map) {
-        val map = state.map ?: return@LaunchedEffect
+    DisposableEffect(styleJson, state.map) {
+        val map = state.map
+        var active = true
         state.ready = false
-        map.setStyle(Style.Builder().fromJson(styleJson)) { state.ready = true }
+        map?.setStyle(Style.Builder().fromJson(styleJson)) {
+            if (active && state.map === map) state.ready = true
+        }
+        onDispose { active = false }
     }
     AndroidView(factory = { mapView }, modifier = modifier)
 }
