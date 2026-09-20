@@ -1,3 +1,4 @@
+import { mapSourceNames } from '@/features/map/mapSources'
 import { usePreferences } from '@/features/preferences/PreferencesProvider'
 import { isSettingsPanel, settingsTitles, SettingsContent } from '@/features/preferences/Settings'
 import { useUi } from '@/shared/i18n/ui'
@@ -53,7 +54,7 @@ export function MapShell({
     sharedTarget?: SharedTarget | undefined
 }) {
     const ui = useUi()
-    const { preferences } = usePreferences()
+    const { sourceFailure, retrySource, preferences } = usePreferences()
     const mobile = useMobileLayout()
     const session = useSession()
     const showBookmarks = Boolean(sample) || session.status === 'authenticated'
@@ -121,7 +122,6 @@ export function MapShell({
     const [menuHeight, setMenuHeight] = useState<number | null>(null)
     const [nearbyHeight, setNearbyHeight] = useState(326)
     const [voice, setVoice] = useState(false)
-    const [mapSourceError, setMapSourceError] = useState<string | null>(null)
     const mainMenu =
         (panel === 'initial' || panel === 'search') &&
         browse?.mode !== 'search' &&
@@ -400,7 +400,6 @@ export function MapShell({
             ) : (
                 <MapSurface
                     onMap={onMap}
-                    onSourceError={setMapSourceError}
                     onPick={picking ? selectPoint : undefined}
                     places={
                         browse
@@ -621,7 +620,19 @@ export function MapShell({
                 </div>
             )}
             <div className="map-notices">
-                {mapSourceError && <MapNotice key={mapSourceError} message={mapSourceError} />}
+                {sourceFailure && (
+                    <MapNotice
+                        key={sourceFailure.id}
+                        message={
+                            sourceFailure.exhausted
+                                ? 'Map sources are unavailable. Check your connection and try again.'
+                                : ui.text('Map could not load. Switched to {source}.', {
+                                      source: mapSourceNames[preferences.source],
+                                  })
+                        }
+                        onRetry={sourceFailure.exhausted ? retrySource : undefined}
+                    />
+                )}
                 {!sample && <HeadingPermission />}
                 {browse && (browse.location.error || browse.location.pending) && (
                     <MapNotice
@@ -645,7 +656,7 @@ export function MapShell({
     )
 }
 
-function MapNotice({ message, onRetry }: { message: string; onRetry?: () => void }) {
+function MapNotice({ message, onRetry }: { message: string; onRetry?: (() => void) | undefined }) {
     const ui = useUi()
     const [dismissed, setDismissed] = useState(false)
     if (dismissed) return null

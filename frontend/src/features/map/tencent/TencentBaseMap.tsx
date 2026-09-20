@@ -1,30 +1,44 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMap } from 'react-leaflet'
-import { loadTencentSdk, type TencentMap } from './sdk'
+import type { TencentMap } from './sdk'
+import { loadTencentResources } from './resources'
+import { createLoadWatchdog } from '../loadWatchdog'
 
 const CREDIT = '&copy; <a href="https://map.qq.com/" target="_blank" rel="noopener">腾讯地图</a>'
 
 /** Official Tencent renderer; Leaflet retains the app's controls and WGS84 data. */
-export default function TencentBaseMap({ onError }: { onError: () => void }) {
+export default function TencentBaseMap({
+    onError,
+    onReady,
+}: {
+    onError: () => void
+    onReady?: () => void
+}) {
     const map = useMap()
+    const [connectionVersion, setConnectionVersion] = useState(0)
+    useEffect(() => {
+        const reconnect = () => setConnectionVersion((value) => value + 1)
+        window.addEventListener('online', reconnect)
+        return () => window.removeEventListener('online', reconnect)
+    }, [])
     const failure = useRef(onError)
     failure.current = onError
+    const readyCallback = useRef(onReady)
+    readyCallback.current = onReady
     useEffect(() => {
         let disposed = false,
             instance: TencentMap | undefined,
-            ready = false
+            rendered = false
         let restoreProjection: (() => void) | undefined
         let sync = () => {}
         const container = document.createElement('div')
         container.className = 'tencent-basemap'
         container.setAttribute('aria-hidden', 'true')
-        let watchdog: number | undefined
         const fail = () => {
             if (!disposed) failure.current()
         }
-        // Start the vendor SDK alongside the larger projection dataset; neither
-        // is fetched until Tencent is selected, and one cannot delay the other.
-        void Promise.all([loadTencentSdk(), import('./coordinates')])
+        const watchdog = createLoadWatchdog(fail)
+        void loadTencentResources()
             .then(([sdk, { tencentCrs, toTencent }]) => {
                 if (disposed) return
                 const crs = map.options.crs,
@@ -68,33 +82,42 @@ export default function TencentBaseMap({ onError }: { onError: () => void }) {
                 }
                 sync = () => {
                     const current = toTencent(map.getCenter().wrap())
-                    if (instance?.getZoom() !== map.getZoom()) instance?.setZoom(map.getZoom())
+                    const zoomChanged = Math.abs((instance?.getZoom() ?? -1) - map.getZoom()) > 1e-6
                     const previous = instance?.getCenter()
-                    if (!previous || previous.lat !== current.lat || previous.lng !== current.lng)
-                        instance?.setCenter(new sdk.LatLng(current.lat, current.lng))
+                    const centerChanged =
+                        !previous ||
+                        Math.abs(previous.lat - current.lat) > 1e-8 ||
+                        Math.abs(previous.lng - current.lng) > 1e-8
+                    if (zoomChanged || centerChanged) watchdog.start()
+                    if (zoomChanged) instance?.setZoom(map.getZoom())
+                    if (centerChanged) instance?.setCenter(new sdk.LatLng(current.lat, current.lng))
                 }
                 map.on('move zoom resize', sync)
                 instance.on('context_lost', fail)
                 instance.on('tilesloaded', () => {
-                    ready = true
-                    window.clearTimeout(watchdog)
+                    rendered = true
+                    watchdog.clear()
+                    readyCallback.current?.()
                     container.dataset.loaded = 'true'
                 })
-                watchdog = window.setTimeout(() => {
-                    if (!ready) fail()
-                }, 20000)
+                // Cached viewport changes can become idle without fetching any
+                // tiles. Do not mistake the absent tilesloaded event for a hang.
+                instance.on('idle', () => {
+                    if (rendered) watchdog.clear()
+                })
+                watchdog.start()
                 sync()
             })
             .catch(fail)
         return () => {
             disposed = true
-            window.clearTimeout(watchdog)
+            watchdog.destroy()
             map.off('move zoom resize', sync)
             instance?.off('context_lost', fail)
             instance?.destroy()
             container.remove()
             if (map.getPane('mapPane')) restoreProjection?.()
         }
-    }, [map])
+    }, [map, connectionVersion])
     return null
 }
