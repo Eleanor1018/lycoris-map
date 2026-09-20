@@ -117,8 +117,12 @@ export const uiMessages = {
     'Compass access is blocked. Allow motion and orientation access in your browser settings to see which way you face.':
         '方向访问已被阻止，请在浏览器设置中允许动作与方向访问，以查看你面朝的方向。',
     'Stop listening': '停止语音输入',
+    'Voice search': '语音搜索',
+    'Stop voice search': '停止语音搜索',
     'Start voice search': '开始语音搜索',
     'Voice search is listening…': '正在听语音…',
+    'Finishing voice search…': '正在完成语音搜索…',
+    'Speak now…': '请开始说话…',
     'Waiting for microphone access…': '正在等待麦克风权限…',
     'Voice search is unavailable in this browser.': '当前浏览器不支持语音搜索。',
     'Voice search was denied. Allow microphone access to use it.':

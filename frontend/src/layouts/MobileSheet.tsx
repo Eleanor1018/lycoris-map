@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { FigmaIcon } from '@/shared/ui/figma-icon'
 import { PlaceMeta, PlaceSummary, ShareButton } from './DesktopPanel'
 import { CategoryBadge, DesignButton, IconButton, NearbyCards, SearchField } from './primitives'
+import type { VoiceSearchState } from '@/shared/ui/design-primitives'
 import type { DesignSample, Snap } from './types'
 import { ContributionForm, type ContributionFormProps } from './ContributionForm'
 import type { PlaceBrowse } from '@/features/places/usePlaceBrowse'
@@ -21,6 +22,9 @@ export function MobileSheet({
     sample,
     search,
     setSearch,
+    voice,
+    onMic,
+    onVoiceChange,
     openDetails,
     close,
     height,
@@ -45,6 +49,10 @@ export function MobileSheet({
     sample: DesignSample | undefined
     search: string
     setSearch: (value: string) => void
+    voice: boolean
+    /** Expands the menu to its maximum before any recognised word arrives. */
+    onMic: () => void
+    onVoiceChange: (voice: VoiceSearchState) => void
     openDetails: (focusId: string) => void
     close: () => void
     height: number
@@ -78,13 +86,24 @@ export function MobileSheet({
         const scroll = content?.parentElement
         if (!content || !scroll) return
         const nearby = mainMenu ? content.querySelector<HTMLElement>('.nearby-cards') : null
+        const voiceBody = mainMenu ? content.querySelector<HTMLElement>('.voice-search-body') : null
         const measure = () => {
             const bounds = content.getBoundingClientRect()
             const natural = bounds.height
             if (!natural) return
             const safeArea = parseFloat(getComputedStyle(scroll).paddingBottom) || 0
             const onHeight = liveDetail ? onDetailHeight : onMenuHeight
-            onHeight(Math.max(liveDetail ? 158 : 326, Math.ceil(natural + safeArea)))
+            // The voice body is absolutely placed inside the reserved body area,
+            // so a long transcript grows the menu to fit instead of being cut off.
+            const voiceBottom = voiceBody
+                ? voiceBody.getBoundingClientRect().bottom - bounds.top
+                : 0
+            onHeight(
+                Math.max(
+                    liveDetail ? 158 : 326,
+                    Math.ceil(Math.max(natural, voiceBottom + 22) + safeArea),
+                ),
+            )
             const cards = nearby?.getBoundingClientRect()
             if (cards?.height) {
                 // The middle stop shows every nearby card and the same bottom
@@ -98,8 +117,9 @@ export function MobileSheet({
         observer.observe(content)
         observer.observe(scroll)
         if (nearby) observer.observe(nearby)
+        if (voiceBody) observer.observe(voiceBody)
         return () => observer.disconnect()
-    }, [liveDetail, mainMenu, onDetailHeight, onMenuHeight, onNearbyHeight])
+    }, [liveDetail, mainMenu, voice, onDetailHeight, onMenuHeight, onNearbyHeight])
     useEffect(() => {
         const element = sheet.current,
             viewport = window.visualViewport
@@ -279,7 +299,13 @@ export function MobileSheet({
                         className={`mobile-search-content ${hasPlaceResults ? 'has-place-results' : ''}`}
                     >
                         <div className="mobile-logo">{ui.text('Lycoris Maps')}</div>
-                        <SearchField mobile value={search} onChange={setSearch} />
+                        <SearchField
+                            mobile
+                            value={search}
+                            onChange={setSearch}
+                            onVoiceStart={onMic}
+                            onVoiceChange={onVoiceChange}
+                        />
                         {!sample ? (
                             <AccountEntry mobile />
                         ) : (
@@ -291,7 +317,7 @@ export function MobileSheet({
                                 AA
                             </DesignButton>
                         )}
-                        {browse && hasPlaceResults && selectPlace ? (
+                        {voice ? null : browse && hasPlaceResults && selectPlace ? (
                             <div
                                 inert={snap === 'collapsed'}
                                 aria-hidden={snap === 'collapsed' || undefined}
@@ -304,14 +330,10 @@ export function MobileSheet({
                                 aria-hidden={snap === 'collapsed' || undefined}
                             >
                                 <h2 className="mobile-nearby-heading">{ui.text('Find Nearby')}</h2>
-                                <NearbyCards
-                                    mobile
-                                    half={snap === 'half'}
-                                    onSelect={chooseCategory}
-                                />
+                                <NearbyCards mobile onSelect={chooseCategory} />
                             </div>
                         )}
-                        {!hasPlaceResults && (
+                        {!hasPlaceResults && !voice && (
                             <div inert={snap !== 'full'} aria-hidden={snap !== 'full' || undefined}>
                                 {showBookmarks && (
                                     <>

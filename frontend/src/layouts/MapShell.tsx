@@ -11,6 +11,7 @@ import { HeadingPermission } from '@/features/map/HeadingPermission'
 import { MapSourcePicker } from '@/features/map/MapSourcePicker'
 import { FigmaIcon, type FigmaIconName } from '@/shared/ui/figma-icon'
 import { DesignButton, IconButton } from './primitives'
+import type { VoiceSearchState } from '@/shared/ui/design-primitives'
 import { DesktopPanel } from './DesktopPanel'
 import { usePanelRoute } from './usePanelRoute'
 import type { DesignSample, Panel, Snap } from './types'
@@ -108,13 +109,14 @@ export function MapShell({
     const [detailHeight, setDetailHeight] = useState(433)
     const [menuHeight, setMenuHeight] = useState<number | null>(null)
     const [nearbyHeight, setNearbyHeight] = useState(326)
+    const [voice, setVoice] = useState(false)
     const mainMenu =
         (panel === 'initial' || panel === 'search') &&
         browse?.mode !== 'search' &&
         browse?.mode !== 'cluster'
     const fullSheetHeight = Math.min(
         viewportHeight - 46,
-        mainMenu ? (menuHeight ?? Infinity) : Infinity,
+        mainMenu && !voice ? (menuHeight ?? Infinity) : Infinity,
     )
     const halfSheetHeight = Math.min(mainMenu ? nearbyHeight : 320, fullSheetHeight)
     const sheetHeight =
@@ -186,6 +188,15 @@ export function MapShell({
             if (mobile && (snap !== 'full' || panel !== 'search')) showMobileSearch('full')
         } else setSearch(value)
     }
+    // The mic click expands the menu to its maximum immediately, before any
+    // permission or recognition result. Keeping the SearchField mounted (only
+    // its props/state change) is what stops the recording from being cancelled.
+    const onMic = () => {
+        if (mobile && (snap !== 'full' || panel !== 'search')) showMobileSearch('full')
+    }
+    const onVoiceChange = useCallback((next: VoiceSearchState) => {
+        setVoice(next.active || next.finishing)
+    }, [])
     const nearbyCategory = params.get('nearbyCategory')
     const requestedCategory =
         nearbyCategory === 'baby_room' || nearbyCategory === 'friendly_clinic'
@@ -481,6 +492,9 @@ export function MapShell({
                     sample={sample}
                     search={browse?.search ?? search}
                     setSearch={updateSearch}
+                    voice={voice}
+                    onMic={onMic}
+                    onVoiceChange={onVoiceChange}
                     openDetails={(focusId) => open('details', focusId)}
                     close={close}
                     height={sheetHeight}
