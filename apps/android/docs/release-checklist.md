@@ -18,8 +18,8 @@ The last command requires an attached test device. CI uses API 36 `default` / `x
 
 The preview APK is installable with the debug certificate and runs the same R8 optimization as release, with shell profiling enabled. It uses a separate `.preview` application ID and real HTTPS endpoints. It supports local performance and browsing checks, but must not be distributed as a production-signed release.
 
-- [ ] The workflow has completed successfully on the release candidate commit; retain its run URL and reports. Adding the workflow or passing a local build does not establish a successful CI run.
-- [ ] Inspect lint and test reports, not only the job status. Confirm no tests were skipped unexpectedly.
+- [x] The workflow passed on implementation commit `3edbd76`: [run 35489996913](https://github.com/Eleanor1018/lycoris-map/actions/runs/35489996913). Retain a new run for any later application-source changes; this is not a signed release approval.
+- [x] Local XML: 120 JVM tests and 30 passing device tests, with only the opt-in backend case skipped. That backend case passed separately against guarded Rust/Postgres. Remote CI logs confirm the same expected skip and no test failures; lint has no errors (dependency-upgrade/style warnings remain).
 - [ ] Install and open the resulting QA APK; verify its application ID is `com.lycoris.maps.qa`.
 - [ ] Review release R8 output and test a correctly signed release build. CI's `app-release-unsigned.apk` is an unsigned build artifact, not an installable store release.
 - [ ] Retain release APK/AAB hashes, version code, mapping file and dependency/toolchain versions with the release record.
