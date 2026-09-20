@@ -56,6 +56,19 @@ it('removes a failed script and allows the next selection to retry', async () =>
     await retry
 })
 
+it('reuses a low-priority idle download when the user selects Tencent', async () => {
+    const { loadTencentSdk } = await import('./sdk')
+    const warm = loadTencentSdk(true)
+    const script = document.querySelector<HTMLScriptElement>('script[src*="map.qq.com/api/gljs"]')!
+    expect(script.fetchPriority).toBe('low')
+    const selected = loadTencentSdk()
+    expect(selected).toBe(warm)
+    expect(script.fetchPriority).toBe('high')
+    window.TMap = {} as TencentSdk
+    window.__lycorisTencentReady?.()
+    await selected
+})
+
 it('times out a script that never calls ready so the UI can recover', async () => {
     vi.useFakeTimers()
     const { loadTencentSdk } = await import('./sdk')

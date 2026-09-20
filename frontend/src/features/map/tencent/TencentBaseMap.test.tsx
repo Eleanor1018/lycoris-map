@@ -101,6 +101,31 @@ it('does not create a late SDK instance after switching away or unmounting', asy
     expect(document.querySelector('.tencent-basemap')).toBeNull()
 })
 
+it('accepts an idle cached viewport without falsely timing out a working map', async () => {
+    let map!: L.Map
+    const failure = vi.fn()
+    const view = render(
+        <MapContainer
+            ref={(value) => {
+                if (value) map = value
+            }}
+            center={[31.2304, 121.4737]}
+            zoom={14}
+        >
+            <TencentBaseMap onError={failure} />
+        </MapContainer>,
+    )
+    await waitFor(() => expect(instances).toHaveLength(1))
+    act(() => instances[0]!.events.get('tilesloaded')?.())
+    vi.useFakeTimers()
+    act(() => map.setView([31.2305, 121.4738], 14, { animate: false }))
+    act(() => instances[0]!.events.get('idle')?.())
+    act(() => vi.advanceTimersByTime(21000))
+    expect(failure).not.toHaveBeenCalled()
+    view.unmount()
+    vi.useRealTimers()
+})
+
 it('reports load and GPU failures so the parent can fall back instead of leaving a blank map', async () => {
     const failure = vi.fn()
     load.mockRejectedValueOnce(new Error('network'))

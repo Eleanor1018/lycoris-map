@@ -1,22 +1,23 @@
 import 'leaflet/dist/leaflet.css'
-import { useCallback, useEffect, useRef, type RefCallback } from 'react'
-import { MapContainer, TileLayer, useMap } from 'react-leaflet'
+import { useCallback, useEffect, useRef, useState, type RefCallback } from 'react'
+import { AttributionControl, MapContainer, TileLayer, useMap } from 'react-leaflet'
 import L, { type Map as LeafletMap } from 'leaflet'
 import { MapPlaces, type MapPlacesProps } from './MapPlaces'
 import { usePreferences } from '@/features/preferences/PreferencesProvider'
-import { osmTileUrl, tiandituTileUrl } from './mapSources'
+import { isMapSourceAvailable, osmTileUrl, tiandituTileUrl } from './mapSources'
 import TencentBaseMap from './tencent/TencentBaseMap'
+import { watchTileLayer } from './watchTileLayer'
+import { scheduleIdlePreload } from './idlePreload'
+import { loadTencentResources } from './tencent/resources'
 const CENTER: [number, number] = [31.2304, 121.4737]
 export function MapSurface({
     onMap,
     onPick,
     places,
-    onSourceError,
 }: {
     onMap: RefCallback<LeafletMap>
     onPick?: ((point: { lat: number; lng: number }) => void) | undefined
     places?: MapPlacesProps | undefined
-    onSourceError?: ((message: string) => void) | undefined
 }) {
     return (
         <MapContainer
@@ -27,33 +28,43 @@ export function MapSurface({
             trackResize={false}
             maxZoom={19}
             className="product-map"
-            attributionControl
+            attributionControl={false}
         >
-            <BaseMapLayers onSourceError={onSourceError} />
+            <AttributionControl prefix='<a href="https://leafletjs.com/" title="A JavaScript library for interactive maps">Leaflet</a>' />
+            <BaseMapLayers />
             <MapLifecycle />
             <MapPick onPick={onPick} />
             {places && <MapPlaces {...places} />}
         </MapContainer>
     )
 }
-function BaseMapLayers({
-    onSourceError,
-}: {
-    onSourceError: ((message: string) => void) | undefined
-}) {
-    const { preferences, update } = usePreferences()
-    const actions = useRef({ update, onSourceError })
-    actions.current = { update, onSourceError }
-    const failed = useCallback(() => {
-        actions.current.update({ source: 'osm' })
-        actions.current.onSourceError?.('Tencent Maps could not load. Switched to OSM.')
-    }, [])
-    if (preferences.source === 'tencent') return <TencentBaseMap onError={failed} />
+function BaseMapLayers() {
+    const { preferences, reportSourceFailure, sourceAttempt } = usePreferences()
+    const monitorKey = `${sourceAttempt}/${preferences.source}`
+    const [ready, setReady] = useState<string | null>(null)
+    const loaded = useCallback(() => setReady(monitorKey), [monitorKey])
+    const failed = useCallback(
+        () => reportSourceFailure(preferences.source),
+        [reportSourceFailure, preferences.source],
+    )
+    useEffect(() => {
+        if (
+            ready !== monitorKey ||
+            preferences.source === 'tencent' ||
+            !isMapSourceAvailable('tencent')
+        )
+            return
+        return scheduleIdlePreload(() => loadTencentResources(true))
+    }, [ready, monitorKey, preferences.source])
+    if (preferences.source === 'tencent')
+        return <TencentBaseMap key={monitorKey} onError={failed} onReady={loaded} />
     if (preferences.source === 'tianditu')
         return (
             <>
-                <TileLayer
-                    key="tianditu-base"
+                <MonitoredTileLayer
+                    key={`${monitorKey}/base`}
+                    onError={failed}
+                    onReady={loaded}
                     url={tiandituTileUrl('vec')}
                     subdomains="01234567"
                     minNativeZoom={1}
@@ -62,8 +73,10 @@ function BaseMapLayers({
                     zIndex={1}
                     attribution='&copy; <a href="https://www.tianditu.gov.cn/">天地图</a>'
                 />
-                <TileLayer
-                    key="tianditu-labels"
+                <MonitoredTileLayer
+                    key={`${monitorKey}/labels`}
+                    onError={failed}
+                    onReady={loaded}
                     url={tiandituTileUrl('cva')}
                     subdomains="01234567"
                     minNativeZoom={1}
@@ -74,14 +87,36 @@ function BaseMapLayers({
             </>
         )
     return (
-        <TileLayer
-            key="osm"
+        <MonitoredTileLayer
+            key={monitorKey}
+            onError={failed}
+            onReady={loaded}
             url={osmTileUrl}
             maxNativeZoom={19}
             maxZoom={19}
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         />
     )
+}
+function MonitoredTileLayer({
+    onError,
+    onReady,
+    ...props
+}: React.ComponentProps<typeof TileLayer> & { onError: () => void; onReady: () => void }) {
+    const cleanup = useRef<(() => void) | undefined>(undefined)
+    const actions = useRef({ onError, onReady })
+    actions.current = { onError, onReady }
+    const ref = useCallback((layer: L.TileLayer | null) => {
+        cleanup.current?.()
+        cleanup.current = layer
+            ? watchTileLayer(
+                  layer,
+                  () => actions.current.onError(),
+                  () => actions.current.onReady(),
+              )
+            : undefined
+    }, [])
+    return <TileLayer {...props} ref={ref} />
 }
 function MapPick({
     onPick,

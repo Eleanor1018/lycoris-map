@@ -1,11 +1,11 @@
 .map-source-popover {
     z-index: 30;
-    width: min(286px, calc(100vw - 88px));
+    width: min(334px, calc(100vw - 88px));
     max-width: calc(100vw - 22px);
     max-height: var(--radix-popover-content-available-height);
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 16px;
+    padding: 12px;
     border: 1px solid #00000014;
     border-radius: 22px;
     background: #f6f6f9eb;
@@ -27,7 +27,7 @@
     z-index: 0;
 }
 .map-source-title {
-    margin: 0 0 16px;
+    margin: 0 0 10px;
     text-align: center;
     font:
         600 14px/20px -apple-system,
@@ -37,8 +37,8 @@
 }
 .map-source-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
     align-items: start;
 }
 .map-source-options .map-source-card {
@@ -66,7 +66,7 @@
 .map-source-preview {
     display: block;
     width: 100%;
-    aspect-ratio: 1;
+    aspect-ratio: 1.16;
     padding: 3px;
     border: 2px solid transparent;
     border-radius: 18px;
@@ -94,7 +94,7 @@
 }
 .map-source-options .map-source-credits,
 .preferences-content .map-source-options .map-source-credits {
-    margin: 16px 0 0;
+    margin: 10px 0 0;
     text-align: center;
     color: #6e6e73;
     font:
@@ -111,8 +111,8 @@
     text-decoration: underline;
 }
 .settings-popover:has(.map-source-options) {
-    width: 286px;
-    padding: 16px;
+    width: min(334px, calc(100vw - 22px));
+    padding: 12px;
 }
 .map-tools #map-source[data-state='open'] {
     background: #e9e9ed;

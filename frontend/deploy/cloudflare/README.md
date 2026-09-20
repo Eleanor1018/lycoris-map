@@ -92,8 +92,9 @@ the route and edge cache status. The visible OSM attribution remains on the map.
 No bulk loading or offline download is introduced.
 
 The official site was verified without a configured proxy on 2026-09-20 after
-PR #30 merged: HTTP 200, 256×256 PNG, 37,809 bytes, edge HIT. OSM remains the
-default provider. Local Vite development forwards this path to the official site.
+PR #30 merged: HTTP 200, 256×256 PNG, 37,809 bytes, edge HIT. Local Vite
+development forwards this path to the official site. Default providers and
+recovery follow the language policy below.
 
 ## Tencent Maps
 
@@ -101,7 +102,7 @@ Set `VITE_TENCENT_MAP_KEY` to the JavaScript API GL **browser key** in both
 Production and Preview build variables. Local development uses ignored
 `.env.local`. This value is public in the browser bundle; actual keys must not
 be committed. An absent key disables the Tencent choice and invalid saved
-selections fall back to OSM. Each variable change needs a new build.
+selections follow the available language defaults. Each variable change needs a new build.
 
 Selecting Tencent loads its official `map.qq.com/api/gljs` SDK asynchronously
 with the required callback parameter. The SDK renders the base map while
@@ -112,20 +113,45 @@ mainland coverage data and conversion approximation as the native apps are
 used, including unchanged overseas/Hong Kong/Taipei coordinates. See
 `src/features/map/tencent/LICENSE.txt`. This is not a surveying transformation.
 
-The SDK and projection dataset start loading in parallel only after selecting
-Tencent. Browser caching and the shared SDK promise are reused on subsequent
-selections. This avoids serial module-then-SDK downloads without adding Tencent
-requests to the default OSM startup.
+The SDK and projection dataset load in parallel on selection. After a visible
+OSM/Tianditu basemap has loaded, they can also warm silently during idle time.
+Warmup waits for document load, three seconds without resource completions or
+interaction, and `requestIdleCallback` where available. It skips hidden/offline
+pages, Save-Data and reported 2G/3G connections. SDK warmup uses low fetch priority;
+selection reuses the same promise and raises its priority. No map instance or
+provider tiles are prefetched. Network quiet is best-effort: browsers do not
+expose a universal pending-request/network-idle signal.
 
 Tencent supports zooms 3–19 in this integration. Pan and pinch remain continuous;
 discrete CSS zoom animation is disabled only while this WebGL provider is active
 to keep markers aligned. Leaving the layer destroys its GPU context and restores
-the OSM projection. SDK load failures, initial tile timeouts and GPU context loss
-restore OSM with a dismissible notification. The picker uses an actual image
+the OSM projection. SDK load failures, visible-page tile deadlines and GPU context
+loss enter the recovery chain below. Cached Tencent views may complete through
+its idle event without a new tilesloaded event. The picker uses an actual image
 from Tencent Static Map API v2, with linked provider credit.
 
 References: [OSM tile policy](https://operations.osmfoundation.org/policies/tiles/),
 [Tencent JavaScript API GL](https://lbs.qq.com/webApi/javascriptGL/glGuide/glBasic).
+
+## Language defaults and recovery
+
+Without a saved manual map choice, Chinese uses Tencent → Tianditu → OSM;
+English uses OSM → Tencent → Tianditu. Missing browser keys are skipped. Explicit
+map choices remain saved; automatic defaults and temporary fallback are never
+persisted by radius/category edits. Defaults follow the app language, including
+browser detection, saved language and the URL override.
+
+Each recovery round tries every available provider at most once. A manual map
+selection or Retry starts a new round. Raster providers are monitored through
+real Leaflet requests: isolated edge-tile errors are tolerated, largely failed
+batches or a 20-second zero-success load trigger recovery. Deadlines pause in
+hidden/offline pages; reconnection retries the active renderer. No arbitrary
+health-check tiles or polling are added. Exhaustion shows a dismissible retry
+message, while the current camera and point data stay intact.
+
+The source picker displays three compact previews in one row. The attribution
+control uses the Leaflet text link without its flag graphic; all provider
+attributions remain visible.
 
 ## Private R2 media and thumbnails
 
