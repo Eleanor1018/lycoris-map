@@ -100,3 +100,7 @@ Tencent uses its official native Android SDK, with shared Figma marker assets, c
 - Android Studio was synced in the visible worktree and launched the updated Dev build. Computer Use confirmed rendered OSM and the enabled Tencent option alongside OSM and unavailable Google Maps. Dev's existing provider/language preferences and Tencent privacy choice were left unchanged. Tencent's full visual comparison and physical-device heading remain separate from the automated SDK evidence above.
 
 Evidence: `tencent-verified-build.log`, `tencent-pixel-final.log` in the ignored runtime directory. No Web/iOS source, server deployment or production data was changed.
+
+## CI soft-keyboard fixture
+
+Remote run [35503823643](https://github.com/Eleanor1018/lycoris-map/actions/runs/35503823643) passed unit tests, lint, all APK builds and release ZIP alignment, but failed the real IME test on API 36. Its diagnostics reported a hardware keyboard, `showImeWithHardKeyboard=0` and zero IME bottom inset despite the focused text editor. The workflow now enables and checks `show_ime_with_hard_keyboard` only on its disposable API 36 and API 26 AVDs. The existing real-touch, keyboard-inset, Back handling and button-reachability assertions remain unchanged; no local or physical-device keyboard setting is changed. A new remote run is required to verify this fixture correction.
