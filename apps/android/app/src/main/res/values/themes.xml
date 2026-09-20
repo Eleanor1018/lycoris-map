@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.Lycoris" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#6750A4</item>
+        <item name="android:windowBackground">#F3EDF7</item>
+    </style>
+</resources>
