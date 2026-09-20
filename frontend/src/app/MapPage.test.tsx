@@ -214,7 +214,8 @@ it('copies only a public place link, offers navigation apps without auto-opening
     expect(links.map((link) => link.textContent)).toEqual([
         'Apple Maps',
         'Google Maps',
-        'Baidu Maps',
+        'AMap',
+        'Tencent Maps',
     ])
     expect(links[0]).toHaveAttribute(
         'href',
@@ -226,7 +227,11 @@ it('copies only a public place link, offers navigation apps without auto-opening
     )
     expect(links[2]).toHaveAttribute(
         'href',
-        'https://api.map.baidu.com/direction?origin=%E6%88%91%E7%9A%84%E4%BD%8D%E7%BD%AE&destination=latlng%3A31.2304%2C121.4737%7Cname%3ASynthetic+place+1&mode=walking&coord_type=wgs84&output=html&src=webapp.lycoris.maps',
+        'https://uri.amap.com/marker?position=121.4737%2C31.2304&name=Synthetic+place+1&coordinate=wgs84&src=lycoris-map&callnative=1',
+    )
+    expect(links[3]).toHaveAttribute(
+        'href',
+        'https://apis.map.qq.com/uri/v1/routeplan?type=walk&to=Synthetic+place+1&tocoord=31.2304%2C121.4737&coord_type=1&referer=Lycoris+Maps',
     )
     for (const link of links) expect(link).toHaveAttribute('rel', 'noopener noreferrer')
     // Escape closes the menu and returns focus to the trigger.
@@ -347,7 +352,7 @@ it('shares the selected Nearby item, uses its destination and hides a failed ima
     const navigate = within(item).getByRole('button', { name: 'Navigate' })
     fireEvent.click(navigate)
     const chooser = screen.getByRole('dialog', { name: 'Choose a navigation app' })
-    expect(within(chooser).getAllByRole('link')).toHaveLength(3)
+    expect(within(chooser).getAllByRole('link')).toHaveLength(4)
     for (const link of within(chooser).getAllByRole('link'))
         expect(link).toHaveAttribute('rel', 'noopener noreferrer')
     fireEvent.keyDown(chooser, { key: 'Escape' })
@@ -700,4 +705,180 @@ it('fits the open primary menu to changing content and caps it to the viewport',
         key: 'ArrowUp',
     })
     expect(root.style.getPropertyValue('--sheet-height')).toBe('366px')
+})
+
+it.each(['Half', 'Full'])(
+    'opens the phone voice search from the %s menu on the mic click',
+    (snap) => {
+        class MapSpeech {
+            static instances: MapSpeech[] = []
+            static startCalls = 0
+            lang = ''
+            continuous = false
+            interimResults = false
+            maxAlternatives = 0
+            onstart: (() => void) | null = null
+            onresult: ((event: unknown) => void) | null = null
+            onerror: ((event: unknown) => void) | null = null
+            onend: (() => void) | null = null
+            constructor() {
+                MapSpeech.instances.push(this)
+            }
+            start() {
+                // Deliberately does not fire onstart: the session is still waiting
+                // for the permission decision, so no result exists yet.
+                MapSpeech.startCalls++
+            }
+            stop() {
+                this.onend?.()
+            }
+            abort() {}
+        }
+        vi.stubGlobal('SpeechRecognition', MapSpeech)
+        const { fetcher } = app(`/?lang=en&snap=${snap.toLowerCase()}`, true)
+        const input = screen.getByRole('textbox', { name: 'Search Positions' })
+        expect(document.getElementById('map-shell')).toHaveAttribute(
+            'data-snap',
+            snap.toLowerCase(),
+        )
+        const searchesBefore = fetcher.mock.calls.filter(([input]) =>
+            String(input).includes('/api/markers/search'),
+        ).length
+        fireEvent.click(screen.getByRole('button', { name: 'Start voice search' }))
+        // The same click expands the menu and starts recognition once, with no wait
+        // for a transcript or geolocation.
+        expect(document.getElementById('map-shell')).toHaveAttribute('data-snap', 'full')
+        expect(MapSpeech.startCalls).toBe(1)
+        expect(screen.getByRole('group', { name: 'Voice search' })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Stop voice search' })).toBeInTheDocument()
+        expect(screen.getByText('Waiting for microphone access…')).toBeInTheDocument()
+        // The field itself is the same node, so recording cannot be cancelled by a remount.
+        expect(screen.getByRole('textbox', { name: 'Search Positions' })).toBe(input)
+        // No recognised text means no search request yet.
+        expect(
+            fetcher.mock.calls.filter(([call]) => String(call).includes('/api/markers/search'))
+                .length,
+        ).toBe(searchesBefore)
+    },
+)
+
+it('keeps recognised phone voice text out of the search until the user stops', () => {
+    class MapSpeech {
+        static instances: MapSpeech[] = []
+        lang = ''
+        continuous = false
+        interimResults = false
+        maxAlternatives = 0
+        onstart: (() => void) | null = null
+        onresult: ((event: unknown) => void) | null = null
+        onerror: ((event: unknown) => void) | null = null
+        onend: (() => void) | null = null
+        constructor() {
+            MapSpeech.instances.push(this)
+        }
+        start() {
+            this.onstart?.()
+        }
+        stop() {
+            this.onend?.()
+        }
+        abort() {}
+    }
+    vi.stubGlobal('SpeechRecognition', MapSpeech)
+    const { fetcher } = app('/?lang=en', true)
+    fireEvent.click(screen.getByRole('button', { name: 'Start voice search' }))
+    const instance = MapSpeech.instances[0]!
+    const interimSearches = () =>
+        fetcher.mock.calls.filter(([call]) => String(call).includes('/api/markers/search')).length
+    const before = interimSearches()
+    act(() =>
+        instance.onresult?.({
+            resultIndex: 0,
+            results: Object.assign([{ isFinal: false, 0: { transcript: 'synthetic' } }], {
+                length: 1,
+            }),
+        }),
+    )
+    expect(screen.getByText('synthetic')).toBeInTheDocument()
+    // Interim words must never trigger a backend search.
+    expect(interimSearches()).toBe(before)
+    // Tapping Stop commits the complete text and runs the search once.
+    fireEvent.click(screen.getByRole('button', { name: 'Stop voice search' }))
+    expect(screen.getByRole('textbox', { name: 'Search Positions' })).toHaveValue('synthetic')
+    return waitFor(() => expect(interimSearches()).toBeGreaterThan(before))
+})
+
+it('renders the half-menu Nursing card on two lines with no leading space', () => {
+    const { container } = app('/?lang=en&snap=half', true)
+    const card = container.querySelector('#mobile-nearby-nursing')!
+    expect(card.querySelector('.card-title')!.textContent).toBe('Nursing\nRooms')
+})
+
+it('replaces the desktop nearby cards with the voice body while listening', () => {
+    class DesktopSpeech {
+        static instances: DesktopSpeech[] = []
+        lang = ''
+        continuous = false
+        interimResults = false
+        maxAlternatives = 0
+        onstart: (() => void) | null = null
+        onresult: ((event: unknown) => void) | null = null
+        onerror: ((event: unknown) => void) | null = null
+        onend: (() => void) | null = null
+        constructor() {
+            DesktopSpeech.instances.push(this)
+        }
+        start() {
+            this.onstart?.()
+        }
+        stop() {
+            this.onend?.()
+        }
+        abort() {}
+    }
+    vi.stubGlobal('SpeechRecognition', DesktopSpeech)
+    const { container } = app('/?panel=search&lang=en')
+    expect(screen.getByRole('button', { name: 'Nursing Rooms' })).toBeInTheDocument()
+    const input = screen.getByRole('textbox', { name: 'Lycoris Maps' })
+    fireEvent.click(screen.getByRole('button', { name: 'Start voice search' }))
+    // The body replaces the cards instead of covering them.
+    expect(screen.getByRole('group', { name: 'Voice search' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Nursing Rooms' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Stop voice search' })).toBeInTheDocument()
+    // The desktop field is still the same node, so recording is not cancelled.
+    expect(screen.getByRole('textbox', { name: 'Lycoris Maps' })).toBe(input)
+    expect(container.querySelector('.desktop-panel .voice-search-body')).not.toBeNull()
+})
+
+it('resets the phone container voice state when the field is replaced by details', async () => {
+    class ReplaceSpeech {
+        static instances: ReplaceSpeech[] = []
+        lang = ''
+        continuous = false
+        interimResults = false
+        maxAlternatives = 0
+        onstart: (() => void) | null = null
+        onresult: ((event: unknown) => void) | null = null
+        onerror: ((event: unknown) => void) | null = null
+        onend: (() => void) | null = null
+        constructor() {
+            ReplaceSpeech.instances.push(this)
+        }
+        start() {
+            this.onstart?.()
+        }
+        stop() {
+            this.onend?.()
+        }
+        abort() {}
+    }
+    vi.stubGlobal('SpeechRecognition', ReplaceSpeech)
+    app('/?lang=en', true)
+    fireEvent.click(screen.getByRole('button', { name: 'Start voice search' }))
+    expect(screen.getByRole('group', { name: 'Voice search' })).toBeInTheDocument()
+    // Opening Nearby replaces the search field entirely.
+    fireEvent.click(screen.getByRole('button', { name: 'Find nearby' }))
+    await screen.findByRole('heading', { name: 'Nearby' })
+    expect(screen.queryByRole('group', { name: 'Voice search' })).not.toBeInTheDocument()
+    expect(document.getElementById('map-shell')).toHaveAttribute('data-snap', 'full')
 })

@@ -67,7 +67,7 @@ it('keeps the Navigate trigger in place and never opens a menu until chosen', ()
     expect(screen.queryByRole('link')).toBeNull()
 })
 
-it('opens three app options with Apple first and no visible title heading', () => {
+it('opens four app options with Apple first, no Baidu and no visible title heading', () => {
     renderActions()
     fireEvent.click(screen.getByRole('button', { name: 'Navigate' }))
     const chooser = screen.getByRole('dialog', { name: 'Choose a navigation app' })
@@ -76,8 +76,10 @@ it('opens three app options with Apple first and no visible title heading', () =
     expect(links.map((link) => link.textContent)).toEqual([
         'Apple Maps',
         'Google Maps',
-        'Baidu Maps',
+        'AMap',
+        'Tencent Maps',
     ])
+    for (const link of links) expect(link.textContent).not.toMatch(/baidu/i)
     expect(links[0]).toHaveAttribute(
         'href',
         'https://maps.apple.com/?daddr=31.2304%2C121.4737&dirflg=w',
@@ -86,10 +88,13 @@ it('opens three app options with Apple first and no visible title heading', () =
         'href',
         'https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=31.2304%2C121.4737',
     )
-    expect(links[2]).toHaveAttribute('href', expect.stringContaining('coord_type=wgs84'))
+    expect(links[2]).toHaveAttribute('href', expect.stringContaining('uri.amap.com/marker'))
+    expect(links[2]).toHaveAttribute('href', expect.stringContaining('coordinate=wgs84'))
+    expect(links[3]).toHaveAttribute('href', expect.stringContaining('apis.map.qq.com/uri/v1'))
     for (const link of links) {
         expect(link).toHaveAttribute('target', '_blank')
         expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+        expect(link.getAttribute('href')).not.toContain('baidu')
     }
 })
 

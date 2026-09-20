@@ -163,10 +163,6 @@
     left: 101px;
     top: 9px;
 }
-.mobile-sheet.mobile-contribution {
-    height: calc(100dvh - 46px);
-    bottom: 0;
-}
 .contribution-form-mobile {
     min-height: 758px;
     margin-top: -24px;
@@ -327,14 +323,17 @@
     opacity: 1;
 }
 .mobile-sheet.mobile-contribution {
-    max-height: calc(var(--contribution-viewport-height, 100dvh) - 46px);
-    bottom: var(--contribution-keyboard-offset, 0px);
+    /* Visible-window height from the shared snapshot. The shell already grows
+       by the keyboard pan, so the sheet must not add it again. */
+    height: calc(var(--map-viewport-height, 100dvh) - 46px);
+    max-height: calc(var(--map-viewport-height, 100dvh) - 46px);
+    bottom: 0;
 }
 .mobile-contribution .sheet-scroll {
     scroll-padding: 16px;
 }
 @media (max-height: 480px) {
     .mobile-sheet.mobile-contribution {
-        max-height: calc(var(--contribution-viewport-height, 100dvh) - 8px);
+        max-height: calc(var(--map-viewport-height, 100dvh) - 8px);
     }
 }

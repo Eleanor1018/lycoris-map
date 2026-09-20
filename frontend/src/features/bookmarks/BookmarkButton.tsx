@@ -35,12 +35,12 @@ function ActiveBookmarkButton({ place, language, mobile = false }: Props) {
                 label={saved ? 'Remove bookmark' : 'Bookmark place'}
                 aria-pressed={saved}
                 aria-busy={pending}
-                available={!pending && !(bookmarks.scope && bookmarks.idsPending)}
+                // Only an in-flight write for this place blocks a tap. An
+                // unresolved first read (pending or failed) leaves the state
+                // "unknown", and a tap there is an explicit save intent rather
+                // than a lost click or an automatic toggle.
+                available={!pending}
                 onClick={() => {
-                    if (bookmarks.idsError) {
-                        bookmarks.retry()
-                        return
-                    }
                     flow.requireLogin((scope) =>
                         bookmarks.controller.toggle(place, !saved, language, scope),
                     )
@@ -51,9 +51,9 @@ function ActiveBookmarkButton({ place, language, mobile = false }: Props) {
                     {ui.message(bookmarks.error)}
                 </p>
             )}
-            {bookmarks.idsError && (
+            {!bookmarks.error && bookmarks.idsError && (
                 <p className="bookmark-feedback" role="status">
-                    {ui.text('Could not load bookmarks. Click the bookmark to retry.')}
+                    {ui.message('Could not refresh bookmarks. You can still change this bookmark.')}
                 </p>
             )}
         </>

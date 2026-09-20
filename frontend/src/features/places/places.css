@@ -74,7 +74,9 @@
 }
 .mobile-sheet .has-place-results {
     padding: 0;
-    height: calc(100dvh - 46px - env(safe-area-inset-bottom, 0px));
+    /* Visible-window height from the shared snapshot; the sheet scroll area owns
+       the single safe-area inset. */
+    height: calc(var(--map-viewport-height, 100dvh) - 46px - env(safe-area-inset-bottom, 0px));
 }
 .mobile-place-results {
     top: 131px;

@@ -117,8 +117,12 @@ export const uiMessages = {
     'Compass access is blocked. Allow motion and orientation access in your browser settings to see which way you face.':
         '方向访问已被阻止，请在浏览器设置中允许动作与方向访问，以查看你面朝的方向。',
     'Stop listening': '停止语音输入',
+    'Voice search': '语音搜索',
+    'Stop voice search': '停止语音搜索',
     'Start voice search': '开始语音搜索',
     'Voice search is listening…': '正在听语音…',
+    'Finishing voice search…': '正在完成语音搜索…',
+    'Speak now…': '请开始说话…',
     'Waiting for microphone access…': '正在等待麦克风权限…',
     'Voice search is unavailable in this browser.': '当前浏览器不支持语音搜索。',
     'Voice search was denied. Allow microphone access to use it.':
@@ -142,7 +146,8 @@ export const uiMessages = {
     'Choose a navigation app': '选择导航应用',
     'Apple Maps': 'Apple 地图',
     'Google Maps': 'Google 地图',
-    'Baidu Maps': '百度地图',
+    AMap: '高德地图',
+    'Tencent Maps': '腾讯地图',
     'Edit place': '编辑点位',
     'Bookmark place': '收藏点位',
     'Remove bookmark': '取消收藏',
@@ -188,6 +193,9 @@ export const uiMessages = {
     'Log in to view your bookmarks.': '登录后查看收藏。',
     'Could not load your places. Try again.': '无法加载你的点位，请重试。',
     'Could not load bookmarks. Click the bookmark to retry.': '收藏加载失败，请点击收藏按钮重试。',
+    'Could not refresh bookmarks. You can still change this bookmark.':
+        '收藏刷新失败，你仍可修改此收藏。',
+    'Could not update this bookmark. Please try again.': '收藏更新失败，请重试。',
     'Bookmarked places': '收藏的点位',
     'Login to bookmark points or contribute.': '登录后收藏点位或参与贡献。',
     'Login to bookmark points': '登录后收藏点位',

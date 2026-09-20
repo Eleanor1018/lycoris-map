@@ -1,8 +1,21 @@
 .map-shell {
-    position: relative;
+    /* Pinned at the layout origin so no outer html/document scroll can reveal
+       the body behind it. `--map-viewport-offset-top` is the visual viewport's
+       pan inside the layout viewport (keyboard): the shell keeps its top at 0
+       and only grows taller, so its bottom edge lands on the visual bottom and
+       the offset is never applied twice. Non-map pages have neither variable
+       and keep the plain 100dvh fallback. */
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
     width: 100%;
-    height: 100dvh;
+    height: calc(var(--map-viewport-height, 100dvh) + var(--map-viewport-offset-top, 0px));
+    /* The shell only clips: `clip` (with `hidden` as the older-browser fallback)
+       cannot be scrolled programmatically, so focus()/scrollIntoView() inside the
+       sheet can no longer scroll the map itself. Scrolling stays on .sheet-scroll. */
     overflow: hidden;
+    overflow: clip;
     isolation: isolate;
     background: white;
 }
@@ -200,23 +213,56 @@
     border-color: var(--ui-brand-blush);
     box-shadow: 0 0 0 3px var(--ui-brand-blush);
 }
-.design-search .voice-search-status {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    right: 0;
-    padding: 4px 11px;
-    border-radius: 12px;
-    background: var(--ui-nav-surface);
-    color: var(--ui-brand-deep);
-    font: 400 12px/16px var(--ui-font-body);
+/* A discrete voice body that occupies the panel's content position instead of
+   floating over the cards. Containers place it via the rules below. */
+.voice-search-body {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    padding: 11px;
+    border-radius: 22px;
+    background: white;
+    box-shadow: 0 4px 16px #0000000a;
 }
-.design-search .voice-search-error {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    right: 0;
-    z-index: 20;
+/* Status and Stop stay visible inside the viewport; only the transcript scrolls. */
+.voice-search-status,
+.voice-search-stop {
+    flex-shrink: 0;
+}
+.voice-search-status {
+    color: var(--ui-brand-deep);
+    font: 510 13px/17px var(--ui-font-body);
+}
+.voice-search-text {
+    margin: 0;
+    min-height: 22px;
+    color: black;
+    font: 400 17px/22px var(--ui-font-body);
+    letter-spacing: -0.5px;
+    overflow-wrap: anywhere;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+.voice-search-stop {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 44px;
+    padding: 0 11px;
+    border: 0;
+    border-radius: 22px;
+    background: var(--ui-brand-blush);
+    color: var(--ui-brand-deep);
+    font: 590 17px/20px var(--ui-font-body);
+    letter-spacing: -0.5px;
+    cursor: pointer;
+}
+.voice-search-stop:disabled {
+    cursor: default;
+    opacity: 0.7;
+}
+.voice-search-error {
     display: flex;
     align-items: center;
     gap: 4px;
@@ -227,15 +273,31 @@
     font: 400 12px/16px var(--ui-font-body);
     box-shadow: 0 4px 16px #00000014;
 }
-.design-search .voice-search-error > span {
+.voice-search-error > span {
     flex: 1;
     min-width: 0;
     overflow-wrap: anywhere;
 }
-.design-search .voice-search-dismiss {
+.voice-search-dismiss {
     flex: 0 0 28px;
     width: 28px;
     height: 28px;
+}
+/* The desktop search control and its voice body are absolutely placed. The body
+   is capped to the remaining viewport height, so status and Stop stay visible. */
+.desktop-panel .voice-search-body {
+    position: absolute;
+    top: 136px;
+    left: 16px;
+    width: 288px;
+    max-height: calc(var(--map-viewport-height, 100dvh) - 136px - 22px);
+}
+.desktop-panel .voice-search-error {
+    position: absolute;
+    top: 136px;
+    left: 16px;
+    width: 288px;
+    z-index: 20;
 }
 .nearby-heading {
     position: absolute;
@@ -556,12 +618,16 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: calc(100dvh - 46px);
+    /* Same snapshot as the shell: the sheet is capped to the visible height so
+       its fully expanded top stays 46px below the visible top edge. */
+    height: calc(var(--map-viewport-height, 100dvh) - 46px);
     border-radius: 10px 10px 0 0;
     background: var(--ui-nav-surface);
     box-shadow: 0 0 6px #00000021;
     z-index: 10;
+    /* Clip only; .sheet-scroll owns the actual scrolling. */
     overflow: hidden;
+    overflow: clip;
 }
 .sheet-handle {
     position: absolute;
@@ -643,6 +709,20 @@
     left: var(--mobile-content-inset);
     top: 72px;
     width: calc(100% - 2 * var(--mobile-content-inset) - 44px - 6px);
+    z-index: 1;
+}
+/* In the menu the voice body occupies the nearby/bookmarks/settings area (the
+   sections are unmounted while engaged), so it never covers the cards. It is
+   capped to the remaining viewport height so status and Stop stay visible. */
+.mobile-search-content .voice-search-body,
+.mobile-search-content .voice-search-error {
+    position: absolute;
+    top: 160px;
+    left: var(--mobile-content-inset);
+    right: var(--mobile-content-inset);
+}
+.mobile-search-content .voice-search-body {
+    max-height: calc(var(--map-viewport-height, 100dvh) - 206px - 22px);
 }
 .mobile-search input {
     font-size: 16px;
@@ -828,6 +908,13 @@
     width: 28px;
     height: 28px;
 }
+/* Widen the tap target to 44px without moving the 28px icon or the right-aligned
+   layout: a transparent pseudo-element extends the hit area symmetrically. */
+.mobile-bookmark::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+}
 .map-shell[data-mobile='true'] .map-tools {
     right: 10px;
     background: #f7f7f6;
@@ -847,16 +934,16 @@
     transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .map-shell[data-mobile='true'] {
-    --sheet-height: min(158px, calc(100dvh - 46px));
+    --sheet-height: min(158px, calc(var(--map-viewport-height, 100dvh) - 46px));
 }
 .map-shell[data-mobile='true'][data-snap='half'] {
-    --sheet-height: min(326px, calc(100dvh - 46px));
+    --sheet-height: min(326px, calc(var(--map-viewport-height, 100dvh) - 46px));
 }
 .map-shell[data-mobile='true'][data-snap='full'] {
-    --sheet-height: calc(100dvh - 46px);
+    --sheet-height: calc(var(--map-viewport-height, 100dvh) - 46px);
 }
 .map-shell[data-mobile='true'][data-panel='details'] {
-    --sheet-height: min(433px, calc(100dvh - 46px));
+    --sheet-height: min(433px, calc(var(--map-viewport-height, 100dvh) - 46px));
 }
 @media (max-width: 374px) {
     .mobile-sheet .category-card {

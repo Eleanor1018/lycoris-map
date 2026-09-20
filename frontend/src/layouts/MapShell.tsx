@@ -1,16 +1,25 @@
 import { usePreferences } from '@/features/preferences/PreferencesProvider'
 import { isSettingsPanel, settingsTitles, SettingsContent } from '@/features/preferences/Settings'
 import { useUi } from '@/shared/i18n/ui'
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import {
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    useState,
+    type CSSProperties,
+} from 'react'
 import type { Map as LeafletMap } from 'leaflet'
 import { useNavigate } from 'react-router'
 import { MobileSheet } from './MobileSheet'
-import { useMobileLayout, useViewportHeight } from './useMobileLayout'
+import { useMobileLayout } from './useMobileLayout'
+import { useViewportSnapshot } from './viewport'
 import { MapSurface } from '@/features/map/MapSurface'
 import { HeadingPermission } from '@/features/map/HeadingPermission'
 import { MapSourcePicker } from '@/features/map/MapSourcePicker'
 import { FigmaIcon, type FigmaIconName } from '@/shared/ui/figma-icon'
 import { DesignButton, IconButton } from './primitives'
+import type { VoiceSearchState } from '@/shared/ui/design-primitives'
 import { DesktopPanel } from './DesktopPanel'
 import { usePanelRoute } from './usePanelRoute'
 import type { DesignSample, Panel, Snap } from './types'
@@ -89,7 +98,10 @@ export function MapShell({
     useEffect(() => {
         if (mobile && panel === 'contribute') open('contribute-form', 'nav-contribute', true)
     }, [mobile, panel, open])
-    const viewportHeight = useViewportHeight()
+    // One visual-viewport snapshot feeds both the CSS shell height and every JS
+    // sheet calc, so `100dvh` can never disagree with `innerHeight` again.
+    const viewport = useViewportSnapshot()
+    const viewportHeight = viewport.height
     const navigate = useNavigate()
     const mobileFixture = Boolean(sample) && location.pathname === '/__design/mobile'
     const params = new URLSearchParams(location.search)
@@ -108,13 +120,14 @@ export function MapShell({
     const [detailHeight, setDetailHeight] = useState(433)
     const [menuHeight, setMenuHeight] = useState<number | null>(null)
     const [nearbyHeight, setNearbyHeight] = useState(326)
+    const [voice, setVoice] = useState(false)
     const mainMenu =
         (panel === 'initial' || panel === 'search') &&
         browse?.mode !== 'search' &&
         browse?.mode !== 'cluster'
     const fullSheetHeight = Math.min(
         viewportHeight - 46,
-        mainMenu ? (menuHeight ?? Infinity) : Infinity,
+        mainMenu && !voice ? (menuHeight ?? Infinity) : Infinity,
     )
     const halfSheetHeight = Math.min(mainMenu ? nearbyHeight : 320, fullSheetHeight)
     const sheetHeight =
@@ -125,7 +138,26 @@ export function MapShell({
               : snap === 'half'
                 ? halfSheetHeight
                 : Math.min(158, viewportHeight - 46)
-    const sheetTop = viewportHeight - sheetHeight
+    // Top edge of the sheet in the shell's own (layout-origin) coordinates. The
+    // shell is anchored at the layout origin and is `bottom` tall, so the sheet
+    // top is `viewport.bottom - sheetHeight`; the tool controls are placed at
+    // shell-relative offsets (54px / 152px) and must be compared in the same
+    // frame, not in visual-window coordinates where the keyboard pan is dropped.
+    const sheetTop = viewport.bottom - sheetHeight
+    // Publish the shared snapshot on the document root for every map layout, so
+    // the shell and portalled overlays (the account dialog) read the same numbers
+    // on phones, landscape and tablets alike. Desktop values are unchanged
+    // because a normal desktop visual viewport equals innerHeight. Non-map pages
+    // never set these and fall back to 100dvh.
+    useLayoutEffect(() => {
+        const root = document.documentElement
+        root.style.setProperty('--map-viewport-height', `${viewportHeight}px`)
+        root.style.setProperty('--map-viewport-offset-top', `${viewport.offsetTop}px`)
+        return () => {
+            root.style.removeProperty('--map-viewport-height')
+            root.style.removeProperty('--map-viewport-offset-top')
+        }
+    }, [viewportHeight, viewport.offsetTop])
     const setSnap = (next: Snap) => {
         const nextParams = new URLSearchParams(location.search)
         nextParams.set(mobileFixture ? 'screen' : 'snap', next)
@@ -186,6 +218,15 @@ export function MapShell({
             if (mobile && (snap !== 'full' || panel !== 'search')) showMobileSearch('full')
         } else setSearch(value)
     }
+    // The mic click expands the menu to its maximum immediately, before any
+    // permission or recognition result. Keeping the SearchField mounted (only
+    // its props/state change) is what stops the recording from being cancelled.
+    const onMic = () => {
+        if (mobile && (snap !== 'full' || panel !== 'search')) showMobileSearch('full')
+    }
+    const onVoiceChange = useCallback((next: VoiceSearchState) => {
+        setVoice(next.active || next.finishing)
+    }, [])
     const nearbyCategory = params.get('nearbyCategory')
     const requestedCategory =
         nearbyCategory === 'baby_room' || nearbyCategory === 'friendly_clinic'
@@ -481,6 +522,9 @@ export function MapShell({
                     sample={sample}
                     search={browse?.search ?? search}
                     setSearch={updateSearch}
+                    voice={voice}
+                    onMic={onMic}
+                    onVoiceChange={onVoiceChange}
                     openDetails={(focusId) => open('details', focusId)}
                     close={close}
                     height={sheetHeight}
