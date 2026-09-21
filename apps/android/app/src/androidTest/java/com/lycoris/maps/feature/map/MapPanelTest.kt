@@ -163,6 +163,67 @@ class MapPanelTest {
         compose.runOnIdle { assertEquals(expected, visible, 2f) }
     }
 
+    // A held drag whose underlying result set grows must keep the finger's progress. The
+    // list is short enough not to scroll internally, so the drag reaches the sheet through
+    // the LazyColumn's touch target rather than the grabber.
+    @Test fun contentResizeDuringHeldListDragKeepsFingerProgress() {
+        contentResizeDuringHeldDragKeepsFingerProgress(dragFrom = "panel-list")
+    }
+
+    // The same held-content-growth case must also hold when the gesture starts on the grabber
+    // and is owned by the outer anchoredDraggable.
+    @Test fun contentResizeDuringHeldGrabberDragKeepsFingerProgress() {
+        contentResizeDuringHeldDragKeepsFingerProgress(dragFrom = "panel-grabber")
+    }
+
+    private fun contentResizeDuringHeldDragKeepsFingerProgress(dragFrom: String) {
+        val extraResults = mutableStateOf(0)
+        var headerY = 0f
+        compose.setContent {
+            LycorisTheme {
+                BoxWithConstraints(Modifier.fillMaxWidth().height(620.dp), contentAlignment = Alignment.BottomCenter) {
+                    val density = LocalDensity.current
+                    MapPanel(with(density) { maxHeight.toPx() }, with(density) { 284.dp.toPx() },
+                        PanelStop.MIDDLE, "Nearby", {}, {}) {
+                        item("header") {
+                            Box(Modifier.fillMaxWidth().height(120.dp)
+                                .onGloballyPositioned { headerY = it.positionInRoot().y }) {
+                                Text("Nearby categories")
+                            }
+                        }
+                        items(2, key = { "nearby-$it" }) { Text("Nearby result $it", Modifier.fillMaxWidth().height(72.dp)) }
+                        items(extraResults.value, key = { "late-$it" }) { Text("Late result $it", Modifier.fillMaxWidth().height(72.dp)) }
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+        val middleY = headerY
+        // Press on the chosen surface and drag the sheet downward without releasing. Touch
+        // coordinates are root-relative, so the gesture is dispatched on the root.
+        val start = compose.onNodeWithTag(dragFrom).fetchSemanticsNode().boundsInRoot.center
+        val rootOrigin = compose.onRoot().fetchSemanticsNode().boundsInRoot.topLeft
+        try {
+            compose.onRoot().performTouchInput { down(start - rootOrigin) }
+            repeat(4) {
+                compose.onRoot().performTouchInput { moveBy(Offset(0f, 40f)) }
+                compose.waitForIdle()
+            }
+            val heldY = headerY
+            assertTrue("A held downward drag must move the panel away from its middle detent", heldY > middleY + 1f)
+            // An asynchronous result set arrives while the finger is still down.
+            compose.runOnIdle { extraResults.value = 6 }
+            compose.waitForIdle()
+            val afterResizeY = headerY
+            assertEquals(
+                "Content growth during a held drag must keep the finger's progress; middleY=$middleY heldY=$heldY afterResizeY=$afterResizeY",
+                heldY, afterResizeY, 1f,
+            )
+        } finally {
+            compose.onRoot().performTouchInput { up() }
+        }
+    }
+
     @Test fun fiveThousandRowsComposeOnlyNearTheViewportAndLastRowIsReachable() {
         val active = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()
         val entered = java.util.concurrent.ConcurrentHashMap.newKeySet<Int>()

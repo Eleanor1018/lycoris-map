@@ -10,6 +10,8 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.ScrollScope
 import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.gestures.animateTo
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
@@ -59,8 +61,21 @@ fun MapPanel(
     val currentRequestedStop by rememberUpdatedState(requestedStop)
     val currentPageKey by rememberUpdatedState(pageKey)
     val flingThreshold = with(density) { 300.dp.toPx() }
+    // Real drag signals from Foundation: the outer anchoredDraggable handle and the list itself.
+    val handleInteractions = remember { MutableInteractionSource() }
+    val handleDragging by handleInteractions.collectIsDraggedAsState()
+    val listDragging by scroll.interactionSource.collectIsDraggedAsState()
+    val isUserDragging = handleDragging || listDragging
+    // Remember which page/stop owned the drag so it never leaks into a new page or an explicit
+    // external stop request.
+    var dragControl by remember { mutableStateOf<Pair<String, PanelStop>?>(null) }
+    LaunchedEffect(isUserDragging) {
+        dragControl = if (isUserDragging) currentPageKey to currentRequestedStop else null
+    }
 
-    LaunchedEffect(requestedStop, pageKey, geometry) {
+    // Programmatic control follows explicit stop/page changes only. Re-measurement updates
+    // anchors in place without stealing an in-progress gesture.
+    LaunchedEffect(requestedStop, pageKey) {
         val target = geometry.anchorFor(requestedStop)
         if (state.targetValue != target) state.animateTo(target, spring(dampingRatio = 0.9f, stiffness = 420f))
     }
@@ -144,6 +159,17 @@ fun MapPanel(
         ).layout { measurable, constraints ->
             val placeable = measurable.measure(constraints)
             val measuredGeometry = PanelGeometry.measure(availableHeight, placeable.height.toFloat(), middleContentHeight, collapsed)
+            val previousGeometry = geometry
+            val previousOffset = state.offset
+            // A held drag keeps its visible top. The parent is BottomCenter, so when the content
+            // full height changes the sheet origin moves; add the full delta to the raw offset and
+            // clamp into the new bounds. Guard on the same page/stop and a finite offset, and also
+            // correct when only middle changes while full stays equal.
+            val heldOffset = if (isUserDragging && dragControl == (currentPageKey to currentRequestedStop) &&
+                previousOffset.isFinite() && measuredGeometry != previousGeometry) {
+                (previousOffset + (measuredGeometry.full - previousGeometry.full))
+                    .coerceIn(0f, measuredGeometry.offset(PanelStop.COLLAPSED))
+            } else null
             // Update anchors before placing this measured height. Feeding onSizeChanged back
             // through composition placed new content at the previous height's offset for a frame.
             geometry = measuredGeometry
@@ -152,6 +178,9 @@ fun MapPanel(
                 if (measuredGeometry.full > measuredGeometry.middle + 1f) PanelStop.EXPANDED at 0f
                 PanelStop.MIDDLE at measuredGeometry.offset(PanelStop.MIDDLE)
             }, newTarget = measuredGeometry.anchorFor(currentRequestedStop))
+            // Compensate in the same measured pass; do not defer through a SideEffect, and do not
+            // leave the placement reading a state offset that no longer matches the finger.
+            if (heldOffset != null) state.dispatchRawDelta(heldOffset - state.offset)
             layout(placeable.width, placeable.height) {
                 val offset = state.offset.takeIf { it.isFinite() }.orEmptyOffset(measuredGeometry).roundToInt()
                 placeable.placeRelative(0, offset)
@@ -161,7 +190,7 @@ fun MapPanel(
         }
             .clip(RoundedCornerShape(topStart = 25.dp, topEnd = 25.dp))
             .background(LycorisColors.Surface).nestedScroll(connection)
-            .anchoredDraggable(state, Orientation.Vertical, flingBehavior = userFling)
+            .anchoredDraggable(state, Orientation.Vertical, interactionSource = handleInteractions, flingBehavior = userFling)
             .semantics {
                 paneTitle = pageKey
                 expand { scope.launch { settleUserStop(PanelStop.EXPANDED) }; true }
