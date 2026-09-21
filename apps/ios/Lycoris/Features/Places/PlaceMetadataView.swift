@@ -17,7 +17,7 @@ struct PlaceVenueTag: View {
   var body: some View {
     Label(venue.title(language: appLanguage), systemImage: venue.symbol)
       .font(.caption.weight(.medium))
-      .labelStyle(.titleAndIcon)
+      .labelStyle(VenueTagLabelStyle())
       .foregroundStyle(.primary)
       .padding(.horizontal, 8)
       .padding(.vertical, 3)
@@ -25,6 +25,16 @@ struct PlaceVenueTag: View {
       .accessibilityElement(children: .ignore)
       .accessibilityLabel(venue.title(language: appLanguage))
       .accessibilityIdentifier("place.venue")
+  }
+}
+
+/// Use each symbol's natural width instead of List's reserved row-icon column.
+private struct VenueTagLabelStyle: LabelStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    HStack(spacing: 4) {
+      configuration.icon
+      configuration.title
+    }
   }
 }
 
