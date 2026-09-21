@@ -80,7 +80,7 @@ fun HomeScreen(
     onQuery: (String) -> Unit,
     onSearch: () -> Unit,
     onVoice: () -> Unit,
-    initials: String,
+    accountAvatar: @Composable () -> Unit,
     onAccount: () -> Unit,
     onLocate: () -> Unit,
     onNearby: (String?) -> Unit,
@@ -180,7 +180,7 @@ fun HomeScreen(
         }
         SearchBar(query, onQuery, {
             focus.clearFocus(); stop = PanelStop.EXPANDED; onSearch()
-        }, onVoice, initials, onAccount, chinese,
+        }, onVoice, accountAvatar, onAccount, chinese,
             Modifier.align(Alignment.TopCenter).padding(top = topInset + 4.dp, start = 8.dp, end = 8.dp).onSizeChanged { measuredSearchHeight = it.height.toFloat() })
         Column(Modifier.align(Alignment.TopEnd).padding(top = topInset + searchHeight + 16.dp, end = 13.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             MapTool("layers", if (chinese) "地图来源" else "Map source", onMapSource)
@@ -225,7 +225,9 @@ fun HomeScreen(
             ) {
                 item(key = "panel-header", contentType = "header") {
                 if (secondary) {
-                    PanelTitle(secondaryTitle.orEmpty(), onCloseSecondary, chinese, startPadding = 30.dp, topPadding = 12.dp, bottomPadding = 8.dp)
+                    val detail = secondaryKey?.startsWith("detail:") == true
+                    PanelTitle(secondaryTitle.orEmpty(), onCloseSecondary, chinese, startPadding = 30.dp,
+                        topPadding = if (detail) 11.dp else 12.dp, bottomPadding = if (detail) 11.dp else 8.dp)
                 } else {
                     Column(Modifier.fillMaxWidth().onSizeChangedCompat { if (section != MainSection.BOOKMARKS) middleMeasured = it + with(density) { 12.dp.toPx() } }) {
                         PanelTitle(when (section) {
@@ -275,7 +277,7 @@ private fun Modifier.onSizeChangedCompat(onHeight: (Float) -> Unit): Modifier = 
 )
 
 @Composable
-private fun SearchBar(query: String, onQuery: (String) -> Unit, onSearch: () -> Unit, onVoice: () -> Unit, initials: String, onAccount: () -> Unit, chinese: Boolean, modifier: Modifier) {
+internal fun SearchBar(query: String, onQuery: (String) -> Unit, onSearch: () -> Unit, onVoice: () -> Unit, accountAvatar: @Composable () -> Unit, onAccount: () -> Unit, chinese: Boolean, modifier: Modifier) {
     Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), color = Color(0xFFFAFCF9), shadowElevation = 2.dp) {
         Row(Modifier.heightIn(min = 60.dp).padding(start = 12.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             FigmaIcon("search", Modifier.size(20.dp))
@@ -287,7 +289,7 @@ private fun SearchBar(query: String, onQuery: (String) -> Unit, onSearch: () -> 
             IconButton(onVoice, Modifier.size(48.dp)) { Icon(Icons.Rounded.MicNone, if (chinese) "语音搜索" else "Voice search", Modifier.size(20.dp), tint = Color(0xFF88898B)) }
             Box(Modifier.size(48.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onAccount)
                 .semantics { contentDescription = if (chinese) "账号" else "Account" }, contentAlignment = Alignment.Center) {
-                Box(Modifier.size(36.dp).background(Color(0xFFC7C7CB), CircleShape), contentAlignment = Alignment.Center) { Text(initials, fontSize = 14.sp, color = Color(0xFFF7F7F6)) }
+                accountAvatar()
             }
         }
     }

@@ -95,7 +95,7 @@ fun LycorisRoot(model: HomeViewModel) {
     }
     PlaceImageScope(model.container.clients, account) {
     HomeScreen(map, zh, section, model::selectSection, query, model::setQuery, model::search, devices.onVoice,
-        account.user?.displayName?.take(2)?.uppercase().orEmpty().ifEmpty { "AA" }, model::account, devices.onLocate,
+        { SearchAccountAvatar(account, model.container.clients, preferences.language) }, model::account, devices.onLocate,
         { category ->
             val fix = devices.location.fix
             model.nearby(category, fix?.latitude ?: map.camera.latitude, fix?.longitude ?: map.camera.longitude)

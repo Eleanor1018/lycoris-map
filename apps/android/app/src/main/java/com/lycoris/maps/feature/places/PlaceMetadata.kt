@@ -59,6 +59,23 @@ private fun MetadataTag(label: String, warning: Boolean = false) {
 
 @Composable
 fun PlaceHours(place: Marker, chinese: Boolean) {
+    if (place.hoursLabel(chinese) == null) return
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { HoursBadges(place, chinese) }
+}
+
+/** Keep detail metadata together, wrapping only when text or the available width requires it. */
+@Composable
+fun PlaceMetadataRow(place: Marker, chinese: Boolean) {
+    if (place.venue == null && place.hoursLabel(chinese) == null) return
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(11.dp), verticalArrangement = Arrangement.spacedBy(11.dp),
+        itemVerticalAlignment = Alignment.CenterVertically) {
+        PlaceVenueTag(place, chinese)
+        HoursBadges(place, chinese)
+    }
+}
+
+@Composable
+private fun HoursBadges(place: Marker, chinese: Boolean) {
     val hours = place.hoursLabel(chinese) ?: return
     val status = place.openingStatus(LocalPlaceTime.current)
     val label = when (status) {
@@ -67,16 +84,14 @@ fun PlaceHours(place: Marker, chinese: Boolean) {
         else -> null
     }
     val warning = status == OpeningStatus.CLOSING_SOON
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Surface(shape = MaterialTheme.shapes.small,
-            color = if (warning) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
-            contentColor = if (warning) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer) {
-            Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Icon(Icons.Rounded.Schedule, null, Modifier.size(18.dp))
-                Text(listOfNotNull(label, hours).joinToString(" · "), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
-            }
+    Surface(shape = MaterialTheme.shapes.small,
+        color = if (warning) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
+        contentColor = if (warning) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer) {
+        Row(Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Icon(Icons.Rounded.Schedule, null, Modifier.size(18.dp))
+            Text(listOfNotNull(label, hours).joinToString(" · "), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
         }
-        if (warning) MetadataTag(if (chinese) "即将结束营业" else "Closing soon", warning = true)
     }
+    if (warning) MetadataTag(if (chinese) "即将结束营业" else "Closing soon", warning = true)
 }

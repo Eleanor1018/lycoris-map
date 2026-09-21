@@ -77,19 +77,18 @@ private fun PlaceRow(place: Marker, clients: ApiClients, account: AccountState, 
 
 @Composable
 fun PlaceDetailContent(place: Marker, clients: ApiClients, account: AccountState, chinese: Boolean, referenceLat: Double, referenceLng: Double, onFavorite: () -> Unit, onNavigate: () -> Unit, onShare: () -> Unit, onEdit: () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 30.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(categoryName(place.category, chinese), Modifier.weight(1f), color = LycorisColors.SecondaryText)
-            IconButton(onEdit) { Icon(Icons.Rounded.Edit, if (chinese) "编辑点位" else "Edit place", tint = LycorisColors.Plum) }
+            Text(distanceLabel(referenceLat, referenceLng, place.lat, place.lng), fontSize = 15.sp, color = LycorisColors.SecondaryText)
         }
-        PlaceVenueTag(place, chinese)
-        Text(distanceLabel(referenceLat, referenceLng, place.lat, place.lng), fontSize = 15.sp, color = LycorisColors.SecondaryText)
-        PlaceHours(place, chinese)
+        PlaceMetadataRow(place, chinese)
         if (!place.markImage.isNullOrBlank()) PlacePhoto(place, clients, account, Modifier.fillMaxWidth().aspectRatio(16f / 9).clip(RoundedCornerShape(16.dp)), true, chinese)
         place.description?.takeIf(String::isNotBlank)?.let { Text(it, fontSize = 16.sp, lineHeight = 23.sp) }
         if (place.reviewStatus != "APPROVED") Text(if (chinese) "待审核" else "Pending review", color = LycorisColors.Primary)
-        Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             IconButton(onShare) { Icon(Icons.Rounded.Share, if (chinese) "分享点位" else "Share place") }
+            IconButton(onEdit) { Icon(Icons.Rounded.Edit, if (chinese) "编辑点位" else "Edit place", tint = LycorisColors.Plum) }
             Spacer(Modifier.weight(1f))
             FilledTonalButton(onNavigate) {
                 Text(if (chinese) "导航" else "Navigate")
