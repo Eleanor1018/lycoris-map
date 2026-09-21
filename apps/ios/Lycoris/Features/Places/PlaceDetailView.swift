@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PlaceDetailView: View {
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+  @Environment(\.lycorisMetadataNow) private var metadataNow
   let place: PlacePresentation
   let bottomInset: CGFloat
   var state: PlaceStore.LoadState = .idle
@@ -41,6 +42,18 @@ struct PlaceDetailView: View {
         }
         .padding(.horizontal, 24).padding(.top, 10)
 
+        if !hasFailed, place.venue != nil || placeClosingSoon {
+          let tagLayout =
+            dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
+            : AnyLayout(HStackLayout(spacing: 8))
+          tagLayout {
+            if let venue = place.venue { PlaceVenueTag(venue: venue) }
+            PlaceClosingSoonTag(place: place)
+          }
+          .padding(.horizontal, 24).padding(.top, 8)
+        }
+
         PlaceLoadStatus(state: state, retry: onRetry).padding(.horizontal, 18)
         if !hasFailed {
           let metadataLayout =
@@ -49,7 +62,7 @@ struct PlaceDetailView: View {
             : AnyLayout(HStackLayout(spacing: 16))
           metadataLayout {
             if !place.distance.isEmpty { Text(place.distance) }
-            Text(place.openingHours)
+            PlaceOpeningHoursView(place: place, suppressesClosingSoonText: placeClosingSoon)
           }
           .font(.subheadline).foregroundStyle(.secondary)
           .padding(.horizontal, 24).padding(.top, 10)
@@ -118,6 +131,10 @@ struct PlaceDetailView: View {
   private var hasFailed: Bool {
     if case .failed = state { return true }
     return false
+  }
+
+  private var placeClosingSoon: Bool {
+    place.openingStatus(at: metadataNow) == .closingSoon
   }
 
   private func actionLabel(

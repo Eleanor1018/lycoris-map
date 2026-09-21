@@ -15,8 +15,20 @@ struct Marker: Codable, Equatable, Sendable {
   let contentLanguage: String
   var isPublic: Bool? = nil
   var reviewStatus: String? = nil
+  /// Controlled venue tag. Kept as a raw `String?` so a future/unknown server
+  /// value can never fail the whole list decode; use `venue` for display.
+  var venueType: String? = nil
+  /// Server-owned IANA opening-hours time zone. Read-only: never inferred from
+  /// the device and never written back by the app.
+  var hoursTimezone: String? = nil
 
   var point: GeoPoint? { GeoPoint(latitude: lat, longitude: lng) }
+  /// Only an accessible toilet may show or speak a venue tag. A stale or
+  /// malformed venue on another category is ignored rather than displayed.
+  var venue: PlaceVenue? {
+    guard category == .toilet else { return nil }
+    return venueType.flatMap(PlaceVenue.init(rawValue:))
+  }
 }
 
 enum PlaceCategory: String, Codable, CaseIterable, Sendable {

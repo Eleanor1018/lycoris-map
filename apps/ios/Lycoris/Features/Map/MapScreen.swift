@@ -34,6 +34,9 @@ struct MapScreen: View {
   @State private var bookmarkIntent = UUID()
   @State private var showsAccountError = false
   @Environment(\.scenePhase) private var scenePhase
+  /// One shared clock for every place's real-time opening status. All rows,
+  /// details and sheets read this instead of each starting their own timer.
+  @State private var metadataNow = Date()
   @State private var showsLocationError = false
   @State private var showsNavigationError = false
   private var selectedPlace: PlacePresentation? {
@@ -81,7 +84,10 @@ struct MapScreen: View {
     self.bookmarks = bookmarks
   }
 
-  var body: some View {
+  /// The map/panel/tools surface. Kept as a separate opaque view so the very
+  /// large modifier chain does not have to be type-checked as one expression
+  /// together with the lifecycle, sheet and alert modifiers in `body`.
+  private var mapSurface: some View {
     GeometryReader { geometry in
       let layout = PanelLayout(
         viewport: CGSize(
@@ -93,11 +99,7 @@ struct MapScreen: View {
         headerHeight: max(44, searchHeight) + 58,
         nearbyContentHeight: titleHeight + 8 + cardHeight
           * (dynamicTypeSize.isAccessibilitySize ? 3 : 2) + 24,
-        detailHeight: selectedPlace == nil
-          ? nil
-          : 208 + (selectedPlace?.hasPhoto == true ? (geometry.size.width - 30) * 198 / 353 : 0)
-            + (selectedPlace?.distanceReference != nil ? 30 : 0)
-            + max(geometry.safeAreaInsets.bottom, 29),
+        detailHeight: detailHeight(geometry: geometry),
         collapsedHeaderHeight: max(44, searchHeight) + 28
       )
       let panelTop = layout.clampedTop(layout.top(for: detent) + dragTranslation)
@@ -108,6 +110,9 @@ struct MapScreen: View {
       let toolsVisible = panelTop > layout.topInset + 270 && !isSearchFocused && !selectingLocation
       // Keep attribution fixed above the panel's lowest resting position.
       let mapBottomInset = layout.viewport.height - layout.collapsedTop + 10
+      let showsUserLocation =
+        !store.isPreview && location.hasRequestedLocation && location.isAuthorized
+      let isActive = scenePhase == .active
 
       ZStack(alignment: .topLeading) {
         NativeMapView(
@@ -115,9 +120,9 @@ struct MapScreen: View {
           appearance: preferences.mapAppearance,
           coordinateSpace: mapCoordinates.space,
           places: mapPlaces, language: preferences.language, focus: store.focus,
-          showsUserLocation: !store.isPreview && location.hasRequestedLocation
-            && location.isAuthorized, isActive: scenePhase == .active, animated: !reduceMotion,
+          showsUserLocation: showsUserLocation, isActive: isActive, animated: !reduceMotion,
           isSelectingLocation: selectingLocation, selectedLocation: pickedLocation,
+          metadataNow: metadataNow,
           onPickLocation: pickLocation,
           onUnresolvedCoordinate: coordinateUnavailable,
           onViewport: { store.viewportChanged($0) },
@@ -205,6 +210,13 @@ struct MapScreen: View {
       .frame(width: layout.viewport.width, height: layout.viewport.height)
       .offset(y: -geometry.safeAreaInsets.top)
     }
+  }
+
+  /// The map surface plus its presentation modifiers (sheets, alerts, links).
+  /// Kept separate from the lifecycle/observation modifiers so no single SwiftUI
+  /// expression grows beyond what the type-checker can handle.
+  private var mapPresentations: some View {
+    mapSurface
     .ignoresSafeArea(.keyboard)
     .sensoryFeedback(.selection, trigger: locationPickFeedback)
     .alert(Text("Map unavailable", tableName: "Coordinates"), isPresented: $showsCoordinateError) {
@@ -312,6 +324,10 @@ struct MapScreen: View {
     } message: {
       Text("Check the link and close any open sheet before trying again.")
     }
+  }
+
+  var body: some View {
+    mapPresentations
     .onChange(of: preferences.language) { _, _ in
       cancelVoiceSearch()
       applyPreferences()
@@ -336,6 +352,12 @@ struct MapScreen: View {
         await account.restore()
         contribution.synchronize()
       }
+    }
+    // A single minute-boundary clock for opening status. It restarts when the
+    // scene becomes active and refreshes immediately on return to foreground;
+    // it never triggers a network request or moves the map.
+    .task(id: scenePhase) {
+      await runMetadataClock()
     }
     .onChange(of: scenePhase) { _, phase in
       if phase == .background
@@ -435,12 +457,8 @@ struct MapScreen: View {
     .onReceive(
       NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
     ) { notification in
-      guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
-      else { return }
-      let screenHeight =
-        UIApplication.shared.connectedScenes
-        .compactMap { $0 as? UIWindowScene }.first?.screen.bounds.height ?? 0
-      keyboardHeight = max(0, screenHeight - frame.minY)
+      guard let height = Self.keyboardHeight(from: notification) else { return }
+      keyboardHeight = height
     }
     .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification))
     { _ in
@@ -448,6 +466,74 @@ struct MapScreen: View {
     }
     .environment(\.locale, preferences.language.locale)
     .environment(\.lycorisAppLanguage, preferences.language)
+    .environment(\.lycorisMetadataNow, metadataNow)
+  }
+
+  /// The on-screen keyboard height from a frame-change notification, kept out
+  /// of the view expression to reduce SwiftUI type-check complexity. Returns
+  /// `nil` when the notification has no usable frame, so the caller keeps the
+  /// previous height exactly as the original inline guard did.
+  private static func keyboardHeight(from notification: Notification) -> CGFloat? {
+    guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
+    else { return nil }
+    let screenHeight =
+      UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }.first?.screen.bounds.height ?? 0
+    return max(0, screenHeight - frame.minY)
+  }
+
+  /// Refreshes the shared opening-status clock on every minute boundary while
+  /// the scene is active, and immediately on foreground return. Cancellation
+  /// (scene change, view teardown) exits the loop without leaving a timer. It
+  /// performs no network work and does not touch the map.
+  private func runMetadataClock() async {
+    guard scenePhase == .active else { return }
+    let fixed = Self.fixedMetadataNow()
+    if let fixed {
+      metadataNow = fixed
+      return
+    }
+    while !Task.isCancelled {
+      let now = Date()
+      metadataNow = now
+      let interval = 60 - (now.timeIntervalSince1970.truncatingRemainder(dividingBy: 60))
+      do {
+        try await Task.sleep(for: .seconds(interval))
+      } catch {
+        return
+      }
+    }
+  }
+
+  /// A fixed test clock for reproducible closing-soon tests. Only a Debug build
+  /// with local test support honors the launch argument; Release always uses
+  /// the real current time.
+  private static func fixedMetadataNow() -> Date? {
+    #if DEBUG && LYCORIS_LOCAL_TESTS
+      let arguments = ProcessInfo.processInfo.arguments
+      guard let index = arguments.firstIndex(of: "-lycoris-test-metadata-now"),
+        arguments.indices.contains(index + 1),
+        let seconds = TimeInterval(arguments[index + 1]),
+        seconds.isFinite
+      else { return nil }
+      return Date(timeIntervalSince1970: seconds)
+    #else
+      return nil
+    #endif
+  }
+
+  /// Estimated detail height including the venue/status metadata row, kept out
+  /// of the main `body` so the type-checker has a smaller expression.
+  private func detailHeight(geometry: GeometryProxy) -> CGFloat? {
+    guard let selectedPlace else { return nil }
+    var height: CGFloat = 208
+    if selectedPlace.hasPhoto {
+      height += (geometry.size.width - 30) * 198 / 353
+    }
+    if selectedPlace.distanceReference != nil { height += 30 }
+    if selectedPlace.venue != nil { height += 30 }
+    height += max(geometry.safeAreaInsets.bottom, 29)
+    return height
   }
 
   private func applyPreferences() {

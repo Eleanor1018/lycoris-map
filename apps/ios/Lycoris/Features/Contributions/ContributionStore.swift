@@ -78,8 +78,9 @@ final class ContributionStore {
     else { throw AccountFailure(status: 401) }
     if draft?.phase == .complete { try discard() }
     guard draft == nil else { return }
-    let value = ContributionDraft(
+    var value = ContributionDraft(
       owner: owner, origin: origin, point: point, language: account.language)
+    value.fields = Self.normalized(value.fields)
     try journal.save(value)
     draft = value
     message = nil
@@ -113,12 +114,43 @@ final class ContributionStore {
 
   func update(_ fields: ContributionFields) {
     guard var value = draft, value.editable, !isWorking else { return }
-    value.fields = fields
+    value.fields = Self.normalized(fields)
     do {
       try journal.save(value)
       draft = value
       message = nil
     } catch { message = String(appLocalized: "Could not save the contribution on this device.") }
+  }
+
+  /// Keeps the venue tag consistent with the chosen category: a non-toilet
+  /// never keeps a tag that could be sent for the wrong type. It never invents
+  /// an `other` value for an existing draft whose venue is absent, so an old
+  /// draft edited only in text/time cannot overwrite a server-side
+  /// reclassification. A brand-new toilet already starts at `other` from
+  /// `ContributionFields(language:)`; an explicit category switch back to a
+  /// toilet is handled by `switchingCategory`.
+  nonisolated static func normalized(_ fields: ContributionFields) -> ContributionFields {
+    var value = fields
+    if value.category != .toilet {
+      value.venueType = nil
+      value.unknownVenueType = nil
+    }
+    return value
+  }
+
+  /// Applies the venue rule for an explicit category change: leaving the toilet
+  /// category clears any tag, and returning to it starts at the `other` default
+  /// without a stale value.
+  nonisolated static func switchingCategory(
+    _ fields: ContributionFields, from previous: PlaceCategory
+  ) -> ContributionFields {
+    var value = normalized(fields)
+    if previous != .toilet, value.category == .toilet,
+      value.venueType == nil, value.unknownVenueType == nil
+    {
+      value.venueType = .other
+    }
+    return value
   }
 
   func choosePhoto(_ encoded: Data) throws {

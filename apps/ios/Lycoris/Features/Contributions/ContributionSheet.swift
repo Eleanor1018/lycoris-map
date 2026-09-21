@@ -190,7 +190,7 @@ struct ContributionSheet: View {
         TextField("Title", text: field(\.title)).focused($focused)
           .submitLabel(.done).onSubmit { focused = false }
           .accessibilityIdentifier("contribution.title")
-        Picker("Category", selection: field(\.category)) {
+        Picker("Category", selection: categorySelection()) {
           ForEach(
             PlaceCategory.allCases.filter { $0 != .other || draft.original?.category == .other },
             id: \.self
@@ -198,6 +198,27 @@ struct ContributionSheet: View {
             Text(category.title).tag(category)
           }
         }.accessibilityIdentifier("contribution.category")
+        if draft.fields.category == .toilet {
+          Picker(
+            selection: venueSelection(),
+            label: Text(
+              String(
+                appLocalized: "Venue type", language: AppLanguage.current(),
+                table: "PlaceMetadata"))
+          ) {
+            // A missing/unknown tag is a non-actionable placeholder, not a
+            // false "Other" selection. Only the six real options can be chosen.
+            Text(venuePlaceholder())
+              .tag(PlaceVenue?.none)
+              .disabled(true)
+            ForEach(PlaceVenue.allCases) { venue in
+              Text(venueTitle(venue)).tag(PlaceVenue?.some(venue))
+            }
+          }
+          .accessibilityIdentifier("contribution.venue")
+          .accessibilityValue(
+            draft.fields.venueType.map(venueTitle) ?? venuePlaceholder())
+        }
         TextField("Description", text: field(\.description), axis: .vertical)
           .lineLimit(3...8).focused($focused).accessibilityIdentifier("contribution.description")
       }
@@ -229,8 +250,46 @@ struct ContributionSheet: View {
     }.disabled(!draft.editable || store.isWorking || photoLoading)
   }
 
-  private func field<Value>(_ key: WritableKeyPath<ContributionFields, Value>) -> Binding<Value> {
+  /// The category binding routes through `switchingCategory`, so an explicit
+  /// move away from a toilet clears the tag and a move back restores the other
+  /// default without disturbing an ordinary text/time edit.
+  private func categorySelection() -> Binding<PlaceCategory> {
     Binding(
+      get: { store.draft?.fields.category ?? .toilet },
+      set: { category in
+        guard var fields = store.draft?.fields else { return }
+        let previous = fields.category
+        fields.category = category
+        fields = ContributionStore.switchingCategory(fields, from: previous)
+        store.update(fields)
+      })
+  }
+
+  /// The Picker binds through the normalized `store.update`, so switching
+  /// category away and back clears any stale tag and restores the `other`
+  /// default. Selecting the current value still routes through the setter.
+  private func venueSelection() -> Binding<PlaceVenue?> {
+    Binding(
+      get: { store.draft?.fields.venueType },
+      set: { venue in
+        guard var fields = store.draft?.fields, let venue else { return }
+        fields.venueType = venue
+        fields.unknownVenueType = nil
+        store.update(fields)
+      })
+  }
+
+  /// The disabled placeholder shown when a toilet has no known venue yet.
+  private func venuePlaceholder() -> String {
+    String(
+      appLocalized: "Not specified", language: AppLanguage.current(), table: "PlaceMetadata")
+  }
+
+  private func venueTitle(_ venue: PlaceVenue) -> String {
+    venue.title(language: AppLanguage.current())
+  }
+
+  private func field<Value>(_ key: WritableKeyPath<ContributionFields, Value>) -> Binding<Value> {    Binding(
       get: { (store.draft?.fields ?? ContributionFields(language: "en"))[keyPath: key] },
       set: { value in
         guard var fields = store.draft?.fields else { return }

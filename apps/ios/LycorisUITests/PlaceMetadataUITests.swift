@@ -1,0 +1,308 @@
+import XCTest
+
+/// A real failure (not an environment skip) when an expected fixture write never
+/// arrives, so a broken serialization path cannot be silently skipped.
+private enum WriteWaitError: Error { case missingWrite }
+
+/// UI coverage for the venue tag and opening status. Fixture-backed cases run
+/// only against the identified loopback `lycoris-place-metadata` fixture in the
+/// Test configuration; no real account or production write is used.
+@MainActor final class PlaceMetadataUITests: LocalBackendTestCase {
+  private let base = URL(string: "http://127.0.0.1:8080")!
+  private let fixtureAccount = (username: "ios_metadata_fixture", password: "Metadata-Fixture-1")
+  override func setUp() { continueAfterFailure = false }
+
+  // MARK: - Real list -> detail venue tag and closing-soon reminder
+
+  func testListAndDetailShowVenueTagAndClosingSoon() async throws {
+    try await resetFixture()
+    let app = launch(now: "2026-09-20T13:45:00Z")
+    let search = app.textFields["map.search"]
+    XCTAssertTrue(search.waitForExistence(timeout: 10))
+    search.tap()
+    search.typeText("Metro Accessible Toilet")
+    let row = app.buttons["place.row.21"]
+    XCTAssertTrue(row.waitForExistence(timeout: 8))
+    attach(app, "metadata-list")
+
+    // The real, unique row button carries the complete label: category, name,
+    // venue, hours and the real closing-soon status. The decorative tag is
+    // reviewed from the screenshot, not required as a separate AX element.
+    XCTAssertTrue(row.isHittable)
+    XCTAssertEqual(app.buttons.matching(identifier: "place.row.21").count, 1)
+    XCTAssertTrue(row.label.contains("Accessible Toilets"), row.label)
+    XCTAssertTrue(row.label.contains("Metro Accessible Toilet"), row.label)
+    XCTAssertTrue(row.label.contains("09:00–22:00"), row.label)
+    XCTAssertTrue(row.label.contains("Closing soon"), row.label)
+
+    row.tap()
+    XCTAssertTrue(app.staticTexts["place.title"].waitForExistence(timeout: 8))
+    attach(app, "metadata-detail")
+    // The detail shows the localized venue tag and the short reminder.
+    let venue = app.descendants(matching: .any)["place.venue"]
+    XCTAssertTrue(venue.waitForExistence(timeout: 5))
+    XCTAssertEqual(venue.label, "Metro")
+    let closing = app.descendants(matching: .any)["place.closing-soon"]
+    XCTAssertTrue(closing.waitForExistence(timeout: 5))
+    XCTAssertEqual(closing.label, "Closing soon")
+  }
+
+  func testNonToiletRowHasNoInventedVenueTag() async throws {
+    try await resetFixture()
+    let app = launch(now: "2026-09-20T03:00:00Z")
+    let search = app.textFields["map.search"]
+    XCTAssertTrue(search.waitForExistence(timeout: 10))
+    search.tap()
+    search.typeText("Nursing Room No Tag")
+    let nursing = app.buttons["place.row.23"]
+    XCTAssertTrue(nursing.waitForExistence(timeout: 8))
+    XCTAssertFalse(nursing.label.contains("Other"))
+    XCTAssertEqual(app.buttons.matching(identifier: "place.row.21").count, 0)
+  }
+
+  // MARK: - Accessibility sizes
+
+  func testEnglishStandardAndChineseAccessibilityText() async throws {
+    try await resetFixture()
+    for (name, language, large, locale) in [
+      ("en", "en", false, false), ("zh-AXXXL", "zh", true, true),
+    ] {
+      let app = launch(language: language, large: large, locale: locale, now: "2026-09-20T13:45:00Z")
+      let search = app.textFields["map.search"]
+      XCTAssertTrue(search.waitForExistence(timeout: 10), name)
+      search.tap()
+      search.typeText("Metro Accessible Toilet")
+      let row = app.buttons["place.row.21"]
+      XCTAssertTrue(row.waitForExistence(timeout: 15), name)
+      attach(app, "metadata-\(name)-row")
+      row.tap()
+      XCTAssertTrue(app.staticTexts["place.title"].waitForExistence(timeout: 8), name)
+      // Screenshot the top metadata (tags/hours) before scrolling.
+      attach(app, "metadata-\(name)-detail-top")
+
+      // At large sizes the actions stack vertically, so they cannot all be
+      // visible at once. Expand the panel, then scroll to each one in turn and
+      // confirm it is reachable, without requiring simultaneous visibility.
+      let handle = app.buttons["map.panel.handle"]
+      if handle.exists, (handle.value as? String) != "Expanded" { handle.tap() }
+      let scroll = app.scrollViews["place.details"]
+      XCTAssertTrue(scroll.waitForExistence(timeout: 5), name)
+      XCTAssertTrue(scrollTo(app, scroll, button: "place.share", name: name), name)
+      XCTAssertTrue(scrollTo(app, scroll, button: "place.navigate", name: name), name)
+      XCTAssertTrue(scrollTo(app, scroll, button: "place.bookmark", name: name), name)
+      attach(app, "metadata-\(name)-detail-actions")
+      app.terminate()
+    }
+  }
+
+  // MARK: - Native venue Picker and serialized payload
+
+  func testVenuePickerChangeCategoryAndSubmittedPayload() async throws {
+    try await resetFixture()
+    let app = launch(now: "2026-09-20T03:00:00Z")
+    signInViaContribute(app, cancelAfter: true)
+    // Edit the metro fixture marker.
+    let search = app.textFields["map.search"]
+    XCTAssertTrue(search.waitForExistence(timeout: 8))
+    search.tap()
+    search.typeText("Metro Accessible Toilet")
+    let row = app.buttons["place.row.21"]
+    XCTAssertTrue(row.waitForExistence(timeout: 8))
+    row.tap()
+    XCTAssertTrue(app.buttons["place.edit"].waitForExistence(timeout: 8))
+    app.buttons["place.edit"].tap()
+    let picker = app.buttons["contribution.venue"]
+    XCTAssertTrue(picker.waitForExistence(timeout: 10))
+    attach(app, "metadata-editor-venue")
+    // The existing tag is pre-filled.
+    XCTAssertEqual(picker.value as? String, "Metro")
+
+    // Really select a different venue and confirm it sticks.
+    picker.tap()
+    app.buttons["Mall"].tap()
+    XCTAssertEqual(picker.value as? String, "Mall")
+
+    // Switching to a non-toilet hides the Picker; back returns the other
+    // default with no stale tag.
+    let category = app.buttons["contribution.category"]
+    category.tap()
+    app.buttons["Nursing Rooms"].tap()
+    XCTAssertFalse(app.buttons["contribution.venue"].exists)
+    category.tap()
+    app.buttons["Accessible Toilets"].tap()
+    XCTAssertTrue(app.buttons["contribution.venue"].waitForExistence(timeout: 5))
+    XCTAssertEqual(app.buttons["contribution.venue"].value as? String, "Other")
+
+    // Choose Mall again and submit the proposal, then confirm the serialized
+    // payload through the fixture's recorded writes.
+    app.buttons["contribution.venue"].tap()
+    app.buttons["Mall"].tap()
+    attach(app, "metadata-editor-before-submit")
+    app.buttons["contribution.submit"].tap()
+    XCTAssertTrue(app.staticTexts["contribution.complete"].waitForExistence(timeout: 20))
+    let write = try await waitForWrite(method: "PATCH", id: 21)
+    XCTAssertEqual(write["venueType"] as? String, "mall")
+    // The fixture's published point is unchanged while the edit waits review.
+    XCTAssertEqual(write["title"] as? String, "Metro Accessible Toilet")
+  }
+
+  func testNewToiletOffersAllSixVenues() async throws {
+    try await resetFixture()
+    let app = launch(now: "2026-09-20T03:00:00Z")
+    // Anonymous: tapping Contribute opens login and then resumes location
+    // selection, the same stable path ContributionFlowTests uses.
+    signInViaContribute(app)
+    let useLocation = app.buttons["contribution.confirm-location"]
+    XCTAssertTrue(useLocation.waitForExistence(timeout: 10))
+    XCTAssertFalse(useLocation.isEnabled, "The map center must not silently become the location")
+    // Tap the map to choose a coordinate, then wait for the button to enable.
+    app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.4)).tap()
+    let enabled = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "enabled == true"), object: useLocation)
+    XCTAssertEqual(XCTWaiter.wait(for: [enabled], timeout: 5), .completed)
+    useLocation.tap()
+    let picker = app.buttons["contribution.venue"]
+    XCTAssertTrue(picker.waitForExistence(timeout: 8))
+    // A brand-new accessible toilet starts at the other default.
+    XCTAssertEqual(picker.value as? String, "Other")
+    picker.tap()
+    for venue in ["Metro", "Hospital", "Mall", "Railway station", "School", "Other"] {
+      XCTAssertTrue(app.buttons[venue].waitForExistence(timeout: 3), venue)
+    }
+    app.buttons["School"].tap()
+    XCTAssertEqual(picker.value as? String, "School")
+    attach(app, "metadata-new-venue")
+  }
+
+  // MARK: - Helpers
+
+  private func launch(
+    language: String = "en", large: Bool = false, locale: Bool = false, now: String
+  ) -> XCUIApplication {
+    let app = XCUIApplication()
+    app.launchArguments = ["-AppleLanguages", "(\(language))"]
+    app.launchArguments += ["-AppleLocale", locale ? "zh_Hans" : "en_US"]
+    app.launchArguments += [
+      "-lycoris-test-center", "31.2304,121.4737", "-lycoris.language", language,
+      "-lycoris.searchType", "all", "-lycoris-test-metadata-now",
+      String(Int(ISO8601DateFormatter().date(from: now)!.timeIntervalSince1970)),
+    ]
+    if large {
+      app.launchArguments += [
+        "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+      ]
+    }
+    app.launch()
+    return app
+  }
+
+  /// Signs in through the Contribute entry: anonymous taps Contribute, the
+  /// login form appears, and a successful login resumes location selection.
+  /// With `cancelAfter`, the location overlay is cancelled so the map is usable
+  /// again while the session stays valid.
+  private func signInViaContribute(_ app: XCUIApplication, cancelAfter: Bool = false) {
+    let contribute = app.buttons["map.contribute"]
+    XCTAssertTrue(contribute.waitForExistence(timeout: 10))
+    XCTAssertTrue(contribute.isHittable)
+    contribute.tap()
+    if app.textFields["auth.username"].waitForExistence(timeout: 8) {
+      fill(app.textFields["auth.username"], fixtureAccount.username)
+      fill(app.secureTextFields["auth.password"], fixtureAccount.password)
+      app.secureTextFields["auth.password"].typeText("\n")
+      declinePasswordSave(app)
+    }
+    let useLocation = app.buttons["contribution.confirm-location"]
+    XCTAssertTrue(useLocation.waitForExistence(timeout: 10))
+    if cancelAfter {
+      let cancel = app.buttons["contribution.cancel-location"]
+      XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+      XCTAssertTrue(cancel.isHittable)
+      cancel.tap()
+      XCTAssertTrue(app.textFields["map.search"].waitForExistence(timeout: 8))
+    }
+  }
+
+  /// Scrolls until the identified button is hittable, or fails. Returns whether
+  /// it became reachable within the attempt budget.
+  private func scrollTo(
+    _ app: XCUIApplication, _ scroll: XCUIElement, button identifier: String, name: String
+  ) -> Bool {
+    let element = app.buttons[identifier]
+    for _ in 0..<14 {
+      if element.isHittable { return true }
+      scroll.swipeUp()
+    }
+    return element.isHittable
+  }
+
+  private func fill(_ element: XCUIElement, _ value: String) {
+    element.tap()
+    if let old = element.value as? String, old != element.placeholderValue, !old.isEmpty {
+      element.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count))
+    }
+    element.typeText(value)
+  }
+
+  private func declinePasswordSave(_ app: XCUIApplication) {
+    for host in [app, XCUIApplication(bundleIdentifier: "com.apple.springboard")] {
+      let button = host.buttons.matching(
+        NSPredicate(format: "label IN %@", ["Not Now", "以后", "以后再说"])
+      ).firstMatch
+      if button.waitForExistence(timeout: 3) {
+        button.tap()
+        return
+      }
+    }
+  }
+
+  private func attach(_ app: XCUIApplication, _ name: String) {
+    let attachment = XCTAttachment(screenshot: app.screenshot())
+    attachment.name = name
+    attachment.lifetime = .keepAlways
+    add(attachment)
+  }
+
+  private func waitForWrite(method: String, id: Int) async throws -> [String: Any] {
+    for _ in 0..<40 {
+      let writes = try await fixtureJSON(path: "__ui_fixture/writes") as? [[String: Any]] ?? []
+      if let match = writes.first(where: {
+        $0["method"] as? String == method && ($0["id"] as? Int) == id
+      }), let body = match["body"] as? [String: Any] {
+        return body
+      }
+      try await Task.sleep(for: .milliseconds(250))
+    }
+    XCTFail("No \(method) write for marker \(id) reached the fixture")
+    throw WriteWaitError.missingWrite
+  }
+
+  private func resetFixture() async throws {
+    try await requireFixture()
+    var request = URLRequest(url: base.appendingPathComponent("__ui_fixture/reset"))
+    request.httpMethod = "POST"
+    let (_, response) = try await URLSession.shared.data(for: request)
+    guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+      XCTFail("Fixture reset failed")
+      throw WriteWaitError.missingWrite
+    }
+  }
+
+  private func requireFixture() async throws {
+    let value = try await fixtureJSON(path: "__ui_fixture")
+    guard let fixture = value as? [String: Any],
+      fixture["fixture"] as? String == "lycoris-place-metadata"
+    else {
+      throw XCTSkip("Start scripts/place-metadata-fixture.py on loopback first")
+    }
+  }
+
+  /// Fetches fixture JSON with an async session and validates the HTTP status.
+  private func fixtureJSON(path: String) async throws -> Any {
+    let (data, response) = try await URLSession.shared.data(
+      from: base.appendingPathComponent(path))
+    guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+      throw WriteWaitError.missingWrite
+    }
+    return try JSONSerialization.jsonObject(with: data)
+  }
+}
