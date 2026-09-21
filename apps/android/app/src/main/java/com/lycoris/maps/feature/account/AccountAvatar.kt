@@ -5,7 +5,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -15,8 +18,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.graphics.Color
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
@@ -33,8 +34,9 @@ import com.lycoris.maps.core.network.ImageVariant
 internal fun SearchAccountAvatar(account: AccountState, clients: ApiClients, language: Language) {
     val user = account.user
     if (user == null) {
-        Box(Modifier.size(36.dp).clip(CircleShape).background(Color(0xFFC7C7CB)), contentAlignment = Alignment.Center) {
-            Text("AA", fontSize = 14.sp, color = Color(0xFFF7F7F6))
+        Box(Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceContainerHighest), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.Person, contentDescription = language.text("未登录", "Not signed in"),
+                modifier = Modifier.size(24.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     } else key(user.publicId, account.epoch, user.avatarUrl) {
         AccountAvatar(user, account.epoch, clients, language, Modifier.size(36.dp), compact = true)

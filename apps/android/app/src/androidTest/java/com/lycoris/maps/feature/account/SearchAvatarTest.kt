@@ -69,7 +69,7 @@ class SearchAvatarTest {
                 SearchBar("", {}, {}, {}, { SearchAccountAvatar(account.value, clients, Language.EN) },
                     { opened++ }, false, Modifier.fillMaxWidth())
             } } }
-            compose.onNodeWithText("AA", useUnmergedTree = true).assertIsDisplayed()
+            compose.onNodeWithContentDescription("Not signed in", useUnmergedTree = true).assertIsDisplayed()
             val user = User("synthetic-a", nickname = "Nora Example", avatarUrl = "/uploads/avatars/first.png")
             compose.runOnIdle { account.value = AccountState(initialized = true, user = user, epoch = 1) }
             awaitImage("NE")
@@ -88,7 +88,7 @@ class SearchAvatarTest {
                 account.value = AccountState(initialized = true, epoch = 2)
             }
             compose.onNodeWithContentDescription("Avatar", useUnmergedTree = true).assertDoesNotExist()
-            compose.onNodeWithText("AA", useUnmergedTree = true).assertIsDisplayed()
+            compose.onNodeWithContentDescription("Not signed in", useUnmergedTree = true).assertIsDisplayed()
             compose.onNodeWithContentDescription("Account").performClick()
             compose.runOnIdle { assertEquals(2, opened) }
         }
