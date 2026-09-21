@@ -19,9 +19,18 @@ export const venueTypeSchema = z.enum([
     'mall',
     'railway_station',
     'school',
+    'public_toilet',
+    'airport',
     'other',
 ])
 export type VenueType = z.infer<typeof venueTypeSchema>
+// Read future string values without dropping the entire marker list. Omitted
+// tags remain null when editing, so a newer server's classification is preserved.
+export const venueTypeReadSchema = z
+    .string()
+    .transform((value) => venueTypeSchema.safeParse(value).data ?? null)
+    .nullable()
+    .optional()
 
 export const reviewStatusSchema = z.enum(['PENDING', 'APPROVED', 'REJECTED'])
 
@@ -34,7 +43,7 @@ export const markerSchema = z.object({
     lat: z.number().min(-90).max(90),
     lng: z.number().min(-180).max(180),
     category: markerCategorySchema,
-    venueType: venueTypeSchema.nullable().optional(),
+    venueType: venueTypeReadSchema,
     hoursTimezone: z.string().optional(),
     title: z.string(),
     description: z.string().nullable(),

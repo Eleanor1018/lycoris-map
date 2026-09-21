@@ -6,5 +6,7 @@ export const venueLabels: Record<VenueType, string> = {
     mall: 'Mall',
     railway_station: 'Railway station',
     school: 'School',
+    public_toilet: 'Public toilet',
+    airport: 'Airport',
     other: 'Other',
 }

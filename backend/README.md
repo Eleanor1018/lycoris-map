@@ -23,7 +23,9 @@ Python 开发/演练脚本与根 `docs/` 文档仅保留本地，不随 Git 分�
 ## 场所标签与营业时间
 
 迁移 `0005_marker_venue_type.sql` 为点位和编辑提案增加 `venue_type`。API 使用
-`venueType`：`metro`、`hospital`、`mall`、`railway_station`、`school`、`other`。
+`venueType`：`metro`、`hospital`、`mall`、`railway_station`、`school`、`public_toilet`、`airport`、`other`。
+迁移 `0006_add_public_toilet_airport_venues.sql` 扩展两张表的约束，加入公共卫生间与飞机场；
+仅调整允许值，不改现有标签或停用状态。历史分类待客户端支持新值后独立执行。
 仅 `accessible_toilet` 可带标签，数据库和写接口均校验；新建省略时为 `other`，
 编辑省略或传空值时保留原标签，改为其它类别时清空。旧客户端可继续省略此字段。
 贡献、编辑提案、审核、管理员编辑及图片审核返回值均保留标签。

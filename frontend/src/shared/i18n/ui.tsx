@@ -5,6 +5,9 @@ import { useOptionalLanguage } from './LanguageProvider'
 /** English keys keep reference-design text visible at the call site. */
 export const uiMessages = {
     'Venue type': '场所类型',
+    'Public toilet': '公共卫生间',
+    Airport: '飞机场',
+    'Choose a venue type': '选择场所类型',
     Metro: '地铁',
     Hospital: '医院',
     Mall: '商场',

@@ -205,6 +205,8 @@ async fn migration_adds_columns_check_constraints_and_backfills_only_toilets() {
         "mall",
         "railway_station",
         "school",
+        "public_toilet",
+        "airport",
         "other",
     ] {
         sqlx::query("UPDATE map_markers SET venue_type = $2 WHERE id = $1")
@@ -374,6 +376,8 @@ async fn create_defaults_and_validates_venue_type() {
         "mall",
         "railway_station",
         "school",
+        "public_toilet",
+        "airport",
         "other",
     ] {
         let row = write
