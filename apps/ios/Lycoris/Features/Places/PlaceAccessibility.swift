@@ -45,20 +45,28 @@ enum PlaceAccessibility {
     return distance
   }
 
-  /// The complete spoken label for a place row/pin: category, name, distance and
-  /// hours, without repeating the decorative category icon.
+  /// The complete spoken label for a place row/pin: category, name, venue,
+  /// distance and hours, without repeating the decorative category icon or
+  /// doubling synonymous status phrases. The venue tag is only spoken when a
+  /// known venue exists, and the opening status is only spoken when it is a
+  /// real `open`/`closed`/`closing-soon` value.
   static func placeLabel(
-    _ place: PlacePresentation, language: AppLanguage
+    _ place: PlacePresentation, language: AppLanguage, now: Date = .now
   ) -> String {
     var parts = [
       categoryLabel(place.category, language: language),
       place.title,
     ]
+    if let venue = place.venue {
+      parts.append(venue.title(language: language))
+    }
     if let distance = distanceDescription(place.distance, language: language) {
       parts.append(distance)
     }
     let hours = place.openingHours.trimmingCharacters(in: .whitespacesAndNewlines)
     if !hours.isEmpty { parts.append(hours) }
+    let status = place.openingStatus(at: now).label(language: language)
+    if !status.isEmpty { parts.append(status) }
     return parts.joined(separator: ", ")
   }
 }

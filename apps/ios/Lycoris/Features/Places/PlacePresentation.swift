@@ -13,9 +13,25 @@ struct PlacePresentation: Identifiable, Equatable, Sendable {
   var category: PlaceCategory = .toilet
   var imageURL: URL? = nil
   var distanceReference: String? = nil
+  /// Recognized venue tag for the tag chip; `nil` for missing or unknown values.
+  var venue: PlaceVenue? = nil
+  /// The raw server venue string, retained so unknown values survive edits
+  /// instead of being silently rewritten to `other`.
+  var venueRaw: String? = nil
+  /// The raw server time zone. Never written back; used only for status.
+  var hoursTimezone: String? = nil
+  /// The original server `HH:mm` values, echoed into the editor when valid.
+  var rawStart: String? = nil
+  var rawEnd: String? = nil
 
   var point: GeoPoint? { GeoPoint(latitude: latitude, longitude: longitude) }
   var hasPhoto: Bool { photoAsset != nil || imageURL != nil }
+
+  /// The real-time status for the given instant, computed from the server zone.
+  func openingStatus(at now: Date) -> OpeningStatus {
+    OpeningStatusEngine.status(
+      start: rawStart, end: rawEnd, timeZone: hoursTimezone, now: now)
+  }
 
   init(marker: Marker, origin: GeoPoint?, located: Bool, baseURL: URL?) {
     id = String(marker.id)
@@ -27,7 +43,12 @@ struct PlacePresentation: Identifiable, Equatable, Sendable {
     description = marker.description ?? ""
     photoAsset = nil
     imageURL = Self.imageURL(marker.markImage, baseURL: baseURL)
+    rawStart = marker.openTimeStart
+    rawEnd = marker.openTimeEnd
     openingHours = Self.hours(start: marker.openTimeStart, end: marker.openTimeEnd)
+    venueRaw = marker.venueType
+    venue = marker.venue
+    hoursTimezone = marker.hoursTimezone
     if let origin, let point = marker.point {
       let meters = origin.distance(to: point)
       distance =
@@ -59,10 +80,9 @@ struct PlacePresentation: Identifiable, Equatable, Sendable {
   }
 
   static func hours(start: String?, end: String?) -> String {
-    func valid(_ time: String) -> Bool {
-      time.range(of: #"^(?:[01]\d|2[0-3]):[0-5]\d$"#, options: .regularExpression) != nil
-    }
-    guard let start, let end, valid(start), valid(end) else {
+    guard let start, let end,
+      OpeningStatusEngine.isValidTime(start), OpeningStatusEngine.isValidTime(end)
+    else {
       return String(appLocalized: "Hours not provided")
     }
     return start == end ? String(appLocalized: "Open 24 hours") : "\(start)–\(end)"

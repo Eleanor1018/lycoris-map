@@ -15,6 +15,9 @@ struct NativeMapView: UIViewRepresentable {
   var animated = true
   var isSelectingLocation = false
   var selectedLocation: GeoPoint?
+  /// The shared opening-status clock, used only to refresh existing AX pin
+  /// labels when the minute or the app language changes.
+  var metadataNow: Date = .now
   var onPickLocation: (GeoPoint) -> Void = { _ in }
   var onUnresolvedCoordinate: () -> Void = {}
   var onViewport: (MapViewport) -> Void = { _ in }
@@ -81,10 +84,12 @@ struct NativeMapView: UIViewRepresentable {
     coordinator.placementTap?.isEnabled = isSelectingLocation
     coordinator.placementDoubleTap?.isEnabled = isSelectingLocation
     coordinator.updateSelectedLocation(on: map)
-    if coordinator.language != language {
+    let minuteChanged = coordinator.metadataMinute != Self.minute(of: metadataNow)
+    if coordinator.language != language || minuteChanged {
       coordinator.language = language
-      // Refresh existing pins so the localized category label follows the app's
-      // chosen language, not only the system language.
+      coordinator.metadataMinute = Self.minute(of: metadataNow)
+      // Refresh existing pins so the localized category label and the real-time
+      // opening status follow the app language and the shared minute clock.
       for annotation in map.annotations {
         guard let pin = annotation as? PlaceAnnotation,
           let view = map.view(for: pin)
@@ -171,6 +176,7 @@ struct NativeMapView: UIViewRepresentable {
     private var lastFocusCamera: MKMapCamera?
     var appearance: MapAppearance?
     var language: AppLanguage
+    var metadataMinute: Int
     var lastViewport: MapViewport?
     var placementTap: UITapGestureRecognizer?
     var placementDoubleTap: UITapGestureRecognizer?
@@ -180,6 +186,7 @@ struct NativeMapView: UIViewRepresentable {
     init(parent: NativeMapView) {
       self.parent = parent
       self.language = parent.language
+      self.metadataMinute = NativeMapView.minute(of: parent.metadataNow)
       super.init()
       headingProvider.onChange = { [weak self] in
         guard let self, let map = self.map else { return }
@@ -402,7 +409,8 @@ struct NativeMapView: UIViewRepresentable {
       // The 43pt asset includes a shadow below its tip at y=39. Anchor the tip,
       // not the image bottom, to the geographic point.
       view.centerOffset = CGPoint(x: 0, y: -17.5)
-      view.accessibilityLabel = PlaceAccessibility.placeLabel(pin.place, language: language)
+      view.accessibilityLabel = PlaceAccessibility.placeLabel(
+        pin.place, language: language, now: parent.metadataNow)
       view.accessibilityIdentifier = "map.pin.\(pin.place.id)"
       view.isEnabled = !parent.isSelectingLocation
       view.isAccessibilityElement = !parent.isSelectingLocation
@@ -413,6 +421,12 @@ struct NativeMapView: UIViewRepresentable {
       if !parent.isSelectingLocation { parent.onSelect(pin.place) }
       mapView.deselectAnnotation(pin, animated: false)
     }
+  }
+
+  /// Minute-resolution bucket for the shared clock, so pins only rebuild their
+  /// label when the status could actually have changed.
+  static func minute(of date: Date) -> Int {
+    Int(date.timeIntervalSince1970 / 60)
   }
 
   static func updateMargins(_ insets: UIEdgeInsets, on map: MKMapView) {

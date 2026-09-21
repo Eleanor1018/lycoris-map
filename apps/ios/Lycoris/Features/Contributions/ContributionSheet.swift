@@ -4,6 +4,9 @@ import SwiftUI
 struct ContributionSheet: View {
   @Bindable var store: ContributionStore
   var editID: Int64? = nil
+  var isFindingLocation = false
+  var onFindLocation: () -> Void = {}
+  var onCancelLocationRequest: () -> Void = {}
   var onPickLocation: () -> Void
   @Environment(\.dismiss) private var dismiss
   @State private var photo: PhotosPickerItem?
@@ -27,22 +30,8 @@ struct ContributionSheet: View {
                 .foregroundStyle(.secondary)
             }
           } else {
+            locationSection(draft)
             fields(draft)
-            Section {
-              LabeledContent("Location") {
-                Text(
-                  "\(draft.point.latitude.formatted(.number.precision(.fractionLength(5)))), \(draft.point.longitude.formatted(.number.precision(.fractionLength(5))))"
-                )
-                .monospacedDigit()
-              }
-              if draft.original == nil && draft.editable {
-                Button("Choose location", action: onPickLocation)
-                  .accessibilityIdentifier("contribution.location")
-                  .accessibilityValue(
-                    String(format: "%.5f, %.5f", draft.point.latitude, draft.point.longitude))
-              }
-            }
-            .disabled(store.isWorking)
             Section {
               if let bytes = store.photoPreview, let image = UIImage(data: bytes) {
                 Image(uiImage: image).resizable().scaledToFit()
@@ -96,6 +85,8 @@ struct ContributionSheet: View {
                 .accessibilityIdentifier("contribution.discard")
             }.disabled(store.isWorking || photoLoading)
           }
+        } else if isFindingLocation {
+          locationSection(nil)
         } else if let editLoadError {
           Section {
             Text(editLoadError).foregroundStyle(.secondary)
@@ -109,6 +100,10 @@ struct ContributionSheet: View {
       .navigationTitle(editID != nil || store.draft?.original != nil ? "Edit place" : "Contribute")
       .navigationBarTitleDisplayMode(.inline)
       .scrollDismissesKeyboard(.interactively)
+      .task(id: isFindingLocation) {
+        if isFindingLocation { onFindLocation() }
+      }
+      .onDisappear(perform: onCancelLocationRequest)
       .task(id: editLoadAttempt) {
         guard let editID else { return }
         editLoadError = nil
@@ -123,7 +118,10 @@ struct ContributionSheet: View {
       }
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
-          Button("Close", systemImage: "xmark") { dismiss() }
+          Button("Close", systemImage: "xmark") {
+            onCancelLocationRequest()
+            dismiss()
+          }
             .accessibilityIdentifier("contribution.close")
         }
         if store.draft?.editable == true {
@@ -184,13 +182,45 @@ struct ContributionSheet: View {
     }
   }
 
+  private func locationSection(_ draft: ContributionDraft?) -> some View {
+    Section {
+      if draft.map({ $0.original == nil && $0.editable }) ?? isFindingLocation {
+        Button(action: onPickLocation) {
+          Label {
+            Text("Choose another location on the map", tableName: "ContributionLocation")
+          } icon: {
+            Image(systemName: "mappin.and.ellipse")
+          }
+        }
+        .accessibilityIdentifier("contribution.location")
+        .accessibilityValue(
+          draft.map { String(format: "%.5f, %.5f", $0.point.latitude, $0.point.longitude) }
+            ?? "")
+      }
+      if let draft {
+        LabeledContent("Location") {
+          Text(
+            "\(draft.point.latitude.formatted(.number.precision(.fractionLength(5)))), \(draft.point.longitude.formatted(.number.precision(.fractionLength(5))))"
+          )
+          .monospacedDigit()
+        }
+      } else if isFindingLocation {
+        ProgressView {
+          Text("Finding your current location…", tableName: "ContributionLocation")
+        }
+        .accessibilityIdentifier("contribution.finding-location")
+      }
+    }
+    .disabled(store.isWorking || photoLoading)
+  }
+
   @ViewBuilder private func fields(_ draft: ContributionDraft) -> some View {
     Group {
       Section {
         TextField("Title", text: field(\.title)).focused($focused)
           .submitLabel(.done).onSubmit { focused = false }
           .accessibilityIdentifier("contribution.title")
-        Picker("Category", selection: field(\.category)) {
+        Picker("Category", selection: categorySelection()) {
           ForEach(
             PlaceCategory.allCases.filter { $0 != .other || draft.original?.category == .other },
             id: \.self
@@ -198,6 +228,27 @@ struct ContributionSheet: View {
             Text(category.title).tag(category)
           }
         }.accessibilityIdentifier("contribution.category")
+        if draft.fields.category == .toilet {
+          Picker(
+            selection: venueSelection(),
+            label: Text(
+              String(
+                appLocalized: "Venue type", language: AppLanguage.current(),
+                table: "PlaceMetadata"))
+          ) {
+            // A missing/unknown tag is a non-actionable placeholder, not a
+            // false "Other" selection. Only the six real options can be chosen.
+            Text(venuePlaceholder())
+              .tag(PlaceVenue?.none)
+              .disabled(true)
+            ForEach(PlaceVenue.allCases) { venue in
+              Text(venueTitle(venue)).tag(PlaceVenue?.some(venue))
+            }
+          }
+          .accessibilityIdentifier("contribution.venue")
+          .accessibilityValue(
+            draft.fields.venueType.map(venueTitle) ?? venuePlaceholder())
+        }
         TextField("Description", text: field(\.description), axis: .vertical)
           .lineLimit(3...8).focused($focused).accessibilityIdentifier("contribution.description")
       }
@@ -229,8 +280,46 @@ struct ContributionSheet: View {
     }.disabled(!draft.editable || store.isWorking || photoLoading)
   }
 
-  private func field<Value>(_ key: WritableKeyPath<ContributionFields, Value>) -> Binding<Value> {
+  /// The category binding routes through `switchingCategory`, so an explicit
+  /// move away from a toilet clears the tag and a move back restores the other
+  /// default without disturbing an ordinary text/time edit.
+  private func categorySelection() -> Binding<PlaceCategory> {
     Binding(
+      get: { store.draft?.fields.category ?? .toilet },
+      set: { category in
+        guard var fields = store.draft?.fields else { return }
+        let previous = fields.category
+        fields.category = category
+        fields = ContributionStore.switchingCategory(fields, from: previous)
+        store.update(fields)
+      })
+  }
+
+  /// The Picker binds through the normalized `store.update`, so switching
+  /// category away and back clears any stale tag and restores the `other`
+  /// default. Selecting the current value still routes through the setter.
+  private func venueSelection() -> Binding<PlaceVenue?> {
+    Binding(
+      get: { store.draft?.fields.venueType },
+      set: { venue in
+        guard var fields = store.draft?.fields, let venue else { return }
+        fields.venueType = venue
+        fields.unknownVenueType = nil
+        store.update(fields)
+      })
+  }
+
+  /// The disabled placeholder shown when a toilet has no known venue yet.
+  private func venuePlaceholder() -> String {
+    String(
+      appLocalized: "Not specified", language: AppLanguage.current(), table: "PlaceMetadata")
+  }
+
+  private func venueTitle(_ venue: PlaceVenue) -> String {
+    venue.title(language: AppLanguage.current())
+  }
+
+  private func field<Value>(_ key: WritableKeyPath<ContributionFields, Value>) -> Binding<Value> {    Binding(
       get: { (store.draft?.fields ?? ContributionFields(language: "en"))[keyPath: key] },
       set: { value in
         guard var fields = store.draft?.fields else { return }
