@@ -5,7 +5,7 @@ import Testing
 
 /// Contract and behavior coverage for the place venue tag and the server-time
 /// opening status. These tests mirror `reference/openingStatus.ts` and the
-/// six-value venue contract; they never touch a network or a real backend.
+/// eight-value venue contract; they never touch a network or a real backend.
 struct PlaceMetadataTests {
   // MARK: - Venue DTO contract
 
@@ -13,6 +13,7 @@ struct PlaceMetadataTests {
     let expected: [(String, PlaceVenue)] = [
       ("metro", .metro), ("hospital", .hospital), ("mall", .mall),
       ("railway_station", .railwayStation), ("school", .school), ("other", .other),
+      ("public_toilet", .publicToilet), ("airport", .airport),
     ]
     for (raw, venue) in expected {
       let marker = try decodeMarker(venueType: raw)
@@ -24,7 +25,7 @@ struct PlaceMetadataTests {
       #expect(!en.isEmpty && !zh.isEmpty)
       #expect(en != zh)
     }
-    #expect(PlaceVenue.allCases.count == 6)
+    #expect(PlaceVenue.allCases.count == 8)
   }
 
   @Test func missingNullAndUnknownVenueNeverFailDecodingNorInventATag() throws {
@@ -238,6 +239,22 @@ struct PlaceMetadataTests {
     #expect(try json(new)["venueType"] as? String == "metro")
   }
 
+  @Test func newVenueTypesSurviveDraftPersistenceAndBothWritePayloads() throws {
+    for venue in [PlaceVenue.publicToilet, .airport] {
+      let marker = try decodeMarker(venueType: venue.rawValue)
+      var edit = draft(original: marker)
+      edit.fields.title = "Updated"
+      let restored = try JSONDecoder().decode(
+        ContributionDraft.self, from: JSONEncoder().encode(edit))
+      #expect(restored.fields.venueType == venue)
+      #expect(try json(restored)["venueType"] as? String == venue.rawValue)
+      var new = draft()
+      new.fields.title = "New toilet"
+      new.fields.venueType = venue
+      #expect(try json(new)["venueType"] as? String == venue.rawValue)
+    }
+  }
+
   @Test func legacyDraftWithNoVenueKeyStaysNil() throws {
     let legacy =
       #"{"title":"Legacy","category":"accessible_toilet","description":"","openTimeStart":"","openTimeEnd":"","language":"en"}"#
@@ -274,7 +291,7 @@ struct PlaceMetadataTests {
     #expect(edit.fields.venueType == nil)
     #expect(edit.fields.unknownVenueType == "space_station")
     // An unrelated text edit preserves the raw locally for display, but the
-    // payload omits it so PATCH keeps the server's original six-value field
+    // payload omits it so PATCH keeps the server's original venue field
     // untouched instead of resending an unknown raw.
     edit.fields.title = "Renamed"
     #expect(edit.fields.unknownVenueType == "space_station")
