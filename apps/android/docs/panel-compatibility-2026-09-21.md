@@ -1,6 +1,6 @@
 # Nearby panel compatibility check — 2026-09-21
 
-The owner reports continuous map/panel movement on both realme and Xiaomi phones after entering Nursing Rooms, sometimes accompanied by missing text and icons. The affected devices are remote; their exact models, OS versions, logs and installed APK identities are not available. The issue remains open. No application fix is claimed by this test run.
+The owner reports continuous map/panel movement on both realme and Xiaomi phones after entering Nursing Rooms, sometimes accompanied by missing text and icons. The initial emulator comparison below did not reproduce the problem. Later user-provided videos enabled the reproducible layout correction recorded at the end; acceptance on the affected remote phones remains pending.
 
 ## Test environment
 
@@ -31,6 +31,19 @@ Manual release acceptance was blocked by Computer Use window targeting: input in
 
 Local runtime logs are `galaxy-s25-aosp16-panel-tests.log` and `galaxy-s25-aosp16-provider-tests.log` in the existing ignored `work/android-native/runtime` evidence directory. No application source change was made in this follow-up.
 
-## Remaining reproduction evidence
+## Video-assisted reproduction and correction
 
-Obtain a short recording of the affected flow, exact model/Android version and installed APK version from an affected phone. Distinguish missing app text/icons from map labels. A physical OEM device (or Samsung Remote Test Lab for actual Samsung coverage) is still needed to assess vendor graphics/runtime behavior. The emulator passes do not close the realme/Xiaomi report or justify attributing it to missing OEM system components.
+The owner subsequently supplied a filmed device and a direct screen recording. App text and icons are visible in both. In the direct recording, the sheet moves roughly 72 recording pixels for one frame near 2.97 s and 3.33 s, then returns; the search bar and map markers retain their positions. Raw videos and extracted frames remain outside the repository.
+
+The previous tests sampled bounds only after `waitForIdle`, hiding intermediate bad placements. A new regression records every global header placement while content below it changes between heights. On the unchanged application it failed with `expected=957.0 actual=[841.0, 957.0]`: the new content height was positioned using the previous height's offset, then corrected by the next composition. The initial attempt to record only `drawWithContent` callbacks did not reliably observe reused display lists and was replaced with layout-coordinate observations; no pixel/frame-presentation assertion is claimed.
+
+`MapPanel` now measures content, calculates geometry and updates physical anchors in the same layout pass before placement. It retains the logical stop, existing drag/fling behavior, content wrapping and lazy list. Height reporting now observes the offset during placement, keeping dependent map controls informed during a drag without relying on unrelated recomposition. This follows Android's [Compose phase guidance](https://developer.android.com/develop/ui/compose/phases) about avoiding a layout-size → composition → layout feedback delay.
+
+Validation of the corrected application:
+
+- The previously failing layout regression passed on the same Android 16 AVD.
+- All 13 selected panel tests passed on Android 16 (106.553 s) and Pixel 10 Pro / API 37.2 (84.391 s). This includes the new continuous-drag height-reporting case, loading/empty/long content, merged anchors, viewport changes, large text and secondary close gestures. Both device suites ran while the release build was active; their elapsed times are not performance benchmarks.
+- 143 JVM cases, QA lint and QA/test/Dev/signed-Release builds passed. Build time: 2m28s. The release certificate remains the certificate documented in `signing.md`, and 16 KB ZIP alignment passes.
+- Logs in the ignored runtime evidence directory: `panel-frame-before.log`, `panel-frame-after.log`, `panel-frame-aosp16.log`, `panel-frame-pixel.log`, `panel-frame-final-build.log`.
+
+This fixes a reproduced application layout defect matching the recorded transient motion. It does not establish that every symptom on the remote phones is resolved. Exact phone models/OS versions/APK identities are still unavailable; installation and reproduction on those phones remain the acceptance step. The earlier Computer Use limitation also means the final release has not received manual visual acceptance in this session. No production account action, Web/iOS change or server deployment was performed.
