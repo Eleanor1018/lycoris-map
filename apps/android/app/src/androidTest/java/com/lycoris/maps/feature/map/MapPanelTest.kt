@@ -5,6 +5,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
@@ -18,6 +22,82 @@ import org.junit.Test
 
 class MapPanelTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun changingContentHeightKeepsMiddleHeaderStableDuringLayout() {
+        val extraHeight = mutableStateOf(80.dp)
+        val placedTops = java.util.Collections.synchronizedList(mutableListOf<Float>())
+        var headerCoordinates: LayoutCoordinates? = null
+        compose.setContent {
+            LycorisTheme {
+                BoxWithConstraints(Modifier.fillMaxWidth().height(620.dp), contentAlignment = Alignment.BottomCenter) {
+                    val density = LocalDensity.current
+                    MapPanel(with(density) { maxHeight.toPx() }, with(density) { 284.dp.toPx() },
+                        PanelStop.MIDDLE, "Nearby", {}, {}) {
+                        item("header") {
+                            Box(Modifier.fillMaxWidth().height(300.dp)
+                                .onGloballyPositioned { headerCoordinates = it; placedTops.add(it.positionInRoot().y) }) {
+                                Text("Nearby categories")
+                            }
+                        }
+                        item("results") { Box(Modifier.fillMaxWidth().height(extraHeight.value)) }
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+        val expected = requireNotNull(headerCoordinates).positionInRoot().y
+        for (height in listOf(124.dp, 80.dp, 200.dp, 80.dp)) {
+            compose.runOnIdle { placedTops.clear(); extraHeight.value = height }
+            compose.waitForIdle()
+            val frames = synchronized(placedTops) { placedTops.toList() }
+            assertTrue("The changed layout must have been placed", frames.isNotEmpty())
+            assertTrue("Every layout must retain the middle header, expected=$expected actual=$frames",
+                frames.all { kotlin.math.abs(it - expected) <= 1f })
+        }
+    }
+
+    @Test fun visibleHeightTracksThePanelWhileTheFingerIsStillDragging() {
+        val visible = java.util.concurrent.atomic.AtomicReference(0f)
+        var headerCoordinates: LayoutCoordinates? = null
+        var parentBottom = 0f
+        var grabberHeight = 0f
+        compose.setContent {
+            LycorisTheme {
+                BoxWithConstraints(Modifier.fillMaxWidth().height(620.dp).onGloballyPositioned {
+                    parentBottom = it.positionInRoot().y + it.size.height
+                }, contentAlignment = Alignment.BottomCenter) {
+                    val density = LocalDensity.current
+                    grabberHeight = with(density) { PanelGrabberHeight.toPx() }
+                    var stop by remember { mutableStateOf(PanelStop.MIDDLE) }
+                    MapPanel(with(density) { maxHeight.toPx() }, with(density) { 284.dp.toPx() },
+                        stop, "Nearby", { stop = it }, visible::set) {
+                        item("header") {
+                            Text("Nearby header", Modifier.fillMaxWidth().height(300.dp)
+                                .onGloballyPositioned { headerCoordinates = it })
+                        }
+                        item("results") { Box(Modifier.fillMaxWidth().height(240.dp)) }
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+        val initial = visible.get()
+        val handle = compose.onNodeWithTag("panel-grabber").fetchSemanticsNode().boundsInRoot.center
+        val rootOrigin = compose.onRoot().fetchSemanticsNode().boundsInRoot.topLeft
+        compose.onRoot().performTouchInput { down(handle - rootOrigin); moveBy(Offset(0f, -60f)) }
+        try {
+            repeat(3) {
+                compose.onRoot().performTouchInput { moveBy(Offset(0f, -25f)) }
+                compose.waitForIdle()
+                val actualVisible = parentBottom - (requireNotNull(headerCoordinates).positionInRoot().y - grabberHeight)
+                assertTrue("The panel must follow the upward drag before release", actualVisible > initial + 1f)
+                assertEquals("Map controls must receive the panel's current height during the drag",
+                    actualVisible, visible.get(), 1f)
+            }
+        } finally {
+            compose.onRoot().performTouchInput { up() }
+        }
+    }
 
     @Test fun middleShowsNearbyAndCanExpandToReachLastRow() {
         compose.setContent {
@@ -72,7 +152,7 @@ class MapPanelTest {
             LycorisTheme {
                 BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
                     val density = LocalDensity.current
-                    expected = with(density) { 212.dp.toPx() }
+                    expected = with(density) { 228.dp.toPx() }
                     MapPanel(with(density) { maxHeight.toPx() }, with(density) { 284.dp.toPx() }, PanelStop.EXPANDED, "Detail", {}, { visible = it }) {
                         item { Box(Modifier.fillMaxWidth().height(200.dp)) }
                     }

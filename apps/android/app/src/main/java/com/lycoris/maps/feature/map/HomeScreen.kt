@@ -80,7 +80,7 @@ fun HomeScreen(
     onQuery: (String) -> Unit,
     onSearch: () -> Unit,
     onVoice: () -> Unit,
-    initials: String,
+    accountAvatar: @Composable () -> Unit,
     onAccount: () -> Unit,
     onLocate: () -> Unit,
     onNearby: (String?) -> Unit,
@@ -180,7 +180,7 @@ fun HomeScreen(
         }
         SearchBar(query, onQuery, {
             focus.clearFocus(); stop = PanelStop.EXPANDED; onSearch()
-        }, onVoice, initials, onAccount, chinese,
+        }, onVoice, accountAvatar, onAccount, chinese,
             Modifier.align(Alignment.TopCenter).padding(top = topInset + 4.dp, start = 8.dp, end = 8.dp).onSizeChanged { measuredSearchHeight = it.height.toFloat() })
         Column(Modifier.align(Alignment.TopEnd).padding(top = topInset + searchHeight + 16.dp, end = 13.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             MapTool("layers", if (chinese) "地图来源" else "Map source", onMapSource)
@@ -225,16 +225,18 @@ fun HomeScreen(
             ) {
                 item(key = "panel-header", contentType = "header") {
                 if (secondary) {
-                    PanelTitle(secondaryTitle.orEmpty(), onCloseSecondary, chinese)
+                    val detail = secondaryKey?.startsWith("detail:") == true
+                    PanelTitle(secondaryTitle.orEmpty(), onCloseSecondary, chinese, startPadding = 30.dp,
+                        topPadding = if (detail) 11.dp else 12.dp, bottomPadding = if (detail) 11.dp else 8.dp)
                 } else {
-                    Column(Modifier.fillMaxWidth().onSizeChangedCompat { if (section != MainSection.BOOKMARKS) middleMeasured = it + with(density) { 12.dp.toPx() } }) {
+                    Column(Modifier.fillMaxWidth().onSizeChangedCompat { if (section != MainSection.BOOKMARKS) middleMeasured = it + with(density) { PanelGrabberHeight.toPx() } }) {
                         PanelTitle(when (section) {
                             MainSection.EXPLORE -> if (chinese) "查找附近" else "Find Nearby"
                             MainSection.BOOKMARKS -> if (chinese) "收藏" else "Bookmarks"
                             MainSection.SETTINGS -> if (chinese) "设置" else "Settings"
-                        }, chinese = chinese, startPadding = if (section == MainSection.BOOKMARKS) 30.dp else 41.dp)
+                        }, chinese = chinese, startPadding = 11.dp, endPadding = 11.dp, bottomPadding = 11.dp)
                         when (section) {
-                            MainSection.EXPLORE -> NearbyCategories(chinese, onNearby)
+                            MainSection.EXPLORE -> NearbyCategories(chinese, onNearby, horizontalPadding = 11.dp)
                             MainSection.SETTINGS -> SettingsRows(chinese, radius, mapSourceName, searchType, onSetting)
                             MainSection.BOOKMARKS -> Unit
                         }
@@ -275,7 +277,7 @@ private fun Modifier.onSizeChangedCompat(onHeight: (Float) -> Unit): Modifier = 
 )
 
 @Composable
-private fun SearchBar(query: String, onQuery: (String) -> Unit, onSearch: () -> Unit, onVoice: () -> Unit, initials: String, onAccount: () -> Unit, chinese: Boolean, modifier: Modifier) {
+internal fun SearchBar(query: String, onQuery: (String) -> Unit, onSearch: () -> Unit, onVoice: () -> Unit, accountAvatar: @Composable () -> Unit, onAccount: () -> Unit, chinese: Boolean, modifier: Modifier) {
     Surface(modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), color = Color(0xFFFAFCF9), shadowElevation = 2.dp) {
         Row(Modifier.heightIn(min = 60.dp).padding(start = 12.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             FigmaIcon("search", Modifier.size(20.dp))
@@ -287,7 +289,7 @@ private fun SearchBar(query: String, onQuery: (String) -> Unit, onSearch: () -> 
             IconButton(onVoice, Modifier.size(48.dp)) { Icon(Icons.Rounded.MicNone, if (chinese) "语音搜索" else "Voice search", Modifier.size(20.dp), tint = Color(0xFF88898B)) }
             Box(Modifier.size(48.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onAccount)
                 .semantics { contentDescription = if (chinese) "账号" else "Account" }, contentAlignment = Alignment.Center) {
-                Box(Modifier.size(36.dp).background(Color(0xFFC7C7CB), CircleShape), contentAlignment = Alignment.Center) { Text(initials, fontSize = 14.sp, color = Color(0xFFF7F7F6)) }
+                accountAvatar()
             }
         }
     }
@@ -305,16 +307,16 @@ private fun MapTool(icon: String, label: String, onClick: () -> Unit, modifier: 
 }
 
 @Composable
-fun PanelTitle(title: String, onClose: (() -> Unit)? = null, chinese: Boolean = false, startPadding: androidx.compose.ui.unit.Dp = 41.dp) {
-    Row(Modifier.fillMaxWidth().padding(start = startPadding, end = 24.dp).heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
+fun PanelTitle(title: String, onClose: (() -> Unit)? = null, chinese: Boolean = false, startPadding: androidx.compose.ui.unit.Dp = 41.dp, topPadding: androidx.compose.ui.unit.Dp = 0.dp, bottomPadding: androidx.compose.ui.unit.Dp = 0.dp, endPadding: androidx.compose.ui.unit.Dp = 24.dp) {
+    Row(Modifier.fillMaxWidth().padding(start = startPadding, top = topPadding, end = endPadding, bottom = bottomPadding).heightIn(min = if (onClose != null) 40.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, Modifier.weight(1f).semantics { heading() }, fontSize = 22.sp, lineHeight = 28.sp, color = LycorisColors.Text)
         if (onClose != null) IconButton(onClose) { Icon(Icons.Rounded.Close, if (chinese) "关闭" else "Close") }
     }
 }
 
 @Composable
-fun NearbyCategories(chinese: Boolean, onClick: (String) -> Unit) {
-    Column(Modifier.padding(horizontal = 30.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+fun NearbyCategories(chinese: Boolean, onClick: (String) -> Unit, horizontalPadding: androidx.compose.ui.unit.Dp = 30.dp) {
+    Column(Modifier.padding(horizontal = horizontalPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         nearbyCategories.forEachIndexed { index, category ->
             Row(Modifier.fillMaxWidth().heightIn(min = 66.dp).clip(groupShape(index, 3)).background(LycorisColors.Card)
                 .clickable(role = Role.Button, onClick = { onClick(category.key) }).padding(horizontal = 16.dp, vertical = 12.dp),
@@ -337,7 +339,7 @@ private fun SettingsRows(chinese: Boolean, radius: Int, mapSourceName: String, s
         Triple("source", if (chinese) "地图来源" else "Map Source", mapSourceName),
         Triple("about", if (chinese) "关于 Lycoris Maps" else "About Lycoris Maps", ""),
     )
-    Column(Modifier.padding(horizontal = 30.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.padding(horizontal = 11.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         rows.forEachIndexed { index, (key, label, value) ->
             Row(Modifier.fillMaxWidth().heightIn(min = 66.dp).clip(groupShape(index, rows.size)).background(LycorisColors.Card)
                 .clickable(role = Role.Button, onClick = { onSetting(key) }).padding(horizontal = 16.dp, vertical = 12.dp),

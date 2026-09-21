@@ -22,16 +22,17 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.lycoris.maps.core.designsystem.LycorisColors
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+internal val PanelGrabberHeight = 28.dp
 
 /** Persistent, nonmodal sheet: map gestures outside the sheet always remain available. */
 @Composable
@@ -47,29 +48,18 @@ fun MapPanel(
 ) {
     val density = LocalDensity.current
     val collapsed = with(density) { 52.dp.toPx() }
-    // Keep the last actual size across page changes: onSizeChanged does not fire again when
-    // two consecutive pages have the same measured height.
-    var measuredHeight by remember { mutableFloatStateOf(middleContentHeight) }
-    val geometry = PanelGeometry.measure(availableHeight, measuredHeight, middleContentHeight, collapsed)
+    var geometry by remember {
+        mutableStateOf(PanelGeometry.measure(availableHeight, middleContentHeight, middleContentHeight, collapsed))
+    }
     val state = remember { AnchoredDraggableState(requestedStop) }
     val scope = rememberCoroutineScope()
     val scroll = rememberLazyListState()
     val currentOnStop by rememberUpdatedState(onStop)
-    val currentGeometry by rememberUpdatedState(geometry)
+    val currentOnVisibleHeight by rememberUpdatedState(onVisibleHeight)
     val currentRequestedStop by rememberUpdatedState(requestedStop)
     val currentPageKey by rememberUpdatedState(pageKey)
     val flingThreshold = with(density) { 300.dp.toPx() }
 
-    SideEffect {
-        // Geometry can merge/split physical anchors, but never chooses a new logical stop.
-        // In particular, an expanded request stays expanded while its physical anchor is middle.
-        state.updateAnchors(DraggableAnchors {
-            PanelStop.COLLAPSED at geometry.offset(PanelStop.COLLAPSED)
-            // Keep middle as the canonical anchor when short content makes middle == expanded.
-            if (geometry.full > geometry.middle + 1f) PanelStop.EXPANDED at 0f
-            PanelStop.MIDDLE at geometry.offset(PanelStop.MIDDLE)
-        }, newTarget = geometry.anchorFor(requestedStop))
-    }
     LaunchedEffect(requestedStop, pageKey, geometry) {
         val target = geometry.anchorFor(requestedStop)
         if (state.targetValue != target) state.animateTo(target, spring(dampingRatio = 0.9f, stiffness = 420f))
@@ -78,7 +68,7 @@ fun MapPanel(
     suspend fun settleUserStop(logicalStop: PanelStop) {
         val requestAtStart = currentRequestedStop
         val pageAtStart = currentPageKey
-        state.animateTo(currentGeometry.anchorFor(logicalStop), spring(dampingRatio = 0.9f, stiffness = 420f))
+        state.animateTo(geometry.anchorFor(logicalStop), spring(dampingRatio = 0.9f, stiffness = 420f))
         if (currentRequestedStop == requestAtStart && currentPageKey == pageAtStart && logicalStop != currentRequestedStop) {
             currentOnStop(logicalStop)
         }
@@ -97,7 +87,7 @@ fun MapPanel(
                 // is already available from the actual offset; do not read stale settledValue here.
                 val physicalStop = state.anchors.closestAnchor(state.requireOffset())
                 if (physicalStop != null && currentRequestedStop == requestAtStart && currentPageKey == pageAtStart) {
-                    val logicalStop = currentGeometry.userStop(physicalStop, currentRequestedStop)
+                    val logicalStop = geometry.userStop(physicalStop, currentRequestedStop)
                     if (logicalStop != currentRequestedStop) currentOnStop(logicalStop)
                 }
                 return remaining
@@ -105,7 +95,6 @@ fun MapPanel(
         }
     }
     LaunchedEffect(pageKey) { scroll.scrollToItem(0) }
-    SideEffect { onVisibleHeight(geometry.full - state.offset.takeIf { it.isFinite() }.orEmptyOffset(geometry)) }
 
     val connection = remember(state, scroll, flingThreshold) {
         object : NestedScrollConnection {
@@ -132,16 +121,16 @@ fun MapPanel(
                 if (state.offset <= 0f && (available.y < 0 || scroll.canScrollBackward)) return Velocity.Zero
                 if (!sheetMoved && available.y == 0f) return Velocity.Zero
                 sheetMoved = false
-                val target = currentGeometry.destination(state.offset, available.y, flingThreshold)
-                settleUserStop(currentGeometry.userStop(target, currentRequestedStop))
+                val target = geometry.destination(state.offset, available.y, flingThreshold)
+                settleUserStop(geometry.userStop(target, currentRequestedStop))
                 return available
             }
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
                 // Scrolling the list or bringing an item into view is not a sheet-stop request.
                 if (!sheetMoved && available.y == 0f) return Velocity.Zero
                 sheetMoved = false
-                val target = currentGeometry.destination(state.offset, available.y, flingThreshold)
-                settleUserStop(currentGeometry.userStop(target, currentRequestedStop))
+                val target = geometry.destination(state.offset, available.y, flingThreshold)
+                settleUserStop(geometry.userStop(target, currentRequestedStop))
                 return available
             }
         }
@@ -152,9 +141,25 @@ fun MapPanel(
         modifier.fillMaxWidth().heightIn(
             min = with(density) { collapsed.coerceAtMost(availableHeight).toDp() },
             max = with(density) { availableHeight.toDp() },
-        ).onSizeChanged { measuredHeight = it.height.toFloat() }
-            .offset { IntOffset(0, state.offset.takeIf { it.isFinite() }.orEmptyOffset(geometry).roundToInt()) }
-            .clip(RoundedCornerShape(topStart = 50.dp, topEnd = 50.dp))
+        ).layout { measurable, constraints ->
+            val placeable = measurable.measure(constraints)
+            val measuredGeometry = PanelGeometry.measure(availableHeight, placeable.height.toFloat(), middleContentHeight, collapsed)
+            // Update anchors before placing this measured height. Feeding onSizeChanged back
+            // through composition placed new content at the previous height's offset for a frame.
+            geometry = measuredGeometry
+            state.updateAnchors(DraggableAnchors {
+                PanelStop.COLLAPSED at measuredGeometry.offset(PanelStop.COLLAPSED)
+                if (measuredGeometry.full > measuredGeometry.middle + 1f) PanelStop.EXPANDED at 0f
+                PanelStop.MIDDLE at measuredGeometry.offset(PanelStop.MIDDLE)
+            }, newTarget = measuredGeometry.anchorFor(currentRequestedStop))
+            layout(placeable.width, placeable.height) {
+                val offset = state.offset.takeIf { it.isFinite() }.orEmptyOffset(measuredGeometry).roundToInt()
+                placeable.placeRelative(0, offset)
+                // Placement observes drag offsets even when no recomposition is needed.
+                currentOnVisibleHeight(measuredGeometry.full - offset)
+            }
+        }
+            .clip(RoundedCornerShape(topStart = 25.dp, topEnd = 25.dp))
             .background(LycorisColors.Surface).nestedScroll(connection)
             .anchoredDraggable(state, Orientation.Vertical, flingBehavior = userFling)
             .semantics {
@@ -163,8 +168,8 @@ fun MapPanel(
                 collapse { scope.launch { settleUserStop(PanelStop.COLLAPSED) }; true }
             },
     ) {
-        Box(Modifier.testTag("panel-grabber").fillMaxWidth().height(12.dp), contentAlignment = androidx.compose.ui.Alignment.TopCenter) {
-            Box(Modifier.padding(top = 4.dp).width(48.dp).height(4.dp)
+        Box(Modifier.testTag("panel-grabber").fillMaxWidth().height(PanelGrabberHeight), contentAlignment = androidx.compose.ui.Alignment.TopCenter) {
+            Box(Modifier.padding(top = 8.dp).width(48.dp).height(4.dp)
                 .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.2f), RoundedCornerShape(4.dp)))
         }
         LazyColumn(Modifier.fillMaxWidth().testTag("panel-list"), state = scroll, content = content)

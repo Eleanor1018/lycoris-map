@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import coil3.ImageLoader
 import coil3.compose.SubcomposeAsyncImage
@@ -39,35 +40,35 @@ import com.lycoris.maps.core.network.ImageVariant
 import com.lycoris.maps.feature.map.displayMessage
 import kotlin.math.*
 
-fun LazyListScope.placeItems(state: PlaceListState, clients: ApiClients, account: AccountState, chinese: Boolean, onPlace: (Long) -> Unit, onRetry: () -> Unit) {
+fun LazyListScope.placeItems(state: PlaceListState, clients: ApiClients, account: AccountState, chinese: Boolean, onPlace: (Long) -> Unit, onRetry: () -> Unit, horizontalPadding: Dp = 30.dp) {
         if (state.loading) item(key = "places-loading", contentType = "status") {
-            LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 30.dp))
+            LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = horizontalPadding))
         }
         if (state.failure != null) item(key = "places-failure", contentType = "status") {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 30.dp, vertical = 8.dp)) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = horizontalPadding)) {
             Text(state.failure.displayMessage(if (chinese) Language.ZH else Language.EN), style = MaterialTheme.typography.bodyMedium)
             TextButton(onRetry) { Text(if (chinese) "重试" else "Retry") }
             }
         }
         if (state.loaded && state.places.isEmpty() && !state.loading && state.failure == null) item(key = "places-empty", contentType = "status") {
-            Text(if (chinese) "这个范围内暂时没有点位。" else "No places found in this area.", Modifier.padding(horizontal = 30.dp, vertical = 12.dp), color = LycorisColors.SecondaryText)
+            Text(if (chinese) "这个范围内暂时没有点位。" else "No places found in this area.", Modifier.padding(horizontal = horizontalPadding), color = LycorisColors.SecondaryText)
         }
         itemsIndexed(state.places, key = { _, place -> "place:${place.id}" }, contentType = { _, _ -> "place" }) { index, place ->
-            PlaceRow(place, clients, account, chinese, onPlace, index < state.places.lastIndex)
+            PlaceRow(place, clients, account, chinese, onPlace, index < state.places.lastIndex, horizontalPadding)
         }
 }
 
 @Composable
-private fun PlaceRow(place: Marker, clients: ApiClients, account: AccountState, chinese: Boolean, onPlace: (Long) -> Unit, hasFollowingRow: Boolean) {
-        Box(Modifier.fillMaxWidth().padding(horizontal = 30.dp).padding(bottom = if (hasFollowingRow) 16.dp else 0.dp)) {
+private fun PlaceRow(place: Marker, clients: ApiClients, account: AccountState, chinese: Boolean, onPlace: (Long) -> Unit, hasFollowingRow: Boolean, horizontalPadding: Dp) {
+        Box(Modifier.fillMaxWidth().padding(horizontal = horizontalPadding).padding(bottom = if (hasFollowingRow) 16.dp else 0.dp)) {
             Surface(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = { onPlace(place.id) }), shape = RoundedCornerShape(24.dp), color = LycorisColors.Card) {
                 Column {
                     if (!place.markImage.isNullOrBlank()) PlacePhoto(place, clients, account, Modifier.fillMaxWidth().aspectRatio(16f / 9).clip(RoundedCornerShape(16.dp)), false, chinese)
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(place.title, fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
                         Text(categoryName(place.category, chinese), style = MaterialTheme.typography.labelMedium, color = LycorisColors.SecondaryText)
-                        val hours = hours(place)
-                        if (hours != null) Text(hours, fontSize = 15.sp, color = LycorisColors.SecondaryText)
+                        PlaceVenueTag(place, chinese)
+                        PlaceHours(place, chinese)
                         place.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 15.sp, lineHeight = 20.sp, color = LycorisColors.SecondaryText, maxLines = 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
                     }
                 }
@@ -77,17 +78,18 @@ private fun PlaceRow(place: Marker, clients: ApiClients, account: AccountState, 
 
 @Composable
 fun PlaceDetailContent(place: Marker, clients: ApiClients, account: AccountState, chinese: Boolean, referenceLat: Double, referenceLng: Double, onFavorite: () -> Unit, onNavigate: () -> Unit, onShare: () -> Unit, onEdit: () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 30.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(categoryName(place.category, chinese), Modifier.weight(1f), color = LycorisColors.SecondaryText)
-            IconButton(onEdit) { Icon(Icons.Rounded.Edit, if (chinese) "编辑点位" else "Edit place", tint = LycorisColors.Plum) }
+            Text(distanceLabel(referenceLat, referenceLng, place.lat, place.lng), fontSize = 15.sp, color = LycorisColors.SecondaryText)
         }
-        Text(listOfNotNull(distanceLabel(referenceLat, referenceLng, place.lat, place.lng), hours(place)).joinToString("   "), fontSize = 15.sp, color = LycorisColors.SecondaryText)
+        PlaceMetadataRow(place, chinese)
         if (!place.markImage.isNullOrBlank()) PlacePhoto(place, clients, account, Modifier.fillMaxWidth().aspectRatio(16f / 9).clip(RoundedCornerShape(16.dp)), true, chinese)
         place.description?.takeIf(String::isNotBlank)?.let { Text(it, fontSize = 16.sp, lineHeight = 23.sp) }
         if (place.reviewStatus != "APPROVED") Text(if (chinese) "待审核" else "Pending review", color = LycorisColors.Primary)
-        Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             IconButton(onShare) { Icon(Icons.Rounded.Share, if (chinese) "分享点位" else "Share place") }
+            IconButton(onEdit) { Icon(Icons.Rounded.Edit, if (chinese) "编辑点位" else "Edit place", tint = LycorisColors.Plum) }
             Spacer(Modifier.weight(1f))
             FilledTonalButton(onNavigate) {
                 Text(if (chinese) "导航" else "Navigate")
@@ -118,7 +120,7 @@ fun PlaceImageScope(clients: ApiClients, account: AccountState, content: @Compos
     }
     DisposableEffect(publicLoader) { onDispose { publicLoader.shutdown() } }
     DisposableEffect(privateLoader) { onDispose { privateLoader.memoryCache?.clear(); privateLoader.shutdown() } }
-    CompositionLocalProvider(LocalPlaceImages provides PlaceImages(publicLoader, privateLoader), content = content)
+    PlaceTimeScope { CompositionLocalProvider(LocalPlaceImages provides PlaceImages(publicLoader, privateLoader), content = content) }
 }
 
 @Composable
@@ -147,7 +149,6 @@ fun categoryName(key: String, chinese: Boolean): String = when (key) {
     "friendly_clinic" -> if (chinese) "医疗机构" else "Medical institution"
     else -> if (chinese) "其他" else "Other"
 }
-private fun hours(place: Marker) = if (place.openTimeStart != null && place.openTimeEnd != null) "${place.openTimeStart}–${place.openTimeEnd}" else null
 fun distanceLabel(lat: Double, lng: Double, otherLat: Double, otherLng: Double): String {
     val radians = Math.PI / 180
     val a = sin((otherLat - lat) * radians / 2).pow(2) + cos(lat * radians) * cos(otherLat * radians) * sin((otherLng - lng) * radians / 2).pow(2)

@@ -95,7 +95,7 @@ fun LycorisRoot(model: HomeViewModel) {
     }
     PlaceImageScope(model.container.clients, account) {
     HomeScreen(map, zh, section, model::selectSection, query, model::setQuery, model::search, devices.onVoice,
-        account.user?.displayName?.take(2)?.uppercase().orEmpty().ifEmpty { "AA" }, model::account, devices.onLocate,
+        { SearchAccountAvatar(account, model.container.clients, preferences.language) }, model::account, devices.onLocate,
         { category ->
             val fix = devices.location.fix
             model.nearby(category, fix?.latitude ?: map.camera.latitude, fix?.longitude ?: map.camera.longitude)
@@ -162,15 +162,15 @@ fun LycorisRoot(model: HomeViewModel) {
                 SecondaryPage.CONTRIBUTION -> item(key = "contribution-content", contentType = "form") { ContributionPanel(drafts.firstOrNull { it.id == draftId }, preferences.language, model::draftCommand, model.container.contributions) }
                 null -> when (section) {
                     MainSection.EXPLORE -> {
-                        item(key = "positions-title", contentType = "heading") { PanelTitle(if (zh) "点位" else "Positions", chinese = zh, startPadding = 30.dp) }
-                        placeItems(viewport, model.container.clients, account, zh, model::detail, model::retryViewport)
+                        item(key = "positions-title", contentType = "heading") { PanelTitle(if (zh) "点位" else "Positions", chinese = zh, startPadding = 11.dp, endPadding = 11.dp, bottomPadding = 11.dp) }
+                        placeItems(viewport, model.container.clients, account, zh, model::detail, model::retryViewport, horizontalPadding = 11.dp)
                     }
                     MainSection.BOOKMARKS -> if (account.user == null) item(key = "bookmark-sign-in", contentType = "account-prompt") {
-                        Column(Modifier.padding(horizontal = 30.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(Modifier.padding(horizontal = 11.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text(if (zh) "登录后收藏点位\n或参与贡献。" else "Sign in to bookmark places\nor contribute.")
                             Button(model::account, Modifier.fillMaxWidth()) { Text(if (zh) "登录" else "Log in") }
                         }
-                    } else placeItems(PlaceListState(account.favoritePlaces, preferences.language, account.favoritesLoading, account.failure, account.favoritesInitialized), model.container.clients, account, zh, model::detail, { model.selectSection(MainSection.BOOKMARKS) })
+                    } else placeItems(PlaceListState(account.favoritePlaces, preferences.language, account.favoritesLoading, account.failure, account.favoritesInitialized), model.container.clients, account, zh, model::detail, { model.selectSection(MainSection.BOOKMARKS) }, horizontalPadding = 11.dp)
                     MainSection.SETTINGS -> Unit
                 }
             }

@@ -42,6 +42,8 @@ data class Marker(
     val deactivated: Boolean = false,
     val createdAt: String = "",
     val updatedAt: String = "",
+    val venueType: String? = null,
+    val hoursTimezone: String? = null,
 ) {
     val placeCategory: PlaceCategory get() = PlaceCategory.fromWire(category)
     val hasValidLocation: Boolean get() = id > 0 && validCoordinate(lat, lng)
