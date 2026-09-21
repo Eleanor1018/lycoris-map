@@ -11,6 +11,8 @@ enum class VenueType(val wireValue: String, private val zh: String, private val 
     MALL("mall", "商场", "Mall"),
     RAILWAY_STATION("railway_station", "火车站", "Railway station"),
     SCHOOL("school", "学校", "School"),
+    PUBLIC_TOILET("public_toilet", "公共卫生间", "Public toilet"),
+    AIRPORT("airport", "飞机场", "Airport"),
     OTHER("other", "其他", "Other");
 
     fun label(chinese: Boolean) = if (chinese) zh else en
