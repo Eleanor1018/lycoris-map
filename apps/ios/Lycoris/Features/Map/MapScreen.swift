@@ -21,6 +21,11 @@ struct MapScreen: View {
   @State private var showsCoordinateError = false
   @State private var account = AccountStore()
   @State private var contribution = ContributionStore()
+  // Contribution has its own one-shot location request, so it cannot replace
+  // the startup/locate provider's pending callback.
+  @State private var contributionLocation = LocationProvider()
+  @State private var contributionLocationRequest: ContributionLocationRequest?
+  @State private var measuredDetail: (id: String, height: CGFloat)?
   @State private var selectingLocation = false
   @State private var pickedLocation: GeoPoint?
   @State private var locationPickFeedback = 0
@@ -255,6 +260,7 @@ struct MapScreen: View {
     .sheet(
       item: $modal,
       onDismiss: {
+        contributionLocationRequest = nil
         pendingBookmark = nil
         bookmarkIntent = UUID()
         contributionIntent = nil
@@ -291,7 +297,13 @@ struct MapScreen: View {
           store: account, destination: destination, onAuthenticated: resumeAuthenticatedAction,
           onSelect: selectAccountPlace)
       case .contribution(let editID):
-        ContributionSheet(store: contribution, editID: editID) {
+        ContributionSheet(
+          store: contribution, editID: editID,
+          isFindingLocation: contributionLocationRequest != nil,
+          onFindLocation: findContributionLocation,
+          onCancelLocationRequest: { contributionLocationRequest = nil }
+        ) {
+          contributionLocationRequest = nil
           chooseLocationAfterDismiss = true
           modal = nil
         }
@@ -389,6 +401,10 @@ struct MapScreen: View {
       }
     }
     .onChange(of: account.epoch) { _, _ in
+      if contributionLocationRequest != nil {
+        contributionLocationRequest = nil
+        if case .contribution(editID: nil) = modal { modal = nil }
+      }
       contribution.synchronize()
       if account.user == nil {
         selectingLocation = false
@@ -399,6 +415,7 @@ struct MapScreen: View {
     }
     .onChange(of: account.user?.publicId) { old, new in
       if old != nil, old != new {
+        contributionLocationRequest = nil
         selectingLocation = false
         pickedLocation = nil
         chooseLocationAfterDismiss = false
@@ -421,6 +438,7 @@ struct MapScreen: View {
       }
     }
     .onDisappear {
+      contributionLocationRequest = nil
       cancelVoiceSearch()
       store.stop()
       connectivity.stop()
@@ -433,6 +451,7 @@ struct MapScreen: View {
       }
     }
     .onChange(of: modal?.id) { _, modalID in
+      if modalID != "contribution-new" { contributionLocationRequest = nil }
       if modalID != nil { cancelVoiceSearch() }
     }
     .onChange(of: voice.transcript) { _, text in
@@ -522,13 +541,16 @@ struct MapScreen: View {
     #endif
   }
 
-  /// Estimated detail height including the venue/status metadata row, kept out
-  /// of the main `body` so the type-checker has a smaller expression.
+  /// Fit the actual wrapped text, 11pt gaps and bottom safe area. The estimate
+  /// is used only until the ScrollView has measured its content once.
   private func detailHeight(geometry: GeometryProxy) -> CGFloat? {
     guard let selectedPlace else { return nil }
+    if let measuredDetail, measuredDetail.id == selectedPlace.id {
+      return PanelLayout.grabberRealHeight + measuredDetail.height
+    }
     var height: CGFloat = 208
     if selectedPlace.hasPhoto {
-      height += (geometry.size.width - 30) * 198 / 353
+      height += (geometry.size.width - 22) * 198 / 353
     }
     if selectedPlace.distanceReference != nil { height += 30 }
     if selectedPlace.venue != nil { height += 30 }
@@ -571,6 +593,13 @@ struct MapScreen: View {
           onBookmark: { bookmark(selectedPlace) },
           authenticatedPhoto: account.selectedMarker != nil,
           photo: account.selectedPhoto, photoFailed: account.photoFailed,
+          reportsContentHeight: dragTranslation == 0 && detent != .collapsed,
+          onContentHeight: { height in
+            // The panel narrows during a drag. Measure its resting full width,
+            // without feeding transient wrapping back into the drag geometry.
+            guard height > 0 else { return }
+            measuredDetail = (selectedPlace.id, height)
+          },
           onUnavailableAction: { showsUnavailableAction = true })
       } else {
         MapSearchBar(
@@ -912,14 +941,59 @@ struct MapScreen: View {
     }
     switch intent {
     case .create:
-      enterLocationSelection()
+      beginContributionAtCurrentLocation()
     case .edit(let id):
       modal = .contribution(editID: id)
     }
   }
 
+  private func beginContributionAtCurrentLocation() {
+    guard let owner = account.user?.publicId else { return }
+    do {
+      if contribution.draft?.phase == .complete { try contribution.discard() }
+    } catch {
+      contributionError = String(appLocalized: "Could not save the contribution on this device.")
+      return
+    }
+    contributionLocationRequest = ContributionLocationRequest(owner: owner, epoch: account.epoch)
+    modal = .contribution()
+  }
+
+  /// Start only after the sheet appears: a previously denied permission can
+  /// fail synchronously, and its fallback still needs a real sheet dismissal.
+  private func findContributionLocation() {
+    guard let request = contributionLocationRequest,
+      account.epoch == request.epoch, account.user?.publicId == request.owner,
+      case .contribution(editID: nil) = modal, contribution.draft == nil
+    else { return }
+    contributionLocation.request { result in
+      guard contributionLocationRequest?.id == request.id,
+        account.epoch == request.epoch, account.user?.publicId == request.owner,
+        case .contribution(editID: nil) = modal,
+        contribution.draft == nil
+      else { return }
+      contributionLocationRequest = nil
+      switch result {
+      case .success(let point):
+        do {
+          try contribution.begin(at: point)
+        } catch {
+          modal = nil
+          contributionError = String(
+            appLocalized: "Could not save the contribution on this device.")
+        }
+      case .failure:
+        // A missing GPS fix must never silently turn the map center into the
+        // contribution's location. Fall back to explicit map selection.
+        chooseLocationAfterDismiss = true
+        modal = nil
+      }
+    }
+  }
+
   private func enterLocationSelection(at point: GeoPoint? = nil) {
     guard account.user != nil else { return }
+    contributionLocationRequest = nil
     movePanel(to: .collapsed)
     pickedLocation = point
     if let point { store.focusMap(on: point) }
@@ -992,6 +1066,12 @@ struct MapScreen: View {
 private enum ContributionIntent {
   case create
   case edit(Int64)
+}
+
+private struct ContributionLocationRequest {
+  let id = UUID()
+  let owner: String
+  let epoch: UUID
 }
 
 private enum MapModal: Identifiable {

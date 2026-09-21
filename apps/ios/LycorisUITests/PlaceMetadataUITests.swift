@@ -68,12 +68,34 @@ private enum WriteWaitError: Error { case missingWrite }
       ("en", "en", false, false), ("zh-AXXXL", "zh", true, true),
     ] {
       let app = launch(language: language, large: large, locale: locale, now: "2026-09-20T13:45:00Z")
+      // This case verifies detail typography. Expand first so the search field
+      // is stationary before typing; collapsed-row gestures have their own suite.
+      let handle = app.buttons["map.panel.handle"]
+      let expandedValue = language == "zh" ? "已展开" : "Expanded"
+      XCTAssertTrue(handle.waitForExistence(timeout: 10), name)
+      for _ in 0..<2 {
+        if handle.value as? String == expandedValue { break }
+        handle.tap()
+      }
+      let expanded = XCTNSPredicateExpectation(
+        predicate: NSPredicate(format: "value == %@", expandedValue), object: handle)
+      guard await XCTWaiter.fulfillment(of: [expanded], timeout: 5) == .completed else {
+        XCTFail("Search panel did not expand: \(name)")
+        return
+      }
       let search = app.textFields["map.search"]
       XCTAssertTrue(search.waitForExistence(timeout: 10), name)
       search.tap()
+      guard app.keyboards.firstMatch.waitForExistence(timeout: 5) else {
+        XCTFail("Search keyboard did not appear: \(name)")
+        return
+      }
       search.typeText("Metro Accessible Toilet")
       let row = app.buttons["place.row.21"]
-      XCTAssertTrue(row.waitForExistence(timeout: 15), name)
+      guard row.waitForExistence(timeout: 15) else {
+        XCTFail("Search result did not appear: \(name)")
+        return
+      }
       attach(app, "metadata-\(name)-row")
       row.tap()
       XCTAssertTrue(app.staticTexts["place.title"].waitForExistence(timeout: 8), name)
@@ -83,10 +105,12 @@ private enum WriteWaitError: Error { case missingWrite }
       // At large sizes the actions stack vertically, so they cannot all be
       // visible at once. Expand the panel, then scroll to each one in turn and
       // confirm it is reachable, without requiring simultaneous visibility.
-      let handle = app.buttons["map.panel.handle"]
-      if handle.exists, (handle.value as? String) != "Expanded" { handle.tap() }
+      if handle.exists, (handle.value as? String) != expandedValue { handle.tap() }
       let scroll = app.scrollViews["place.details"]
-      XCTAssertTrue(scroll.waitForExistence(timeout: 5), name)
+      guard scroll.waitForExistence(timeout: 5) else {
+        XCTFail("Detail did not appear: \(name)")
+        return
+      }
       XCTAssertTrue(scrollTo(app, scroll, button: "place.share", name: name), name)
       XCTAssertTrue(scrollTo(app, scroll, button: "place.navigate", name: name), name)
       XCTAssertTrue(scrollTo(app, scroll, button: "place.bookmark", name: name), name)
@@ -100,7 +124,6 @@ private enum WriteWaitError: Error { case missingWrite }
   func testVenuePickerChangeCategoryAndSubmittedPayload() async throws {
     try await resetFixture()
     let app = launch(now: "2026-09-20T03:00:00Z")
-    signInViaContribute(app, cancelAfter: true)
     // Edit the metro fixture marker.
     let search = app.textFields["map.search"]
     XCTAssertTrue(search.waitForExistence(timeout: 8))
@@ -111,6 +134,7 @@ private enum WriteWaitError: Error { case missingWrite }
     row.tap()
     XCTAssertTrue(app.buttons["place.edit"].waitForExistence(timeout: 8))
     app.buttons["place.edit"].tap()
+    signInIfNeeded(app)
     let picker = app.buttons["contribution.venue"]
     XCTAssertTrue(picker.waitForExistence(timeout: 10))
     attach(app, "metadata-editor-venue")
@@ -149,12 +173,10 @@ private enum WriteWaitError: Error { case missingWrite }
   func testNewToiletOffersAllSixVenues() async throws {
     try await resetFixture()
     let app = launch(now: "2026-09-20T03:00:00Z")
-    // Anonymous: tapping Contribute opens login and then resumes location
-    // selection, the same stable path ContributionFlowTests uses.
+    // Use the explicit map-selection entry above the new contribution form.
     signInViaContribute(app)
     let useLocation = app.buttons["contribution.confirm-location"]
     XCTAssertTrue(useLocation.waitForExistence(timeout: 10))
-    XCTAssertFalse(useLocation.isEnabled, "The map center must not silently become the location")
     // Tap the map to choose a coordinate, then wait for the button to enable.
     app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.4)).tap()
     let enabled = XCTNSPredicateExpectation(
@@ -172,6 +194,72 @@ private enum WriteWaitError: Error { case missingWrite }
     app.buttons["School"].tap()
     XCTAssertEqual(picker.value as? String, "School")
     attach(app, "metadata-new-venue")
+  }
+
+  func testCurrentLocationDraftCanChooseAnotherLocationWithoutLosingFields() async throws {
+    try await resetFixture()
+    let app = launch(now: "2026-09-20T03:00:00Z")
+    signInViaContribute(app, chooseOther: false)
+    let title = app.textFields["contribution.title"]
+    XCTAssertTrue(title.waitForExistence(timeout: 20), "The simulated GPS fix should create the draft")
+    let changeLocation = app.buttons["contribution.location"]
+    XCTAssertTrue(changeLocation.isHittable)
+    XCTAssertLessThan(changeLocation.frame.minY, title.frame.minY)
+    let original = try XCTUnwrap(changeLocation.value as? String)
+    XCTAssertEqual(original, "31.23040, 121.47370", "Use the Core Location fix, not the viewport")
+    fill(title, "Keep my contribution")
+    title.typeText("\n")
+    attach(app, "contribution-current-location")
+    changeLocation.tap()
+    let confirm = app.buttons["contribution.confirm-location"]
+    XCTAssertTrue(confirm.waitForExistence(timeout: 8))
+    XCTAssertEqual(confirm.value as? String, original)
+    let alternate = app.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.35))
+    alternate.tap()
+    let changed = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "enabled == true AND value != %@", original), object: confirm)
+    XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 8), .completed)
+    app.buttons["contribution.cancel-location"].tap()
+    XCTAssertTrue(title.waitForExistence(timeout: 8))
+    XCTAssertEqual(title.value as? String, "Keep my contribution")
+    XCTAssertEqual(changeLocation.value as? String, original, "Cancel must preserve the saved point")
+
+    changeLocation.tap()
+    XCTAssertTrue(confirm.waitForExistence(timeout: 8))
+    alternate.tap()
+    let changedAgain = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "enabled == true AND value != %@", original), object: confirm)
+    XCTAssertEqual(XCTWaiter.wait(for: [changedAgain], timeout: 8), .completed)
+    let selected = try XCTUnwrap(confirm.value as? String)
+    confirm.tap()
+    XCTAssertTrue(title.waitForExistence(timeout: 8))
+    XCTAssertEqual(title.value as? String, "Keep my contribution")
+    XCTAssertEqual(changeLocation.value as? String, selected)
+    attach(app, "contribution-alternate-location")
+  }
+
+  /// Run separately with simulator location permission denied. A synchronous
+  /// denied callback must still dismiss the form and reach manual selection.
+  func testDeniedLocationFallsBackToExplicitMapSelection() async throws {
+    try await resetFixture()
+    let app = launch(language: "zh", locale: true, now: "2026-09-20T03:00:00Z")
+    signInViaContribute(app, chooseOther: false)
+    if app.textFields["contribution.title"].waitForExistence(timeout: 3) {
+      throw XCTSkip("Run this case separately with simulator location permission denied")
+    }
+    let confirm = app.buttons["contribution.confirm-location"]
+    XCTAssertTrue(confirm.waitForExistence(timeout: 10))
+    XCTAssertFalse(confirm.isEnabled)
+    XCTAssertEqual(confirm.value as? String, "")
+    app.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.35)).tap()
+    let selected = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "enabled == true AND value != ''"), object: confirm)
+    XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 8), .completed)
+    let point = try XCTUnwrap(confirm.value as? String)
+    confirm.tap()
+    XCTAssertTrue(app.textFields["contribution.title"].waitForExistence(timeout: 8))
+    XCTAssertEqual(app.buttons["contribution.location"].value as? String, point)
+    attach(app, "contribution-denied-location-manual-draft")
   }
 
   // MARK: - Helpers
@@ -196,29 +284,29 @@ private enum WriteWaitError: Error { case missingWrite }
     return app
   }
 
-  /// Signs in through the Contribute entry: anonymous taps Contribute, the
-  /// login form appears, and a successful login resumes location selection.
-  /// With `cancelAfter`, the location overlay is cancelled so the map is usable
-  /// again while the session stays valid.
-  private func signInViaContribute(_ app: XCUIApplication, cancelAfter: Bool = false) {
+  /// Default creation uses GPS; choosing another point is an explicit action.
+  private func signInViaContribute(_ app: XCUIApplication, chooseOther: Bool = true) {
     let contribute = app.buttons["map.contribute"]
     XCTAssertTrue(contribute.waitForExistence(timeout: 10))
     XCTAssertTrue(contribute.isHittable)
     contribute.tap()
+    signInIfNeeded(app)
+    guard chooseOther else { return }
+    let changeLocation = app.buttons["contribution.location"]
+    let confirm = app.buttons["contribution.confirm-location"]
+    let entry = XCTNSPredicateExpectation(
+      predicate: NSPredicate { _, _ in changeLocation.exists || confirm.exists }, object: nil)
+    XCTAssertEqual(XCTWaiter.wait(for: [entry], timeout: 10), .completed)
+    if changeLocation.exists { changeLocation.tap() }
+    XCTAssertTrue(confirm.waitForExistence(timeout: 10))
+  }
+
+  private func signInIfNeeded(_ app: XCUIApplication) {
     if app.textFields["auth.username"].waitForExistence(timeout: 8) {
       fill(app.textFields["auth.username"], fixtureAccount.username)
       fill(app.secureTextFields["auth.password"], fixtureAccount.password)
       app.secureTextFields["auth.password"].typeText("\n")
       declinePasswordSave(app)
-    }
-    let useLocation = app.buttons["contribution.confirm-location"]
-    XCTAssertTrue(useLocation.waitForExistence(timeout: 10))
-    if cancelAfter {
-      let cancel = app.buttons["contribution.cancel-location"]
-      XCTAssertTrue(cancel.waitForExistence(timeout: 5))
-      XCTAssertTrue(cancel.isHittable)
-      cancel.tap()
-      XCTAssertTrue(app.textFields["map.search"].waitForExistence(timeout: 8))
     }
   }
 

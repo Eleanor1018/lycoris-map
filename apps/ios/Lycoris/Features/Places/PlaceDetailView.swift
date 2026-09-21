@@ -16,14 +16,22 @@ struct PlaceDetailView: View {
   var authenticatedPhoto = false
   var photo: Data? = nil
   var photoFailed = false
+  var reportsContentHeight = true
+  var onContentHeight: (CGFloat) -> Void = { _ in }
   let onUnavailableAction: () -> Void
   @AccessibilityFocusState private var titleFocused: Bool
   @ScaledMetric(relativeTo: .body) private var buttonHeight: CGFloat = 48
 
+  private struct ContentMeasurement: Equatable {
+    let id: String
+    let height: CGFloat
+    let isResting: Bool
+  }
+
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 0) {
-        HStack(alignment: .top, spacing: 8) {
+      VStack(alignment: .leading, spacing: 11) {
+        HStack(alignment: .center, spacing: 11) {
           Text(place.detailTitle).font(.title3.weight(.semibold))
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -34,59 +42,54 @@ struct PlaceDetailView: View {
             // black SVG stays visible in dark mode.
             Image("PlaceEdit").renderingMode(.template).resizable().frame(width: 20, height: 20)
               .foregroundStyle(.primary)
-              .frame(width: 44, height: 44)
+              .frame(width: 44, height: 44, alignment: .trailing)
               .contentShape(Rectangle())
           }
           .buttonStyle(.plain).accessibilityLabel("Edit place")
           .accessibilityIdentifier("place.edit")
         }
-        .padding(.horizontal, 24).padding(.top, 10)
 
         if !hasFailed, place.venue != nil || placeClosingSoon {
           let tagLayout =
             dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
-            : AnyLayout(HStackLayout(spacing: 8))
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 11))
+            : AnyLayout(HStackLayout(spacing: 11))
           tagLayout {
             if let venue = place.venue { PlaceVenueTag(venue: venue) }
             PlaceClosingSoonTag(place: place)
           }
-          .padding(.horizontal, 24).padding(.top, 8)
         }
 
-        PlaceLoadStatus(state: state, retry: onRetry).padding(.horizontal, 18)
+        if state == .loading || hasFailed {
+          PlaceLoadStatus(state: state, spacing: 11, horizontalInset: 0, retry: onRetry)
+        }
         if !hasFailed {
           let metadataLayout =
             dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 11))
             : AnyLayout(HStackLayout(spacing: 16))
           metadataLayout {
             if !place.distance.isEmpty { Text(place.distance) }
             PlaceOpeningHoursView(place: place, suppressesClosingSoonText: placeClosingSoon)
           }
           .font(.subheadline).foregroundStyle(.secondary)
-          .padding(.horizontal, 24).padding(.top, 10)
 
           if let reference = place.distanceReference {
             Text(reference).font(.caption).foregroundStyle(.secondary)
-              .padding(.horizontal, 24).padding(.top, 3)
           }
           if !place.description.isEmpty {
             Text(place.description).font(.subheadline).foregroundStyle(.secondary)
               .fixedSize(horizontal: false, vertical: true)
-              .padding(.horizontal, 24).padding(.top, 5)
-
           }
           if place.hasPhoto {
             PlacePhoto(
               place: place, authenticated: authenticatedPhoto, data: photo, photoFailed: photoFailed
             )
-            .padding(.horizontal, 15).padding(.top, 5)
           }
 
           let actionLayout =
             dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: 8)) : AnyLayout(HStackLayout(spacing: 14))
+            ? AnyLayout(VStackLayout(spacing: 11)) : AnyLayout(HStackLayout(spacing: 14))
           actionLayout {
             actionLabel(
               "Share", image: "PlaceShare", size: 20, identifier: "place.share", action: onShare
@@ -117,9 +120,15 @@ struct PlaceDetailView: View {
             )
             .accessibilityIdentifier("place.bookmark").disabled(bookmarkBusy)
           }
-          .padding(.leading, 16).padding(.trailing, 22).padding(.top, 8)
-          .padding(.bottom, max(bottomInset, 12))
         }
+      }
+      .padding(.horizontal, 11)
+      .padding(.top, 11)
+      .padding(.bottom, max(bottomInset, 11))
+      .onGeometryChange(for: ContentMeasurement.self) {
+        ContentMeasurement(id: place.id, height: $0.size.height, isResting: reportsContentHeight)
+      } action: {
+        if $0.isResting { onContentHeight($0.height) }
       }
     }
     .scrollIndicators(.hidden)

@@ -84,6 +84,11 @@ final class MapInteractionTests: LocalBackendTestCase {
     XCTAssertTrue(app.buttons["Share"].isHittable)
     XCTAssertTrue(app.buttons["Navigate"].isHittable)
     XCTAssertTrue(app.buttons["Bookmark place"].isHittable)
+    // A partially clipped button may still be hittable. The resting detail
+    // panel must fit its photo and complete action row above the screen edge.
+    for action in ["place.share", "place.navigate", "place.bookmark"] {
+      XCTAssertLessThanOrEqual(app.buttons[action].frame.maxY, app.frame.maxY, action)
+    }
     attach(app, name: "08-place-details")
 
     app.buttons["Navigate"].tap()

@@ -4,6 +4,9 @@ import SwiftUI
 struct ContributionSheet: View {
   @Bindable var store: ContributionStore
   var editID: Int64? = nil
+  var isFindingLocation = false
+  var onFindLocation: () -> Void = {}
+  var onCancelLocationRequest: () -> Void = {}
   var onPickLocation: () -> Void
   @Environment(\.dismiss) private var dismiss
   @State private var photo: PhotosPickerItem?
@@ -27,22 +30,8 @@ struct ContributionSheet: View {
                 .foregroundStyle(.secondary)
             }
           } else {
+            locationSection(draft)
             fields(draft)
-            Section {
-              LabeledContent("Location") {
-                Text(
-                  "\(draft.point.latitude.formatted(.number.precision(.fractionLength(5)))), \(draft.point.longitude.formatted(.number.precision(.fractionLength(5))))"
-                )
-                .monospacedDigit()
-              }
-              if draft.original == nil && draft.editable {
-                Button("Choose location", action: onPickLocation)
-                  .accessibilityIdentifier("contribution.location")
-                  .accessibilityValue(
-                    String(format: "%.5f, %.5f", draft.point.latitude, draft.point.longitude))
-              }
-            }
-            .disabled(store.isWorking)
             Section {
               if let bytes = store.photoPreview, let image = UIImage(data: bytes) {
                 Image(uiImage: image).resizable().scaledToFit()
@@ -96,6 +85,8 @@ struct ContributionSheet: View {
                 .accessibilityIdentifier("contribution.discard")
             }.disabled(store.isWorking || photoLoading)
           }
+        } else if isFindingLocation {
+          locationSection(nil)
         } else if let editLoadError {
           Section {
             Text(editLoadError).foregroundStyle(.secondary)
@@ -109,6 +100,10 @@ struct ContributionSheet: View {
       .navigationTitle(editID != nil || store.draft?.original != nil ? "Edit place" : "Contribute")
       .navigationBarTitleDisplayMode(.inline)
       .scrollDismissesKeyboard(.interactively)
+      .task(id: isFindingLocation) {
+        if isFindingLocation { onFindLocation() }
+      }
+      .onDisappear(perform: onCancelLocationRequest)
       .task(id: editLoadAttempt) {
         guard let editID else { return }
         editLoadError = nil
@@ -123,7 +118,10 @@ struct ContributionSheet: View {
       }
       .toolbar {
         ToolbarItem(placement: .cancellationAction) {
-          Button("Close", systemImage: "xmark") { dismiss() }
+          Button("Close", systemImage: "xmark") {
+            onCancelLocationRequest()
+            dismiss()
+          }
             .accessibilityIdentifier("contribution.close")
         }
         if store.draft?.editable == true {
@@ -182,6 +180,38 @@ struct ContributionSheet: View {
         } catch { if !Task.isCancelled { showPhotoError() } }
       }
     }
+  }
+
+  private func locationSection(_ draft: ContributionDraft?) -> some View {
+    Section {
+      if draft.map({ $0.original == nil && $0.editable }) ?? isFindingLocation {
+        Button(action: onPickLocation) {
+          Label {
+            Text("Choose another location on the map", tableName: "ContributionLocation")
+          } icon: {
+            Image(systemName: "mappin.and.ellipse")
+          }
+        }
+        .accessibilityIdentifier("contribution.location")
+        .accessibilityValue(
+          draft.map { String(format: "%.5f, %.5f", $0.point.latitude, $0.point.longitude) }
+            ?? "")
+      }
+      if let draft {
+        LabeledContent("Location") {
+          Text(
+            "\(draft.point.latitude.formatted(.number.precision(.fractionLength(5)))), \(draft.point.longitude.formatted(.number.precision(.fractionLength(5))))"
+          )
+          .monospacedDigit()
+        }
+      } else if isFindingLocation {
+        ProgressView {
+          Text("Finding your current location…", tableName: "ContributionLocation")
+        }
+        .accessibilityIdentifier("contribution.finding-location")
+      }
+    }
+    .disabled(store.isWorking || photoLoading)
   }
 
   @ViewBuilder private func fields(_ draft: ContributionDraft) -> some View {

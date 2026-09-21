@@ -26,6 +26,9 @@
 
 ```sh
 python3 apps/ios/scripts/place-metadata-fixture.py
+# In another terminal, seed the simulator for the GPS-default contribution case.
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun simctl location booted set 31.2304,121.4737
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun simctl privacy booted grant location com.lycoris.maps
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
   -project apps/ios/Lycoris.xcodeproj -scheme Lycoris -configuration Test \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
@@ -33,8 +36,12 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild \
   -parallel-testing-enabled NO \
   -only-testing:LycorisTests/PlaceMetadataTests \
   -only-testing:LycorisTests/ContributionTests \
-  -only-testing:LycorisUITests/PlaceMetadataUITests test
+  -only-testing:LycorisUITests/PlaceMetadataUITests \
+  -skip-testing:LycorisUITests/PlaceMetadataUITests/testDeniedLocationFallsBackToExplicitMapSelection test
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun simctl location booted clear
 ```
+
+拒绝定位的单独运行方式见 [详情布局与贡献位置](detail-layout-and-contribution-location.md)。
 
 真实 VoiceOver 的逐项滑动、读音和手势体验仍需真机人工体验；自动化标签断言不等价于完整的 VoiceOver 验收。
 
