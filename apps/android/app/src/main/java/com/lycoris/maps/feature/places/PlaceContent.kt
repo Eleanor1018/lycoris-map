@@ -66,8 +66,8 @@ private fun PlaceRow(place: Marker, clients: ApiClients, account: AccountState, 
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(place.title, fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
                         Text(categoryName(place.category, chinese), style = MaterialTheme.typography.labelMedium, color = LycorisColors.SecondaryText)
-                        val hours = hours(place)
-                        if (hours != null) Text(hours, fontSize = 15.sp, color = LycorisColors.SecondaryText)
+                        PlaceVenueTag(place, chinese)
+                        PlaceHours(place, chinese)
                         place.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 15.sp, lineHeight = 20.sp, color = LycorisColors.SecondaryText, maxLines = 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
                     }
                 }
@@ -82,7 +82,9 @@ fun PlaceDetailContent(place: Marker, clients: ApiClients, account: AccountState
             Text(categoryName(place.category, chinese), Modifier.weight(1f), color = LycorisColors.SecondaryText)
             IconButton(onEdit) { Icon(Icons.Rounded.Edit, if (chinese) "编辑点位" else "Edit place", tint = LycorisColors.Plum) }
         }
-        Text(listOfNotNull(distanceLabel(referenceLat, referenceLng, place.lat, place.lng), hours(place)).joinToString("   "), fontSize = 15.sp, color = LycorisColors.SecondaryText)
+        PlaceVenueTag(place, chinese)
+        Text(distanceLabel(referenceLat, referenceLng, place.lat, place.lng), fontSize = 15.sp, color = LycorisColors.SecondaryText)
+        PlaceHours(place, chinese)
         if (!place.markImage.isNullOrBlank()) PlacePhoto(place, clients, account, Modifier.fillMaxWidth().aspectRatio(16f / 9).clip(RoundedCornerShape(16.dp)), true, chinese)
         place.description?.takeIf(String::isNotBlank)?.let { Text(it, fontSize = 16.sp, lineHeight = 23.sp) }
         if (place.reviewStatus != "APPROVED") Text(if (chinese) "待审核" else "Pending review", color = LycorisColors.Primary)
@@ -118,7 +120,7 @@ fun PlaceImageScope(clients: ApiClients, account: AccountState, content: @Compos
     }
     DisposableEffect(publicLoader) { onDispose { publicLoader.shutdown() } }
     DisposableEffect(privateLoader) { onDispose { privateLoader.memoryCache?.clear(); privateLoader.shutdown() } }
-    CompositionLocalProvider(LocalPlaceImages provides PlaceImages(publicLoader, privateLoader), content = content)
+    PlaceTimeScope { CompositionLocalProvider(LocalPlaceImages provides PlaceImages(publicLoader, privateLoader), content = content) }
 }
 
 @Composable
@@ -147,7 +149,6 @@ fun categoryName(key: String, chinese: Boolean): String = when (key) {
     "friendly_clinic" -> if (chinese) "医疗机构" else "Medical institution"
     else -> if (chinese) "其他" else "Other"
 }
-private fun hours(place: Marker) = if (place.openTimeStart != null && place.openTimeEnd != null) "${place.openTimeStart}–${place.openTimeEnd}" else null
 fun distanceLabel(lat: Double, lng: Double, otherLat: Double, otherLng: Double): String {
     val radians = Math.PI / 180
     val a = sin((otherLat - lat) * radians / 2).pow(2) + cos(lat * radians) * cos(otherLat * radians) * sin((otherLng - lng) * radians / 2).pow(2)

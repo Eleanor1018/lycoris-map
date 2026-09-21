@@ -154,7 +154,7 @@ fun MapPanel(
             max = with(density) { availableHeight.toDp() },
         ).onSizeChanged { measuredHeight = it.height.toFloat() }
             .offset { IntOffset(0, state.offset.takeIf { it.isFinite() }.orEmptyOffset(geometry).roundToInt()) }
-            .clip(RoundedCornerShape(topStart = 50.dp, topEnd = 50.dp))
+            .clip(RoundedCornerShape(topStart = 25.dp, topEnd = 25.dp))
             .background(LycorisColors.Surface).nestedScroll(connection)
             .anchoredDraggable(state, Orientation.Vertical, flingBehavior = userFling)
             .semantics {

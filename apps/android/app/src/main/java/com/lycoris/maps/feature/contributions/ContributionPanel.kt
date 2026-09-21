@@ -16,6 +16,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lycoris.maps.core.model.Language
+import com.lycoris.maps.core.model.VenueType
 import com.lycoris.maps.core.model.PlaceCategory
 import com.lycoris.maps.feature.places.categoryName
 import java.util.Locale
@@ -35,6 +36,7 @@ fun ContributionPanel(
     }
     key(draft.id) {
         var fields by remember { mutableStateOf(draft.fields) }
+        var venuesOpen by remember { mutableStateOf(false) }
         var categoriesOpen by remember { mutableStateOf(false) }
         var confirmDiscard by remember { mutableStateOf(false) }
         val context = LocalContext.current
@@ -60,8 +62,21 @@ fun ContributionPanel(
                 OutlinedButton({ categoriesOpen = true }, Modifier.fillMaxWidth(), enabled = draft.editable) { Text(categoryName(fields.category, zh)) }
                 DropdownMenu(categoriesOpen, { categoriesOpen = false }) {
                     PlaceCategory.entries.forEach { category -> DropdownMenuItem(text = { Text(categoryName(category.wireValue, zh)) }, onClick = {
-                        change(fields.copy(category = category.wireValue)); categoriesOpen = false
+                        change(fields.withCategory(category.wireValue)); categoriesOpen = false
                     }) }
+                }
+            }
+            if (fields.category == PlaceCategory.ACCESSIBLE_TOILET.wireValue) {
+                Text(if (zh) "场所类型" else "Venue type", style = MaterialTheme.typography.labelLarge)
+                Box {
+                    OutlinedButton({ venuesOpen = true }, Modifier.fillMaxWidth(), enabled = draft.editable) {
+                        Text((VenueType.fromWire(fields.venueType) ?: VenueType.OTHER).label(zh))
+                    }
+                    DropdownMenu(venuesOpen, { venuesOpen = false }) {
+                        VenueType.entries.forEach { venue -> DropdownMenuItem(text = { Text(venue.label(zh)) }, onClick = {
+                            change(fields.copy(venueType = venue.wireValue)); venuesOpen = false
+                        }) }
+                    }
                 }
             }
             OutlinedTextField(fields.description, { change(fields.copy(description = it)) }, Modifier.fillMaxWidth(), enabled = draft.editable,

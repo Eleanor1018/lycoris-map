@@ -2,12 +2,38 @@ package com.lycoris.maps.feature.contributions
 
 import com.lycoris.maps.core.model.Marker
 import com.lycoris.maps.core.network.CreateMarkerRequest
+import com.lycoris.maps.core.network.EditMarkerRequest
 import com.lycoris.maps.core.network.LycorisJson
+import kotlinx.serialization.encodeToString
 import java.util.UUID
 import org.junit.Assert.*
 import org.junit.Test
 
 class ContributionDraftTest {
+    @Test fun venueSurvivesEditAndDraftRestoreAndCategoryChangesClearIt() {
+        val marker = Marker(17, 31.2, 121.5, "accessible_toilet", "Place", venueType = "metro", hoursTimezone = "Asia/Shanghai")
+        val draft = ContributionDraft(UUID.randomUUID().toString(), "a", "https://example.test/", marker.lat, marker.lng,
+            ContributionFields.fromMarker(marker), original = marker)
+        assertFalse(draft.hasTextChanges)
+        val restored = LycorisJson.decodeFromString<ContributionDraft>(LycorisJson.encodeToString(draft))
+        assertEquals("metro", restored.fields.venueType)
+        val changed = restored.copy(fields = restored.fields.copy(title = "Updated"))
+        assertEquals("metro", LycorisJson.decodeFromString<EditMarkerRequest>(changed.frozenBody()).venueType)
+        val other = changed.copy(fields = changed.fields.withCategory("baby_room"))
+        assertNull(other.fields.venueType)
+        assertNull(LycorisJson.decodeFromString<EditMarkerRequest>(other.frozenBody()).venueType)
+        assertFalse(other.fields.copy(venueType = "metro").isValid())
+        assertFalse(draft.fields.copy(venueType = "invalid").isValid())
+        val legacy = LycorisJson.decodeFromString<ContributionFields>("""{"title":"Legacy draft"}""")
+        assertTrue(legacy.isValid())
+        val newDraft = draft.copy(original = null, markerId = null, fields = legacy)
+        assertEquals("other", LycorisJson.decodeFromString<CreateMarkerRequest>(newDraft.frozenBody()).venueType)
+        assertEquals("school", LycorisJson.decodeFromString<CreateMarkerRequest>(newDraft.copy(fields = legacy.copy(venueType = "school")).frozenBody()).venueType)
+        val oldMarker = marker.copy(venueType = null)
+        val oldEdit = draft.copy(original = oldMarker, fields = ContributionFields.fromMarker(oldMarker).copy(title = "Updated legacy draft"))
+        assertFalse("Legacy edits must not overwrite a classification added on the server", oldEdit.frozenBody().contains("venueType"))
+    }
+
     @Test fun validationCountsUnicodeScalarsAndRequiresCompleteHours() {
         val fields = ContributionFields(title = "😀".repeat(120))
         assertTrue(fields.isValid())

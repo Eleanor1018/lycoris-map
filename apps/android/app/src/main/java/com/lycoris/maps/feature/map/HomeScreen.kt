@@ -225,7 +225,7 @@ fun HomeScreen(
             ) {
                 item(key = "panel-header", contentType = "header") {
                 if (secondary) {
-                    PanelTitle(secondaryTitle.orEmpty(), onCloseSecondary, chinese)
+                    PanelTitle(secondaryTitle.orEmpty(), onCloseSecondary, chinese, startPadding = 30.dp, topPadding = 12.dp, bottomPadding = 8.dp)
                 } else {
                     Column(Modifier.fillMaxWidth().onSizeChangedCompat { if (section != MainSection.BOOKMARKS) middleMeasured = it + with(density) { 12.dp.toPx() } }) {
                         PanelTitle(when (section) {
@@ -305,8 +305,8 @@ private fun MapTool(icon: String, label: String, onClick: () -> Unit, modifier: 
 }
 
 @Composable
-fun PanelTitle(title: String, onClose: (() -> Unit)? = null, chinese: Boolean = false, startPadding: androidx.compose.ui.unit.Dp = 41.dp) {
-    Row(Modifier.fillMaxWidth().padding(start = startPadding, end = 24.dp).heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
+fun PanelTitle(title: String, onClose: (() -> Unit)? = null, chinese: Boolean = false, startPadding: androidx.compose.ui.unit.Dp = 41.dp, topPadding: androidx.compose.ui.unit.Dp = 0.dp, bottomPadding: androidx.compose.ui.unit.Dp = 0.dp) {
+    Row(Modifier.fillMaxWidth().padding(start = startPadding, top = topPadding, end = 24.dp, bottom = bottomPadding).heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, Modifier.weight(1f).semantics { heading() }, fontSize = 22.sp, lineHeight = 28.sp, color = LycorisColors.Text)
         if (onClose != null) IconButton(onClose) { Icon(Icons.Rounded.Close, if (chinese) "关闭" else "Close") }
     }

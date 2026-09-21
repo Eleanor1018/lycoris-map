@@ -4,6 +4,7 @@ import com.lycoris.maps.core.media.EncodedPhoto
 import com.lycoris.maps.core.media.PhotoPolicy
 import com.lycoris.maps.core.media.canonicalUuid
 import com.lycoris.maps.core.model.Marker
+import com.lycoris.maps.core.model.VenueType
 import com.lycoris.maps.core.model.PlaceCategory
 import com.lycoris.maps.core.model.validCoordinate
 import com.lycoris.maps.core.network.CreateMarkerRequest
@@ -21,15 +22,21 @@ data class ContributionFields(
     val openTimeStart: String = "",
     val openTimeEnd: String = "",
     val language: String = "en",
+    val venueType: String? = null,
 ) {
     fun isValid(): Boolean = title.trim().isNotEmpty() && title.trim().let { it.codePointCount(0, it.length) <= 120 } &&
+        (venueType == null || (category == PlaceCategory.ACCESSIBLE_TOILET.wireValue && VenueType.fromWire(venueType) != null)) &&
         category in PlaceCategory.entries.map { it.wireValue } && language in setOf("en", "zh") &&
         ((openTimeStart.isEmpty() && openTimeEnd.isEmpty()) || (validTime(openTimeStart) && validTime(openTimeEnd)))
+
+    val submittedVenueType: String? get() = if (category == PlaceCategory.ACCESSIBLE_TOILET.wireValue) venueType ?: VenueType.OTHER.wireValue else null
+
+    fun withCategory(value: String) = copy(category = value, venueType = if (value == PlaceCategory.ACCESSIBLE_TOILET.wireValue) venueType else null)
 
     companion object {
         fun fromMarker(marker: Marker): ContributionFields = ContributionFields(
             marker.title, marker.category, marker.description.orEmpty(), marker.openTimeStart.orEmpty(),
-            marker.openTimeEnd.orEmpty(), marker.contentLanguage,
+            marker.openTimeEnd.orEmpty(), marker.contentLanguage, marker.venueType,
         )
         private fun validTime(value: String) = value.matches(Regex("(?:[01][0-9]|2[0-3]):[0-5][0-9]"))
     }
@@ -72,9 +79,11 @@ data class ContributionDraft(
         require(canSubmit)
         return if (original == null) LycorisJson.encodeToString(CreateMarkerRequest(
             latitude, longitude, fields.category, fields.title.trim(), fields.description, fields.language,
-            fields.openTimeStart, fields.openTimeEnd, creationRequestId,
+            fields.openTimeStart, fields.openTimeEnd, creationRequestId, venueType = fields.submittedVenueType,
         )) else LycorisJson.encodeToString(EditMarkerRequest(
-            fields.category, fields.title.trim(), fields.description, fields.language, fields.openTimeStart, fields.openTimeEnd,
+            // Older saved drafts have no venue field. Omit it to preserve the server's later
+            // classification; the API itself clears it when changing to another category.
+            fields.category, fields.title.trim(), fields.description, fields.language, fields.openTimeStart, fields.openTimeEnd, venueType = fields.venueType,
         ))
     }
 
