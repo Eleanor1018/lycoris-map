@@ -1,3 +1,4 @@
+import { markerSchema, markerListSchema } from '@/shared/api/markers'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { ContributionForm } from '@/layouts/ContributionForm'
@@ -48,4 +49,22 @@ it('does not mislabel nursing rooms or old responses with a missing tag', () => 
     expect(view.container.textContent).toBe('')
     view.rerender(<VenueTag place={{ category: 'accessible_toilet', venueType: 'metro' }} />)
     expect(screen.getByText('Metro')).toBeInTheDocument()
+})
+
+it.each(['public_toilet', 'airport'] as const)('reads, edits and displays %s', (venueType) => {
+    const place = markerSchema.parse({ ...syntheticPlace(), venueType })
+    expect(draftText(draftFromMarker(place), 'en').venueType).toBe(venueType)
+    const view = render(<VenueTag place={place} />)
+    expect(view.container.textContent).toBe(venueType === 'airport' ? 'Airport' : 'Public toilet')
+})
+it('keeps future tags from breaking a list or being overwritten by unrelated edits', () => {
+    const [place] = markerListSchema.parse([{ ...syntheticPlace(), venueType: 'future_venue' }])
+    expect(place!.venueType).toBeNull()
+    expect(draftText(draftFromMarker(place!), 'en').venueType).toBeNull()
+    expect(
+        markerTextSchema.safeParse({
+            ...draftText(draftFromMarker(place!), 'en'),
+            venueType: 'future_venue',
+        }).success,
+    ).toBe(false)
 })

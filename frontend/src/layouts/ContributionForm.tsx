@@ -161,10 +161,13 @@ export function ContributionForm({
                     <select
                         id={`${id}-venue`}
                         className="contribution-input"
-                        value={draft.venueType}
+                        value={draft.venueType ?? ''}
                         disabled={locked}
                         onChange={(event) => update('venueType', event.target.value as VenueType)}
                     >
+                        <option value="" disabled>
+                            {ui.text('Choose a venue type')}
+                        </option>
                         {Object.entries(venueLabels).map(([value, label]) => (
                             <option value={value} key={value}>
                                 {ui.message(label)}

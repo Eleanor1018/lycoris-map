@@ -24,13 +24,15 @@ pub const MSG_MARK_IMAGE_UPLOAD_ONLY: &str = "markImage 只能为空，请通过
 /// 非无障碍卫生间类别携带场所标签；或标签值不在白名单内。
 pub const MSG_VENUE_TYPE_INVALID: &str = "venueType 不合法";
 
-/// 受控场所标签取值（`accessible_toilet` 专属，与 `0005_marker_venue_type.sql` 的 CHECK 一致）。
-pub const VENUE_TYPES: [&str; 6] = [
+/// 受控场所标签取值（`accessible_toilet` 专属，与最新场所标签迁移的 CHECK 一致）。
+pub const VENUE_TYPES: [&str; 8] = [
     "metro",
     "hospital",
     "mall",
     "railway_station",
     "school",
+    "public_toilet",
+    "airport",
     "other",
 ];
 

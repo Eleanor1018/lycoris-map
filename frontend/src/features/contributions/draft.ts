@@ -6,7 +6,7 @@ import type { LatLng } from '@/features/map/coords'
 export type ContributionDraft = {
     title: string
     category: 'toilet' | 'nursing' | 'medical' | 'custom' | null
-    venueType: VenueType
+    venueType: VenueType | null
     description: string
     openingHour: string
     openingMinute: string
@@ -42,7 +42,7 @@ export function draftFromMarker(marker: Marker): ContributionDraft {
     return {
         ...emptyContributionDraft,
         category,
-        venueType: marker.venueType ?? 'other',
+        venueType: marker.venueType ?? null,
         title: marker.title,
         description: marker.description ?? '',
         isPublic: marker.isPublic,

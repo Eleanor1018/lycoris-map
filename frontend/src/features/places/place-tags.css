@@ -63,3 +63,11 @@
 .place-meta .place-hours-unknown {
     font-weight: 400;
 }
+.venue-public_toilet {
+    color: #24545a;
+    background: #d4ecee;
+}
+.venue-airport {
+    color: #34467c;
+    background: #e0e5ff;
+}

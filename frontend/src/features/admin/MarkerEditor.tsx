@@ -15,7 +15,7 @@ export function MarkerEditor({ marker, close }: { marker: Marker; close: () => v
     const [draft, setDraft] = useState<MarkerText>({
         title: marker.title,
         category: marker.category,
-        venueType: marker.category === 'accessible_toilet' ? (marker.venueType ?? 'other') : null,
+        venueType: marker.category === 'accessible_toilet' ? (marker.venueType ?? null) : null,
         description: marker.description ?? '',
         isPublic: marker.isPublic,
         openTimeStart: marker.openTimeStart ?? '',
@@ -80,11 +80,14 @@ export function MarkerEditor({ marker, close }: { marker: Marker; close: () => v
                         <label className="admin-field">
                             {ui.message('Venue type')}
                             <select
-                                value={draft.venueType ?? 'other'}
+                                value={draft.venueType ?? ''}
                                 onChange={(e) =>
                                     setDraft({ ...draft, venueType: e.target.value as VenueType })
                                 }
                             >
+                                <option value="" disabled>
+                                    {ui.message('Choose a venue type')}
+                                </option>
                                 {Object.entries(venueLabels).map(([value, label]) => (
                                     <option value={value} key={value}>
                                         {ui.message(label)}
