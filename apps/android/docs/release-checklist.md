@@ -63,12 +63,12 @@ Before the OpenGL artifact replacement, the APK passed ZIP and ARM64/x86_64 PT_L
 
 ## Signing, links and distribution
 
-**Release signing and verified App Links are not configured or accepted yet.** The manifest's intent filter and URI parser tests do not establish operating-system domain verification.
+**Local release signing is configured; verified App Links and store distribution are not configured or accepted yet.** See [signing configuration and certificate fingerprints](signing.md). The manifest's intent filter and URI parser tests do not establish operating-system domain verification. CI intentionally has no release signing credentials.
 
 - [ ] Choose the distribution channel, application ID, increasing version code, signing-key custodian and backup/recovery procedure. Configure release signing outside tracked source; never reuse the debug/QA certificate for production.
 - [ ] Verify the signed artifact's certificate using `apksigner verify --print-certs`. If using Play App Signing, use the app-signing certificate for website association, not the upload certificate. Follow Android's [signing guidance](https://developer.android.com/studio/publish/app-signing).
 - [ ] Publish and review `https://lycoris-map.com/.well-known/assetlinks.json` with package `com.lycoris.maps` and the actual release certificate SHA-256 fingerprint. This server change requires its own reviewed deployment; this Android workflow does not publish it.
 - [ ] Install that signed release and verify its link state with `adb shell pm get-app-links com.lycoris.maps`. Test cold/warm valid place links, unknown/inactive IDs, malformed parameters and unrelated URLs. See [App Links verification](https://developer.android.com/training/app-links/verify-applinks).
-- [ ] Confirm OSM attribution/cache behavior and the release tile-provider configuration. Tianditu remains unavailable until a valid native-use configuration passes actual requests; the existing browser key was rejected, and no forged browser headers should be added.
+- [ ] Confirm OSM and Tianditu attribution/cache behavior and the release tile-provider configuration. Tianditu now accepts the separately supplied native-use key for WMTS; verify the shipping package/key configuration and do not add forged browser headers.
 - [ ] Review privacy disclosures, requested permissions, photo processing, retained drafts and account-data handling against the shipping behavior.
 - [ ] Archive the signed release, mapping file and completed acceptance evidence, then obtain release approval before store upload or distribution. This checklist and CI do not authorize publication.

@@ -19,6 +19,7 @@ import com.lycoris.maps.feature.account.*
 import com.lycoris.maps.feature.map.*
 import com.lycoris.maps.feature.places.*
 import com.lycoris.maps.feature.settings.SettingsDialog
+import com.lycoris.maps.feature.settings.TencentPrivacyDialog
 import com.lycoris.maps.feature.contributions.ContributionPanel
 
 @Composable
@@ -43,6 +44,8 @@ fun LycorisRoot(model: HomeViewModel) {
         (viewport.places + listOfNotNull(detail.place?.takeIf { page == SecondaryPage.DETAIL })).distinctBy { it.id }
     }
     val zh = preferences.language == Language.ZH
+    val needsTencentPrivacy = preferences.initialized && preferences.mapSource == MapSource.TENCENT && !preferences.tencentPrivacyAccepted
+    val renderSource = if (needsTencentPrivacy) MapSource.OSM else preferences.mapSource
     val devices = rememberDeviceActions(map, preferences.language, { model.setQuery(it); model.search() }, model::message,
         allowInitialCenter = allowInitialCenter, onBackgroundMessage = model::backgroundMessage,
         onLocalNetworkGranted = model::retryViewport)
@@ -96,19 +99,23 @@ fun LycorisRoot(model: HomeViewModel) {
         { category ->
             val fix = devices.location.fix
             model.nearby(category, fix?.latitude ?: map.camera.latitude, fix?.longitude ?: map.camera.longitude)
-        }, model::contribute, { setting = "source" }, { setting = it }, preferences.radiusMeters, if (preferences.mapSource == MapSource.GOOGLE) "Google Maps" else "OSM",
-        mapSource = preferences.mapSource,
+        }, model::contribute, { setting = "source" }, { setting = it }, preferences.radiusMeters, preferences.mapSource.title(preferences.language),
+        mapSource = if (preferences.initialized) renderSource else MapSource.OSM,
         searchType = preferences.searchType,
         secondaryTitle = title, secondaryKey = page?.let { if (it == SecondaryPage.DETAIL) "detail:${detail.id}" else if (it == SecondaryPage.ACCOUNT) "account:$accountPage" else it.name }, onCloseSecondary = model::closeSecondary, onBackSecondary = ::close,
         notice = if (picking) { if (zh) "点击地图选择点位位置。" else "Tap the map to choose a place." } else notice,
         onDismissNotice = { if (picking) model.cancelPicking() else model.message(null) },
         onAttribution = {
-            runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.openstreetmap.org/copyright"))) }
+            val url = if (renderSource == MapSource.TIANDITU) "https://www.tianditu.gov.cn/" else "https://www.openstreetmap.org/copyright"
+            runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
                 .onFailure { model.message(if (zh) "没有可用的浏览器。" else "No browser is available.") }
         },
         onUserGesture = model::mapGesture, onCameraIdle = model::cameraIdle, onMapClick = { lat, lng -> model.pickLocation(lat, lng) },
         mapLayers = {
-            if (preferences.mapSource == MapSource.GOOGLE) GooglePlaceLayers(map, renderedPlaces,
+            if (renderSource == MapSource.GOOGLE) GooglePlaceLayers(map, renderedPlaces,
+                { if (!picking) model.detail(it) }, devices.location.fix, devices.heading,
+                onPickCoordinate = if (picking) model::pickLocation else null)
+            else if (renderSource == MapSource.TENCENT && preferences.initialized) TencentPlaceLayers(map, renderedPlaces,
                 { if (!picking) model.detail(it) }, devices.location.fix, devices.heading,
                 onPickCoordinate = if (picking) model::pickLocation else null)
             else PlaceLayers(map, renderedPlaces, { if (!picking) model.detail(it) }, devices.location.fix, devices.heading)
@@ -169,10 +176,18 @@ fun LycorisRoot(model: HomeViewModel) {
             }
         })
     }
-    setting?.let { SettingsDialog(it, preferences, { setting = null }, model::language, model::radius,
+    setting?.let { SettingsDialog(it, preferences, { setting = null }, { value -> map.camera = map.snapshotCamera(); model.language(value) }, model::radius,
         onSearchType = model::searchType,
         onMapSource = { source -> map.camera = map.snapshotCamera(); model.mapSource(source) },
         googleAvailability = model.container.googleMapsAvailability) }
+    if (needsTencentPrivacy && setting == null) TencentPrivacyDialog(preferences.language,
+        onAccept = model::acceptTencentPrivacy,
+        onUseOsm = { model.mapSource(MapSource.OSM) },
+        onOpenPrivacy = {
+            runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse("https://lbs.qq.com/userAgreements/agreements/privacy"))) }
+                .onFailure { model.message(if (zh) "没有可用的浏览器。" else "No browser is available.") }
+        })
     webFallback?.let { destination ->
         AlertDialog(onDismissRequest = { webFallback = null }, title = { Text(if (zh) "没有可用的导航应用" else "No navigation app available") },
             text = { Text(if (zh) "可以在浏览器中查看目的地。" else "You can view the destination in a browser.") },

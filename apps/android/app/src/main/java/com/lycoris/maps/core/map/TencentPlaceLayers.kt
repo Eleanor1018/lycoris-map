@@ -15,13 +15,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import com.google.android.gms.maps.GoogleMap
-import com.google.android.gms.maps.model.BitmapDescriptor
-import com.google.android.gms.maps.model.BitmapDescriptorFactory
-import com.google.android.gms.maps.model.Circle
-import com.google.android.gms.maps.model.CircleOptions
-import com.google.android.gms.maps.model.LatLng
-import com.google.android.gms.maps.model.MarkerOptions
+import com.tencent.tencentmap.mapsdk.maps.TencentMap
+import com.tencent.tencentmap.mapsdk.maps.model.BitmapDescriptor
+import com.tencent.tencentmap.mapsdk.maps.model.BitmapDescriptorFactory
+import com.tencent.tencentmap.mapsdk.maps.model.Circle
+import com.tencent.tencentmap.mapsdk.maps.model.CircleOptions
+import com.tencent.tencentmap.mapsdk.maps.model.LatLng
+import com.tencent.tencentmap.mapsdk.maps.model.MarkerOptions
 import com.lycoris.maps.core.device.DeviceLocation
 import com.lycoris.maps.core.device.HeadingState
 import com.lycoris.maps.core.device.LocationFixPolicy
@@ -32,11 +32,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlin.math.min
 import kotlin.math.roundToInt
-import com.google.android.gms.maps.model.Marker as GoogleMarker
+import com.tencent.tencentmap.mapsdk.maps.model.Marker as TencentMarker
 
 /** App data remains identical across providers; only native drawing primitives differ. */
 @Composable
-fun GooglePlaceLayers(
+fun TencentPlaceLayers(
     state: NativeMapState,
     places: List<Marker>,
     onSelect: (Long) -> Unit,
@@ -48,8 +48,9 @@ fun GooglePlaceLayers(
     val density = LocalDensity.current.density
     val selected by rememberUpdatedState(onSelect)
     val pick by rememberUpdatedState(onPickCoordinate)
-    val map = state.googleMap
+    val map = state.tencentMap
     val ready = state.ready
+    val coordinates = state.tencentCoordinates
     val band = PlaceClustering.zoomBand(state.camera.zoom)
     val bitmaps by produceState<PlaceBitmaps?>(null, context, density) {
         value = try {
@@ -61,8 +62,8 @@ fun GooglePlaceLayers(
             null
         }
     }
-    val renderer = remember(state, map, density) {
-        map?.let { GooglePlaceRenderer(state, it, density,
+    val renderer = remember(state, map, density, coordinates) {
+        map?.takeIf { coordinates != null }?.let { TencentPlaceRenderer(state, it, coordinates!!, density,
             onSelect = { selected(it) },
             onPick = { latitude, longitude ->
                 val callback = pick
@@ -91,7 +92,7 @@ fun GooglePlaceLayers(
             withContext(Dispatchers.Main.immediate) { renderer?.updateLocation(null) }
         }
     }
-    LaunchedEffect(renderer, ready, heading) {
+    LaunchedEffect(renderer, ready, heading, state.camera.bearing) {
         val now = SystemClock.elapsedRealtimeNanos()
         val degrees = reliableHeadingDegrees(heading, now)
         withContext(Dispatchers.Main.immediate) { renderer?.updateHeading(degrees) }
@@ -104,12 +105,13 @@ fun GooglePlaceLayers(
 }
 
 /**
- * Owns only Lycoris overlays and the marker/camera-move listeners. The host owns idle, gesture-start,
+ * Owns only Lycoris overlays and the marker listener. The host owns idle, gesture-start,
  * map-click and tile-loaded callbacks. No map.clear(): provider-owned overlays must not be removed.
  */
-private class GooglePlaceRenderer(
+private class TencentPlaceRenderer(
     private val state: NativeMapState,
-    private val map: GoogleMap,
+    private val map: TencentMap,
+    private val coordinates: TencentCoordinates,
     private val density: Float,
     private val onSelect: (Long) -> Unit,
     private val onPick: (Double, Double) -> Boolean,
@@ -118,31 +120,30 @@ private class GooglePlaceRenderer(
     private var listening = false
     private var artwork: PlaceBitmaps? = null
     private var symbols = emptyMap<String, PlaceSymbol>()
-    private val markers = LinkedHashMap<String, GoogleMarker>()
+    private val markers = LinkedHashMap<String, TencentMarker>()
     private val descriptors = LinkedHashMap<String, BitmapDescriptor>()
     private var accuracy: Circle? = null
-    private var dot: GoogleMarker? = null
-    private var cone: GoogleMarker? = null
+    private var dot: TencentMarker? = null
+    private var cone: TencentMarker? = null
     private var location: DeviceLocation? = null
     private var heading: Double? = null
-    private val active: Boolean get() = !disposed && state.ready && state.googleMap === map && state.map == null && state.tencentMap == null
+    private val active: Boolean get() = !disposed && state.ready && state.tencentMap === map && state.map == null && state.googleMap == null
 
     fun listen() {
         if (!active || listening) return
         listening = true
         map.setOnMarkerClickListener { marker ->
             if (!active) return@setOnMarkerClickListener true
-            if (onPick(marker.position.latitude, marker.position.longitude)) return@setOnMarkerClickListener true
+            if (coordinates.fromMap(marker.position)?.let { onPick(it.latitude, it.longitude) } == true) return@setOnMarkerClickListener true
             val symbol = symbols[marker.tag as? String] ?: return@setOnMarkerClickListener true
             if (symbol.clustered) {
                 state.moveTo(symbol.latitude, symbol.longitude, min(state.camera.zoom + 2.0, 20.0))
             } else {
                 onSelect(symbol.memberIds.single())
             }
-            // Disable Google's default camera shift, info window and external map toolbar.
+            // Disable Tencent's default camera shift, info window and external map toolbar.
             true
         }
-        map.setOnCameraMoveListener { if (active) drawHeading() }
     }
 
     fun attach(bitmaps: PlaceBitmaps?) {
@@ -192,13 +193,13 @@ private class GooglePlaceRenderer(
                     else -> circleBitmap(categoryColor(symbol.category), radiusDp = 7f, strokeDp = 2f)
                 })
             }
-            val point = LatLng(symbol.latitude, symbol.longitude)
+            val point = coordinates.toMap(symbol.latitude, symbol.longitude)
             // The shared Figma pin has the same four-dp bottom offset as the MapLibre symbol layer.
             val anchorY = if (isPin) 1f - 4f / 43f else 0.5f
             val marker = markers[key]
             if (marker == null) {
-                map.addMarker(MarkerOptions().position(point).icon(icon).anchor(0.5f, anchorY)
-                    .flat(false).zIndex(10f))?.also { it.tag = key; markers[key] = it }
+                map.addMarker(MarkerOptions(point).icon(icon).anchor(0.5f, anchorY)
+                    .flat(false).infoWindowEnable(false).zIndex(10f))?.also { it.tag = key; markers[key] = it }
             } else {
                 if (marker.position != point) marker.position = point
                 marker.setIcon(icon)
@@ -220,11 +221,11 @@ private class GooglePlaceRenderer(
             cone?.remove(); cone = null
             return
         }
-        val point = LatLng(fix.latitude, fix.longitude)
+        val point = coordinates.toMap(fix.latitude, fix.longitude)
         val circle = accuracy
         if (circle == null) {
             accuracy = map.addCircle(CircleOptions().center(point).radius(fix.accuracyMeters.toDouble())
-                .fillColor(0x1C6393F2).strokeColor(0x406393F2).strokeWidth(density).clickable(false).zIndex(0f))
+                .fillColor(0x1C6393F2).strokeColor(0x406393F2).strokeWidth(density).clickable(false).zIndex(0))
         } else {
             circle.center = point
             circle.radius = fix.accuracyMeters.toDouble()
@@ -233,7 +234,7 @@ private class GooglePlaceRenderer(
             BitmapDescriptorFactory.fromBitmap(circleBitmap(0xFF0C79FE.toInt(), radiusDp = 8f, strokeDp = 4f))
         }
         if (dot == null) {
-            dot = map.addMarker(MarkerOptions().position(point).icon(icon).anchor(0.5f, 0.5f).flat(false).zIndex(30f))
+            dot = map.addMarker(MarkerOptions(point).icon(icon).anchor(0.5f, 0.5f).flat(false).zIndex(30f))
         } else {
             dot?.position = point
             dot?.setIcon(icon)
@@ -250,10 +251,10 @@ private class GooglePlaceRenderer(
             return
         }
         val icon = descriptors.getOrPut("location-heading") { BitmapDescriptorFactory.fromBitmap(bitmap) }
-        val point = LatLng(fix.latitude, fix.longitude)
-        val rotation = ((degrees - map.cameraPosition.bearing - HEADING_ARTWORK_BEARING) % 360.0 + 360.0).toFloat() % 360f
+        val point = coordinates.toMap(fix.latitude, fix.longitude)
+        val rotation = ((degrees - state.camera.bearing - HEADING_ARTWORK_BEARING) % 360.0 + 360.0).toFloat() % 360f
         if (cone == null) {
-            cone = map.addMarker(MarkerOptions().position(point).icon(icon).anchor(0.5f, 0.5f)
+            cone = map.addMarker(MarkerOptions(point).icon(icon).anchor(0.5f, 0.5f)
                 .flat(false).rotation(rotation).zIndex(20f))
         } else {
             cone?.apply { position = point; this.rotation = rotation; isVisible = true; setIcon(icon) }
@@ -263,14 +264,14 @@ private class GooglePlaceRenderer(
     private fun circleBitmap(color: Int, radiusDp: Float, strokeDp: Float): Bitmap {
         val side = ((radiusDp + strokeDp) * 2 * density).roundToInt().coerceAtLeast(1)
         return Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888).apply {
-            this.density = (160 * this@GooglePlaceRenderer.density).roundToInt()
+            this.density = (160 * this@TencentPlaceRenderer.density).roundToInt()
             val canvas = Canvas(this)
             val paint = Paint(Paint.ANTI_ALIAS_FLAG)
             val center = side / 2f
             paint.color = Color.WHITE
-            canvas.drawCircle(center, center, (radiusDp + strokeDp) * this@GooglePlaceRenderer.density, paint)
+            canvas.drawCircle(center, center, (radiusDp + strokeDp) * this@TencentPlaceRenderer.density, paint)
             paint.color = color
-            canvas.drawCircle(center, center, radiusDp * this@GooglePlaceRenderer.density, paint)
+            canvas.drawCircle(center, center, radiusDp * this@TencentPlaceRenderer.density, paint)
         }
     }
 
@@ -280,7 +281,6 @@ private class GooglePlaceRenderer(
         // Parent/provider teardown can destroy its MapView before sibling effects are disposed.
         if (listening) {
             runCatching { map.setOnMarkerClickListener(null) }
-            runCatching { map.setOnCameraMoveListener(null) }
             listening = false
         }
         markers.values.forEach { runCatching { it.remove() } }

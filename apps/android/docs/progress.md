@@ -42,9 +42,9 @@ Defects found and fixed during testing include first-measurement expansion of th
 ## External limitations
 
 - Computer Use has alternated between an unreadable Android Studio Running Devices floating window and a locked Mac. No native Figma screenshot comparison has been accepted yet. Android Studio is now open on the visible Android worktree; automated tests are not a substitute for a complete visual review.
-- The browser-only Tianditu key returned HTTP 403 / service code 301012 for a native WMTS request. OSM remains available; no browser-header impersonation or embedded Tianditu key is used. The new native Google selector remains disabled until an Android SDK key is configured.
+- The earlier browser-only Tianditu key returned HTTP 403 / service code 301012 for a native WMTS request. The replacement key now loads official WMTS tiles through the native renderer; see the Tianditu follow-up below. Google remains disabled until an Android SDK key is configured.
 - Physical GPS/compass, on-device recognition, navigation-app return, OEM background behavior, signed-release runtime and optimized performance measurements remain unverified.
-- Release signing, app-store distribution and website `assetlinks.json` are not configured. The `.preview` package uses a debug certificate and is for evaluation. Release is unsigned.
+- Local release signing is now available (see the signing follow-up below); app-store distribution and website `assetlinks.json` remain unconfigured. The `.preview` package uses a debug certificate and is for evaluation. CI release artifacts remain unsigned.
 
 See [testing-qa.md](testing-qa.md) for the isolated environment and [release-checklist.md](release-checklist.md) for the full remaining acceptance matrix. No production records, server configuration or Web deployment were modified by these Android checks.
 
@@ -86,3 +86,45 @@ Android Settings now follows the iOS ordering and includes Search Type and About
 - Computer Use subsequently returned `noWindowsAvailable` for coordinate clicks while still providing Android Studio screenshots. The remaining manual About/expanded Positions checks could not be completed in this session; automated functional checks above passed. No full visual-acceptance claim is made.
 
 Local command evidence is in `settings-followup-build.log` and `settings-followup-pixel.log` under the ignored runtime directory. No emulator data was cleared; device proxy, production records and server configuration were unchanged.
+
+## OSM Worker and native Tencent Maps
+
+Android now uses the Web deployment's `https://lycoris-map.com/tiles/osm/{z}/{x}/{y}.png` route. A direct host request with proxies disabled returned HTTP 200, a 256×256 PNG and `X-Lycoris-Tile-Source: osm-worker` / cache HIT. Existing disk caching and visible OSM attribution remain in place.
+
+Tencent uses its official native Android SDK, with shared Figma marker assets, category clusters, foreground location/heading and WGS84 application state. GCJ-02 conversion is restricted to the provider boundary. Switching providers retains camera position/scale. Chinese defaults to Tencent when configured, English to OSM; only explicit choices write the provider key, so manual choices survive language changes and restarts. Existing saved choices are preserved. A separate first-use privacy choice gates SDK initialization. The key is in ignored local configuration; the workflow can read `LYCORIS_TENCENT_MAPS_API_KEY`, but this follow-up did not create that GitHub repository secret.
+
+- Final build: `:app:testQaUnitTest :app:lintQa :app:assembleQa :app:assembleQaAndroidTest :app:assemblePreview :app:assembleDebug :app:assembleRelease` passed in 4m57s. All 134 JVM tests passed with no failures/errors/skips.
+- Final Pixel 10 Pro API 37.2 run: 10 focused instrumentation cases passed in 184.428s. These include real Tencent SDK authentication/loading, a visible synthetic marker with geographic-coordinate checks, background return, Tencent → offline OSM → Tencent switching, repeated camera conversion, provider-selector availability, and the real Worker-backed OSM viewport/background-render test.
+- The emulator proxy remained `null`; no network permissions or device proxy were changed for these online checks. Tencent used a synthetic Shanghai viewport, no account records or live device fix. OSM's native loader reported fetched/parsed center tiles and fully rendered frames; cache-origin semantics remain documented in the test.
+- Debug, QA and optimized Preview were installed on Pixel without clearing data. Dev and Preview report `pageSizeCompat=0`. All ten packaged 64-bit libraries in each checked APK have ELF load alignment of at least 16 KB; Preview ZIP alignment passes. Tencent's official lite foundation avoids the optional full-foundation Bugly x86_64 binary with 4 KB alignment.
+- Android Studio was synced in the visible worktree and launched the updated Dev build. Computer Use confirmed rendered OSM and the enabled Tencent option alongside OSM and unavailable Google Maps. Dev's existing provider/language preferences and Tencent privacy choice were left unchanged. Tencent's full visual comparison and physical-device heading remain separate from the automated SDK evidence above.
+
+Evidence: `tencent-verified-build.log`, `tencent-pixel-final.log` in the ignored runtime directory. No Web/iOS source, server deployment or production data was changed.
+
+## CI soft-keyboard fixture
+
+Remote run [35503823643](https://github.com/Eleanor1018/lycoris-map/actions/runs/35503823643) passed unit tests, lint, all APK builds and release ZIP alignment, but failed the real IME test on API 36. Its diagnostics reported a hardware keyboard, `showImeWithHardKeyboard=0` and zero IME bottom inset despite the focused text editor. The workflow now enables and checks `show_ime_with_hard_keyboard` only on its disposable API 36 and API 26 AVDs. The existing real-touch, keyboard-inset, Back handling and button-reachability assertions remain unchanged; no local or physical-device keyboard setting is changed. A new remote run is required to verify this fixture correction.
+
+## Local release signing
+
+A new owner-controlled release key was created outside the repository on 2026-09-20: RSA 3072, PKCS12, 30-year validity, randomly generated password, directory mode 700 and file modes 600. The public certificate and exact map-service registration values are recorded in [signing.md](signing.md). Ignored `local.properties` contains only the external credentials-file path. The private key and passwords were not uploaded to GitHub; an off-device owner backup remains necessary.
+
+`signingReport`, `assembleRelease` and `bundleRelease` passed in 1m10s. `apksigner verify --verbose --print-certs` verified the resulting APK with the intended release certificate; its package is `com.lycoris.maps`, it is not debuggable, and 16 KB ZIP alignment passes. The AAB JAR signature verifies with the same certificate. Debug/QA/Preview retain the original debug certificate. Five isolated Gradle configuration checks passed: absent configuration stays unsigned; an explicitly blank path, missing credentials file, partial fields or missing keystore fails configuration. Those checks did not change developer-device settings.
+
+This establishes local signing and artifact verification, not a store release or signed-release runtime acceptance. CI continues building unsigned release artifacts without private signing credentials. Build evidence is `release-signing-build.log` in the ignored runtime directory.
+
+## Tianditu native raster maps, 2026-09-21
+
+The supplied replacement Tianditu key is configured only in ignored local secrets. Android uses the existing native MapLibre renderer with Tianditu's HTTPS WMTS vector base and Chinese label layers, visible attribution and shared geographic overlays. Official service capabilities declare 256 px Web Mercator tiles, vector levels 1–18 and label levels 1–19. Ordinary native requests returned HTTP 200 PNGs for both layers, without browser-header impersonation. This verifies WMTS access, not authentication of Tianditu's separate Android SDK.
+
+The existing map-source menu now includes Tianditu when configured. Chinese still defaults to configured Tencent and English to OSM; an explicit available provider choice wins across language changes. `LYCORIS_TIANDITU_MAPS_API_KEY` is wired into the workflow as an optional Actions secret, but was not uploaded to GitHub in this task. Repository sources and documentation contain no actual map key.
+
+The new native test exposed a cached-style timing defect: a style could finish reloading before Compose observed `ready=false`, leaving point and location overlays detached. A monotonically increasing style revision now triggers overlay reattachment for every completed style load. The original rendered-marker and location assertions pass with this fix.
+
+- Final QA/Dev build and lint passed; all 137 JVM tests passed with zero failures, errors or skips. Optimized Preview and signed Release APK builds also passed.
+- Pixel 10 Pro API 37.2 passed all 9 selected device tests in 73.517 seconds: both live raster provider tests and seven map-source selector cases. Tianditu checks fetched/parsed center tiles from both sources, fully rendered frames, the production load callback, a synthetic geographic marker and location dot, marker touch selection, background return, and Tianditu → OSM → Tianditu camera retention. These checks do not claim physical-device GPS/compass acceptance.
+- The device proxy remained `null`; no production records, device data, permissions or network settings were changed. QA, Dev and optimized Preview were updated without clearing app data. Dev and Preview report `pageSizeCompat=0`; Preview and Release pass 16 KB ZIP alignment. The Release APK signature matches the certificate in `signing.md`.
+- Android Studio was synced on the visible Android worktree. Computer Use confirmed the enabled Tianditu option and rendered Shanghai roads, Chinese labels and existing place markers in Dev after selecting a public search result. Dev is left on that Tianditu detail view for review; its manual provider selection is now Tianditu. Preview is installed but not separately claimed as manually reviewed.
+- Earlier CI run [35505259363](https://github.com/Eleanor1018/lycoris-map/actions/runs/35505259363) on the preceding signing commit passed its main/API 36 job, but API 26 still failed two rotation/IME cases. Those compatibility failures remain open; the focused Pixel pass is not a complete CI-matrix pass.
+
+Evidence: `tianditu-qa-verified.log`, `tianditu-optimized-verified.log` and `tianditu-pixel-verified.log` in the ignored runtime directory. No Web/iOS source, server deployment or production data was modified.

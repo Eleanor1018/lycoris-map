@@ -29,6 +29,7 @@
         android:usesCleartextTraffic="false"
         android:theme="@style/Theme.Lycoris">
         <meta-data android:name="com.google.android.geo.API_KEY" android:value="${googleMapsApiKey}" />
+        <meta-data android:name="TencentMapSDK" android:value="${tencentMapsApiKey}" />
         <uses-library android:name="org.apache.http.legacy" android:required="false" />
         <provider android:exported="false" android:name="androidx.startup.InitializationProvider" android:authorities="${applicationId}.androidx-startup" tools:node="merge">
             <meta-data android:name="androidx.work.WorkManagerInitializer" tools:node="remove" />

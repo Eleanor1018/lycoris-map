@@ -43,10 +43,13 @@ import androidx.compose.ui.unit.sp
 import com.lycoris.maps.core.designsystem.FigmaIcon
 import com.lycoris.maps.core.designsystem.LycorisColors
 import com.lycoris.maps.core.map.MapViewHost
+import com.lycoris.maps.core.map.MapStyles
+import com.lycoris.maps.BuildConfig
 import com.lycoris.maps.core.map.NativeMapState
 import com.lycoris.maps.core.map.MapBounds
 import com.lycoris.maps.core.map.MapCamera
 import com.lycoris.maps.core.map.GoogleMapViewHost
+import com.lycoris.maps.core.map.TencentMapViewHost
 import com.lycoris.maps.core.data.preferences.MapSource
 import com.lycoris.maps.core.data.preferences.SearchType
 import com.lycoris.maps.core.model.Language
@@ -102,6 +105,9 @@ fun HomeScreen(
     searchType: SearchType = SearchType.ALL,
 ) {
     var reload by remember { mutableIntStateOf(0) }
+    val rasterStyle = remember(mapSource) {
+        if (mapSource == MapSource.TIANDITU) MapStyles.tianditu(BuildConfig.TIANDITU_MAPS_API_KEY) else MapStyles.osm
+    }
     var mapLoad by remember(mapSource, reload) { mutableStateOf(MapLoad.LOADING) }
     var dismissMapFailure by remember(mapSource, reload) { mutableStateOf(false) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -157,8 +163,16 @@ fun HomeScreen(
                     topPaddingPx = with(density) { (topInset + searchHeight + 8.dp).roundToPx() },
                     bottomPaddingPx = with(density) { bottom.roundToPx() } + visibleHeight.toInt(),
                     onTilesLoaded = { mapLoad = MapLoad.LOADED }, onUnavailable = { mapLoad = MapLoad.FAILED })
+            } else if (mapSource == MapSource.TENCENT) {
+                TencentMapViewHost(Modifier.fillMaxSize(), state = map,
+                    onCameraIdle = onCameraIdle, onMapClick = onMapClick, onUserGesture = onUserGesture,
+                    topPaddingPx = with(density) { (topInset + searchHeight + 8.dp).roundToPx() },
+                    bottomPaddingPx = with(density) { bottom.roundToPx() } + visibleHeight.toInt(),
+                    onTilesLoaded = { mapLoad = MapLoad.LOADED }, onUnavailable = { mapLoad = MapLoad.FAILED })
             } else {
-                MapViewHost(Modifier.fillMaxSize(), state = map, onCameraIdle = onCameraIdle,
+                MapViewHost(Modifier.fillMaxSize(), state = map, styleJson = rasterStyle,
+                    rasterSourceIds = if (mapSource == MapSource.TIANDITU) MapStyles.tiandituSources else MapStyles.osmSources,
+                    onCameraIdle = onCameraIdle,
                     onMapClick = onMapClick, onUserGesture = onUserGesture,
                     onTilesLoaded = { mapLoad = MapLoad.LOADED }, onUnavailable = { mapLoad = MapLoad.FAILED })
             }
@@ -178,10 +192,10 @@ fun HomeScreen(
             MapTool("locate", if (chinese) "定位" else "Locate me", onLocate,
                 Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = bottom + visibleDp + 20.dp), large = true)
         }
-        if (mapSource != MapSource.GOOGLE && maxHeight - bottom - visibleDp > topInset + 70.dp) {
+        if (mapSource in setOf(MapSource.OSM, MapSource.TIANDITU) && maxHeight - bottom - visibleDp > topInset + 70.dp) {
             Box(Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = bottom + visibleDp)
                 .widthIn(max = (maxWidth - 82.dp).coerceAtLeast(1.dp)).heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onAttribution), contentAlignment = Alignment.BottomStart) {
-                Text("© OpenStreetMap contributors", Modifier.background(Color.White.copy(alpha = 0.86f)).padding(horizontal = 4.dp, vertical = 2.dp),
+                Text(if (mapSource == MapSource.TIANDITU) "© 天地图" else "© OpenStreetMap contributors", Modifier.background(Color.White.copy(alpha = 0.86f)).padding(horizontal = 4.dp, vertical = 2.dp),
                     fontSize = 11.sp, lineHeight = 14.sp, color = Color(0xFF005EA8))
             }
         }

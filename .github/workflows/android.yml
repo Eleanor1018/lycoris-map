@@ -28,6 +28,9 @@ jobs:
     name: Build and synthetic tests
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      LYCORIS_TENCENT_MAPS_API_KEY: ${{ secrets.LYCORIS_TENCENT_MAPS_API_KEY }}
+      LYCORIS_TIANDITU_MAPS_API_KEY: ${{ secrets.LYCORIS_TIANDITU_MAPS_API_KEY }}
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -99,6 +102,9 @@ jobs:
           working-directory: apps/android
           script: |
             test -z "$(adb shell pm list packages com.google.android.gms)"
+            # This disposable CI AVD reports a hardware keyboard; still render the real IME.
+            adb shell settings put secure show_ime_with_hard_keyboard 1
+            test "$(adb shell settings get secure show_ime_with_hard_keyboard | tr -d '\r')" = 1
             ./gradlew --no-daemon --max-workers=2 :app:connectedQaAndroidTest
 
       - name: Save test and lint reports
@@ -168,6 +174,9 @@ jobs:
             mkdir -p build/api26-results
             test "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" = 26
             test -z "$(adb shell pm list packages com.google.android.gms)"
+            # Match the API 36 phone-keyboard fixture without changing developer devices.
+            adb shell settings put secure show_ime_with_hard_keyboard 1
+            test "$(adb shell settings get secure show_ime_with_hard_keyboard | tr -d '\r')" = 1
             sha256sum build/api26-apks/qa/app-qa.apk build/api26-apks/androidTest/qa/app-qa-androidTest.apk > build/api26-results/apk-sha256.txt
             adb install -r -t build/api26-apks/qa/app-qa.apk
             adb install -r -t build/api26-apks/androidTest/qa/app-qa-androidTest.apk

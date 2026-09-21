@@ -7,6 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -31,14 +32,27 @@ data class MapBounds(val south: Double, val north: Double, val west: Double, val
 class NativeMapState {
     internal var map by mutableStateOf<MapLibreMap?>(null)
     internal var googleMap by mutableStateOf<GoogleMap?>(null)
+    internal var tencentMap by mutableStateOf<com.tencent.tencentmap.mapsdk.maps.TencentMap?>(null)
+    internal var tencentCoordinates by mutableStateOf<TencentCoordinates?>(null)
     var camera by mutableStateOf(MapCamera())
         internal set
     var ready by mutableStateOf(false)
         internal set
+    internal var styleRevision by mutableIntStateOf(0)
+        private set
+    internal fun didLoadStyle() {
+        // Cached style loads can finish before Compose observes ready=false.
+        // Always signal a new style so overlays reattach to its native sources/layers.
+        styleRevision++
+        ready = true
+    }
     internal fun snapshotCamera(): MapCamera {
         googleMap?.let { google ->
             // A failed remote SDK delegate must not make retry/save/provider-switch crash again.
             return try { google.cameraPosition.toNativeCamera() } catch (_: RuntimeException) { camera }
+        }
+        tencentMap?.let { tencent ->
+            return try { tencentCoordinates?.camera(tencent.cameraPosition) ?: camera } catch (_: RuntimeException) { camera }
         }
         val current = map?.cameraPosition ?: return camera
         val target = current.target ?: return camera
@@ -60,6 +74,12 @@ class NativeMapState {
                 camera = destination
                 ready = false
             }
+            return
+        }
+        tencentMap?.let { tencent ->
+            val position = tencentCoordinates?.camera(destination, tencent.minZoomLevel, tencent.maxZoomLevel) ?: return
+            try { tencent.moveCamera(com.tencent.tencentmap.mapsdk.maps.CameraUpdateFactory.newCameraPosition(position)) }
+            catch (_: RuntimeException) { camera = destination; ready = false }
             return
         }
         if (map == null) { camera = destination; return }
@@ -86,6 +106,7 @@ fun MapViewHost(
     onUserGesture: () -> Unit = {},
     onTilesLoaded: () -> Unit = {},
     onUnavailable: () -> Unit = {},
+    rasterSourceIds: Set<String> = MapStyles.osmSources,
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -114,11 +135,11 @@ fun MapViewHost(
                 map.uiSettings.attributionGravity = android.view.Gravity.TOP or android.view.Gravity.START
                 map.uiSettings.setAttributionMargins(8, (122 * resources.displayMetrics.density).toInt(), 0, 0)
                 map.addOnCameraMoveStartedListener { reason ->
-                    if (!alive[0] || state.map !== map || state.googleMap != null) return@addOnCameraMoveStartedListener
+                    if (!alive[0] || state.map !== map || state.googleMap != null || state.tencentMap != null) return@addOnCameraMoveStartedListener
                     if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) gesture()
                 }
                 map.addOnCameraIdleListener {
-                    if (!alive[0] || state.map !== map || state.googleMap != null) return@addOnCameraIdleListener
+                    if (!alive[0] || state.map !== map || state.googleMap != null || state.tencentMap != null) return@addOnCameraIdleListener
                     val camera = map.cameraPosition
                     val point = camera.target ?: return@addOnCameraIdleListener
                     state.camera = MapCamera(point.latitude, point.longitude, camera.zoom, camera.bearing, camera.tilt)
@@ -126,7 +147,7 @@ fun MapViewHost(
                     idle(state.camera, MapBounds(bounds.latitudeSouth, bounds.latitudeNorth, bounds.longitudeWest, bounds.longitudeEast))
                 }
                 map.addOnMapClickListener { point ->
-                    if (alive[0] && state.map === map && state.googleMap == null) clicked(point.latitude, point.longitude)
+                    if (alive[0] && state.map === map && state.googleMap == null && state.tencentMap == null) clicked(point.latitude, point.longitude)
                     false
                 }
             }
@@ -157,7 +178,7 @@ fun MapViewHost(
             context.applicationContext.unregisterComponentCallbacks(memory)
             lifecycle.removeObserver(observer)
             if (state.map === ownedMap[0]) {
-                if (state.googleMap == null) {
+                    if (state.googleMap == null && state.tencentMap == null) {
                     state.camera = state.snapshotCamera()
                     state.ready = false
                 }
@@ -168,25 +189,25 @@ fun MapViewHost(
             mapView.onDestroy()
         }
     }
-    DisposableEffect(styleJson, state.map) {
+    DisposableEffect(styleJson, rasterSourceIds, state.map) {
         val map = state.map
         var active = true
-        var parsedRaster = false
+        val parsedSources = mutableSetOf<String>()
         var rendered = false
-        val fetched = mutableSetOf<List<Int>>()
+        val fetched = mutableSetOf<Pair<String, List<Int>>>()
         val tiles = MapView.OnTileActionListener { operation, x, y, z, wrap, overscaledZ, source ->
-            if (active && source == "osm" && !rendered) {
-                val id = listOf(x, y, z, wrap, overscaledZ)
+            if (active && source in rasterSourceIds && !rendered) {
+                val id = source to listOf(x, y, z, wrap, overscaledZ)
                 when (operation) {
                     TileOperation.LoadFromNetwork, TileOperation.LoadFromCache -> fetched.add(id)
-                    TileOperation.EndParse -> if (id in fetched) parsedRaster = true
+                    TileOperation.EndParse -> if (id in fetched) parsedSources.add(source)
                     TileOperation.Error -> fetched.remove(id)
                     else -> Unit
                 }
             }
         }
         val frame = MapView.OnDidFinishRenderingFrameWithStatsListener { fully, stats ->
-            if (active && !rendered && parsedRaster && fully && stats.numDrawCalls > 0) {
+            if (active && !rendered && rasterSourceIds.isNotEmpty() && parsedSources.containsAll(rasterSourceIds) && fully && stats.numDrawCalls > 0) {
                 rendered = true
                 fetched.clear()
                 mapView.post { if (active && state.map === map) loaded() }
@@ -200,7 +221,7 @@ fun MapViewHost(
         mapView.addOnDidFailLoadingMapListener(failure)
         state.ready = false
         map?.setStyle(Style.Builder().fromJson(styleJson)) {
-            if (active && state.map === map) state.ready = true
+            if (active && state.map === map) state.didLoadStyle()
         }
         onDispose {
             active = false
@@ -210,10 +231,4 @@ fun MapViewHost(
         }
     }
     AndroidView(factory = { mapView }, modifier = modifier)
-}
-
-object MapStyles {
-    val osm = """
-        {"version":8,"sources":{"osm":{"type":"raster","tiles":["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],"tileSize":256,"maxzoom":19,"attribution":"© OpenStreetMap contributors"}},"layers":[{"id":"background","type":"background","paint":{"background-color":"#F3F0F5"}},{"id":"osm","type":"raster","source":"osm"}]}
-    """.trimIndent()
 }

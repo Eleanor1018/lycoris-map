@@ -18,6 +18,39 @@ val googleMapsApiKey = providers.environmentVariable("LYCORIS_GOOGLE_MAPS_API_KE
 require(googleMapsApiKey.isEmpty() || googleMapsApiKey.matches(Regex("[A-Za-z0-9_-]+"))) {
     "Google Maps key contains invalid characters"
 }
+val tencentMapsApiKey = providers.environmentVariable("LYCORIS_TENCENT_MAPS_API_KEY")
+    .orElse(providers.gradleProperty("lycoris.tencentMapsApiKey")).orNull?.trim()
+    ?: mapSecrets.getProperty("tencentMapsApiKey", "").trim()
+require(tencentMapsApiKey.isEmpty() || tencentMapsApiKey.matches(Regex("[A-Za-z0-9_-]+"))) {
+    "Tencent Maps key contains invalid characters"
+}
+val tiandituMapsApiKey = providers.environmentVariable("LYCORIS_TIANDITU_MAPS_API_KEY")
+    .orElse(providers.gradleProperty("lycoris.tiandituMapsApiKey")).orNull?.trim()
+    ?: mapSecrets.getProperty("tiandituMapsApiKey", "").trim()
+require(tiandituMapsApiKey.isEmpty() || tiandituMapsApiKey.matches(Regex("[A-Fa-f0-9]{32}"))) {
+    "Tianditu Maps key must contain 32 hexadecimal characters"
+}
+
+// Only a path belongs in local.properties; the key and passwords stay outside source control.
+// CI without this optional configuration continues producing an unsigned release artifact.
+val localBuildProperties = Properties().apply {
+    rootProject.file("local.properties").takeIf { it.isFile }?.inputStream()?.use { load(it) }
+}
+val releaseSigningPath = providers.environmentVariable("LYCORIS_ANDROID_SIGNING_PROPERTIES")
+    .orElse(providers.gradleProperty("lycoris.signingProperties")).orNull
+    ?: localBuildProperties.getProperty("lycoris.signingProperties")
+val releaseSigningProperties = releaseSigningPath?.let { path ->
+    require(path.isNotBlank()) { "Release signing properties path must not be blank" }
+    val credentialsFile = rootProject.file(path)
+    require(credentialsFile.isFile) { "Release signing properties file was not found" }
+    Properties().apply {
+        credentialsFile.inputStream().use { load(it) }
+        for (name in listOf("storeFile", "storePassword", "keyAlias", "keyPassword")) {
+            require(!getProperty(name).isNullOrBlank()) { "Release signing requires $name" }
+        }
+        require(rootProject.file(getProperty("storeFile")).isFile) { "Release keystore was not found" }
+    }
+}
 
 android {
     namespace = "com.lycoris.maps"
@@ -30,9 +63,23 @@ android {
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["googleMapsApiKey"] = googleMapsApiKey
+        manifestPlaceholders["tencentMapsApiKey"] = tencentMapsApiKey
+        buildConfigField("boolean", "TENCENT_MAPS_CONFIGURED", tencentMapsApiKey.isNotEmpty().toString())
+        buildConfigField("boolean", "TIANDITU_MAPS_CONFIGURED", tiandituMapsApiKey.isNotEmpty().toString())
+        buildConfigField("String", "TIANDITU_MAPS_API_KEY", "\"$tiandituMapsApiKey\"")
         buildConfigField("boolean", "GOOGLE_MAPS_CONFIGURED", googleMapsApiKey.isNotEmpty().toString())
         buildConfigField("String", "API_BASE_URL", "\"https://api.lycoris-map.com/\"")
         buildConfigField("boolean", "TEST_ENVIRONMENT", "false")
+    }
+    signingConfigs {
+        releaseSigningProperties?.let { credentials ->
+            create("release") {
+                storeFile = rootProject.file(credentials.getProperty("storeFile"))
+                storePassword = credentials.getProperty("storePassword")
+                keyAlias = credentials.getProperty("keyAlias")
+                keyPassword = credentials.getProperty("keyPassword")
+            }
+        }
     }
     buildTypes {
         debug {
@@ -50,6 +97,7 @@ android {
             buildConfigField("boolean", "TEST_ENVIRONMENT", "true")
         }
         release {
+            if (releaseSigningProperties != null) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -91,6 +139,8 @@ dependencies {
     implementation(libs.compose.icons)
     implementation(libs.maplibre)
     implementation(libs.google.maps)
+    implementation(libs.tencent.maps)
+    implementation(libs.tencent.foundation)
     implementation(libs.coroutines.android)
     implementation(libs.serialization.json)
     implementation(libs.okhttp)
