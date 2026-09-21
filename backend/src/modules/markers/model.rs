@@ -31,6 +31,7 @@ pub struct MarkerRow {
     pub last_edited_by_public_id: Option<String>,
     pub last_edited_by_owner: bool,
     pub mark_image: Option<String>,
+    pub venue_type: Option<String>,
     pub deactivated: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -73,6 +74,10 @@ pub struct MarkerDto {
     pub last_edited_by_public_id: Option<String>,
     pub last_edited_by_owner: bool,
     pub mark_image: Option<String>,
+    /// 场所标签；仅 `category == "accessible_toilet"` 非空，否则为 `None`。
+    pub venue_type: Option<String>,
+    /// 服务端可用时区（IANA 名称），与 `availability_zone` 配置一致；只读派生字段。
+    pub hours_timezone: String,
     pub deactivated: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -87,6 +92,7 @@ impl MarkerDto {
         description: Option<String>,
         content_language: &str,
         is_active: bool,
+        hours_timezone: &str,
     ) -> Self {
         Self {
             id: row.id,
@@ -110,6 +116,8 @@ impl MarkerDto {
             last_edited_by_public_id: row.last_edited_by_public_id,
             last_edited_by_owner: row.last_edited_by_owner,
             mark_image: row.mark_image,
+            venue_type: row.venue_type,
+            hours_timezone: hours_timezone.to_string(),
             deactivated: row.deactivated,
             created_at: row.created_at,
             updated_at: row.updated_at,

@@ -149,6 +149,7 @@ fn valid_create() -> MarkerCreateRequest {
         open_time_end: None,
         client_request_id: None,
         mark_image: None,
+        venue_type: None,
     }
 }
 

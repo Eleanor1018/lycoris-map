@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n    id, version, lat, lng, category, title, description, source_language,\n    is_public, username, user_public_id, client_request_id, is_active,\n    open_time_start, open_time_end, review_status, last_edited_by,\n    last_edited_by_public_id, last_edited_by_owner, mark_image, deactivated, created_at, updated_at\nFROM map_markers m\nWHERE m.is_public = true\n  AND m.review_status = 'APPROVED'\n  AND m.deactivated = false\n  AND (\n    lower(m.title) LIKE lower('%' || $1 || '%')\n    OR lower(m.description) LIKE lower('%' || $1 || '%')\n    OR lower(m.category) LIKE lower('%' || $1 || '%')\n    OR m.lat::text LIKE '%' || $1 || '%'\n    OR m.lng::text LIKE '%' || $1 || '%'\n  )\nORDER BY m.id ASC\n",
+  "query": "SELECT\n    id, version, lat, lng, category, title, description, source_language,\n    is_public, username, user_public_id, client_request_id, is_active,\n    open_time_start, open_time_end, review_status, last_edited_by,\n    last_edited_by_public_id, last_edited_by_owner, mark_image, venue_type, deactivated, created_at, updated_at\nFROM map_markers\nWHERE is_public = true\n  AND review_status = 'APPROVED'\n  AND deactivated = false\n  AND abs(lat - $1) <= $3\n  AND abs(lng - $2) <= $3\nORDER BY id ASC\n",
   "describe": {
     "columns": [
       {
@@ -225,6 +225,17 @@
       },
       {
         "ordinal": 20,
+        "name": "venue_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "map_markers",
+            "name": "venue_type"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
         "name": "deactivated",
         "type_info": "Bool",
         "origin": {
@@ -235,7 +246,7 @@
         }
       },
       {
-        "ordinal": 21,
+        "ordinal": 22,
         "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -246,7 +257,7 @@
         }
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "updated_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -259,7 +270,9 @@
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Float8",
+        "Float8",
+        "Float8"
       ]
     },
     "nullable": [
@@ -283,10 +296,11 @@
       true,
       false,
       true,
+      true,
       false,
       false,
       false
     ]
   },
-  "hash": "71389c1c91d97349aac6a531791ff2e7b38951a655703efabdd0e50c49d7b9e1"
+  "hash": "0baa24ecd8d8e6b45e58eca096c174946b21221cab99909ca30ced888c9177ac"
 }

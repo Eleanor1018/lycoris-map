@@ -69,7 +69,7 @@ SELECT
     m.source_language, m.is_public, m.username, m.user_public_id,
     m.client_request_id, m.is_active, m.open_time_start, m.open_time_end,
     m.review_status, m.last_edited_by, m.last_edited_by_public_id,
-    m.last_edited_by_owner, m.mark_image, m.deactivated, m.created_at, m.updated_at
+    m.last_edited_by_owner, m.mark_image, m.venue_type, m.deactivated, m.created_at, m.updated_at
 FROM public.map_markers m
 JOIN candidates c ON c.id = m.id
 WHERE c.distance <= $3::double precision

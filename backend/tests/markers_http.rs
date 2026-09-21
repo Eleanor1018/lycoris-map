@@ -28,7 +28,7 @@ const ALLOWED_ORIGIN: &str = "https://app.example.com";
 const SECOND_PASSCODE: &str = "second-pass";
 
 /// 兼容原有点位字段，并增加独立的软删除标志 `deactivated`。
-const MARKER_KEYS: [&str; 24] = [
+const MARKER_KEYS: [&str; 26] = [
     "id",
     "version",
     "lat",
@@ -46,6 +46,8 @@ const MARKER_KEYS: [&str; 24] = [
     "deactivated",
     "openTimeStart",
     "openTimeEnd",
+    "venueType",
+    "hoursTimezone",
     "reviewStatus",
     "lastEditedBy",
     "lastEditedByPublicId",
@@ -55,8 +57,8 @@ const MARKER_KEYS: [&str; 24] = [
     "updatedAt",
 ];
 
-/// `pending-edits` 的 18 个字段。
-const EDIT_PROPOSAL_KEYS: [&str; 18] = [
+/// `pending-edits` 的 19 个字段。
+const EDIT_PROPOSAL_KEYS: [&str; 19] = [
     "id",
     "markerId",
     "markerTitle",
@@ -70,6 +72,7 @@ const EDIT_PROPOSAL_KEYS: [&str; 18] = [
     "isActive",
     "openTimeStart",
     "openTimeEnd",
+    "venueType",
     "proposerUsername",
     "proposerPublicId",
     "proposerIsOwner",
@@ -1257,6 +1260,7 @@ async fn create_mark_image_only_null_or_blank() {
         open_time_end: None,
         client_request_id: None,
         mark_image,
+        venue_type: None,
     };
 
     let malicious = service_request("核心拒绝", Some("/uploads/markers/private.png".to_string()));
