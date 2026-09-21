@@ -72,7 +72,7 @@ class MapPanelTest {
             LycorisTheme {
                 BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
                     val density = LocalDensity.current
-                    expected = with(density) { 212.dp.toPx() }
+                    expected = with(density) { 228.dp.toPx() }
                     MapPanel(with(density) { maxHeight.toPx() }, with(density) { 284.dp.toPx() }, PanelStop.EXPANDED, "Detail", {}, { visible = it }) {
                         item { Box(Modifier.fillMaxWidth().height(200.dp)) }
                     }

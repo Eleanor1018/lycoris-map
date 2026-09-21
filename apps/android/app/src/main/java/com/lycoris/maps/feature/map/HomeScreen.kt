@@ -229,14 +229,14 @@ fun HomeScreen(
                     PanelTitle(secondaryTitle.orEmpty(), onCloseSecondary, chinese, startPadding = 30.dp,
                         topPadding = if (detail) 11.dp else 12.dp, bottomPadding = if (detail) 11.dp else 8.dp)
                 } else {
-                    Column(Modifier.fillMaxWidth().onSizeChangedCompat { if (section != MainSection.BOOKMARKS) middleMeasured = it + with(density) { 12.dp.toPx() } }) {
+                    Column(Modifier.fillMaxWidth().onSizeChangedCompat { if (section != MainSection.BOOKMARKS) middleMeasured = it + with(density) { PanelGrabberHeight.toPx() } }) {
                         PanelTitle(when (section) {
                             MainSection.EXPLORE -> if (chinese) "查找附近" else "Find Nearby"
                             MainSection.BOOKMARKS -> if (chinese) "收藏" else "Bookmarks"
                             MainSection.SETTINGS -> if (chinese) "设置" else "Settings"
-                        }, chinese = chinese, startPadding = if (section == MainSection.BOOKMARKS) 30.dp else 41.dp)
+                        }, chinese = chinese, startPadding = 11.dp, endPadding = 11.dp, bottomPadding = 11.dp)
                         when (section) {
-                            MainSection.EXPLORE -> NearbyCategories(chinese, onNearby)
+                            MainSection.EXPLORE -> NearbyCategories(chinese, onNearby, horizontalPadding = 11.dp)
                             MainSection.SETTINGS -> SettingsRows(chinese, radius, mapSourceName, searchType, onSetting)
                             MainSection.BOOKMARKS -> Unit
                         }
@@ -307,16 +307,16 @@ private fun MapTool(icon: String, label: String, onClick: () -> Unit, modifier: 
 }
 
 @Composable
-fun PanelTitle(title: String, onClose: (() -> Unit)? = null, chinese: Boolean = false, startPadding: androidx.compose.ui.unit.Dp = 41.dp, topPadding: androidx.compose.ui.unit.Dp = 0.dp, bottomPadding: androidx.compose.ui.unit.Dp = 0.dp) {
-    Row(Modifier.fillMaxWidth().padding(start = startPadding, top = topPadding, end = 24.dp, bottom = bottomPadding).heightIn(min = 40.dp), verticalAlignment = Alignment.CenterVertically) {
+fun PanelTitle(title: String, onClose: (() -> Unit)? = null, chinese: Boolean = false, startPadding: androidx.compose.ui.unit.Dp = 41.dp, topPadding: androidx.compose.ui.unit.Dp = 0.dp, bottomPadding: androidx.compose.ui.unit.Dp = 0.dp, endPadding: androidx.compose.ui.unit.Dp = 24.dp) {
+    Row(Modifier.fillMaxWidth().padding(start = startPadding, top = topPadding, end = endPadding, bottom = bottomPadding).heightIn(min = if (onClose != null) 40.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(title, Modifier.weight(1f).semantics { heading() }, fontSize = 22.sp, lineHeight = 28.sp, color = LycorisColors.Text)
         if (onClose != null) IconButton(onClose) { Icon(Icons.Rounded.Close, if (chinese) "关闭" else "Close") }
     }
 }
 
 @Composable
-fun NearbyCategories(chinese: Boolean, onClick: (String) -> Unit) {
-    Column(Modifier.padding(horizontal = 30.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+fun NearbyCategories(chinese: Boolean, onClick: (String) -> Unit, horizontalPadding: androidx.compose.ui.unit.Dp = 30.dp) {
+    Column(Modifier.padding(horizontal = horizontalPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         nearbyCategories.forEachIndexed { index, category ->
             Row(Modifier.fillMaxWidth().heightIn(min = 66.dp).clip(groupShape(index, 3)).background(LycorisColors.Card)
                 .clickable(role = Role.Button, onClick = { onClick(category.key) }).padding(horizontal = 16.dp, vertical = 12.dp),
@@ -339,7 +339,7 @@ private fun SettingsRows(chinese: Boolean, radius: Int, mapSourceName: String, s
         Triple("source", if (chinese) "地图来源" else "Map Source", mapSourceName),
         Triple("about", if (chinese) "关于 Lycoris Maps" else "About Lycoris Maps", ""),
     )
-    Column(Modifier.padding(horizontal = 30.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.padding(horizontal = 11.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         rows.forEachIndexed { index, (key, label, value) ->
             Row(Modifier.fillMaxWidth().heightIn(min = 66.dp).clip(groupShape(index, rows.size)).background(LycorisColors.Card)
                 .clickable(role = Role.Button, onClick = { onSetting(key) }).padding(horizontal = 16.dp, vertical = 12.dp),

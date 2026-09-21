@@ -30,6 +30,8 @@ Opening hours use native Material 3 colors and informational tags. Status matche
 
 Place details use 11 dp between content groups and above/below their heading. Category and distance share a row; venue and opening-hours badges share a wrapping row that accommodates larger text. The edit action sits immediately after Share. The search account entry displays the same public thumbnail as the profile, scoped to the user, session epoch and avatar URL; missing/failed images show initials and logout restores the anonymous placeholder.
 
+Explore, Bookmarks and Settings use 11 dp outer content insets and 11 dp between headings and their content, including the expanded Positions section. The grabber occupies 28 dp: 8 dp above the 4 dp indicator and 16 dp below it. The measured middle stop includes this same grabber height, so the default Explore panel still fits all three nearby categories.
+
 The Android implementation started at baseline `c139926`. Both native clients belong to this repository under `apps/ios` and `apps/android`. The visible Android worktree is `/Users/nora/lycoris-map-android` on `feat/android-native`; open `/Users/nora/lycoris-map-android/apps/android/settings.gradle.kts` in Android Studio. The iOS working directory stays `/Users/nora/lycoris-map` on `feat/ios-native`. Keep the actual Android worktree open in the IDE, and report its branch, build variant, device and installed version when handing work over for testing. Completion requires runtime evidence, not just a successful build. Device tests and Figma references are recorded in [progress.md](docs/progress.md).
 
 ## Native Google Maps comparison

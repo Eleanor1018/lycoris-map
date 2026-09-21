@@ -33,6 +33,8 @@ import com.lycoris.maps.core.designsystem.LycorisColors
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
+internal val PanelGrabberHeight = 28.dp
+
 /** Persistent, nonmodal sheet: map gestures outside the sheet always remain available. */
 @Composable
 fun MapPanel(
@@ -163,8 +165,8 @@ fun MapPanel(
                 collapse { scope.launch { settleUserStop(PanelStop.COLLAPSED) }; true }
             },
     ) {
-        Box(Modifier.testTag("panel-grabber").fillMaxWidth().height(12.dp), contentAlignment = androidx.compose.ui.Alignment.TopCenter) {
-            Box(Modifier.padding(top = 4.dp).width(48.dp).height(4.dp)
+        Box(Modifier.testTag("panel-grabber").fillMaxWidth().height(PanelGrabberHeight), contentAlignment = androidx.compose.ui.Alignment.TopCenter) {
+            Box(Modifier.padding(top = 8.dp).width(48.dp).height(4.dp)
                 .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.2f), RoundedCornerShape(4.dp)))
         }
         LazyColumn(Modifier.fillMaxWidth().testTag("panel-list"), state = scroll, content = content)

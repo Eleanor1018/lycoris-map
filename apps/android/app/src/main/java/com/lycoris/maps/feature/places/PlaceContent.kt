@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import coil3.ImageLoader
 import coil3.compose.SubcomposeAsyncImage
@@ -39,27 +40,27 @@ import com.lycoris.maps.core.network.ImageVariant
 import com.lycoris.maps.feature.map.displayMessage
 import kotlin.math.*
 
-fun LazyListScope.placeItems(state: PlaceListState, clients: ApiClients, account: AccountState, chinese: Boolean, onPlace: (Long) -> Unit, onRetry: () -> Unit) {
+fun LazyListScope.placeItems(state: PlaceListState, clients: ApiClients, account: AccountState, chinese: Boolean, onPlace: (Long) -> Unit, onRetry: () -> Unit, horizontalPadding: Dp = 30.dp) {
         if (state.loading) item(key = "places-loading", contentType = "status") {
-            LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 30.dp))
+            LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = horizontalPadding))
         }
         if (state.failure != null) item(key = "places-failure", contentType = "status") {
-            Column(Modifier.fillMaxWidth().padding(horizontal = 30.dp, vertical = 8.dp)) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = horizontalPadding)) {
             Text(state.failure.displayMessage(if (chinese) Language.ZH else Language.EN), style = MaterialTheme.typography.bodyMedium)
             TextButton(onRetry) { Text(if (chinese) "重试" else "Retry") }
             }
         }
         if (state.loaded && state.places.isEmpty() && !state.loading && state.failure == null) item(key = "places-empty", contentType = "status") {
-            Text(if (chinese) "这个范围内暂时没有点位。" else "No places found in this area.", Modifier.padding(horizontal = 30.dp, vertical = 12.dp), color = LycorisColors.SecondaryText)
+            Text(if (chinese) "这个范围内暂时没有点位。" else "No places found in this area.", Modifier.padding(horizontal = horizontalPadding), color = LycorisColors.SecondaryText)
         }
         itemsIndexed(state.places, key = { _, place -> "place:${place.id}" }, contentType = { _, _ -> "place" }) { index, place ->
-            PlaceRow(place, clients, account, chinese, onPlace, index < state.places.lastIndex)
+            PlaceRow(place, clients, account, chinese, onPlace, index < state.places.lastIndex, horizontalPadding)
         }
 }
 
 @Composable
-private fun PlaceRow(place: Marker, clients: ApiClients, account: AccountState, chinese: Boolean, onPlace: (Long) -> Unit, hasFollowingRow: Boolean) {
-        Box(Modifier.fillMaxWidth().padding(horizontal = 30.dp).padding(bottom = if (hasFollowingRow) 16.dp else 0.dp)) {
+private fun PlaceRow(place: Marker, clients: ApiClients, account: AccountState, chinese: Boolean, onPlace: (Long) -> Unit, hasFollowingRow: Boolean, horizontalPadding: Dp) {
+        Box(Modifier.fillMaxWidth().padding(horizontal = horizontalPadding).padding(bottom = if (hasFollowingRow) 16.dp else 0.dp)) {
             Surface(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = { onPlace(place.id) }), shape = RoundedCornerShape(24.dp), color = LycorisColors.Card) {
                 Column {
                     if (!place.markImage.isNullOrBlank()) PlacePhoto(place, clients, account, Modifier.fillMaxWidth().aspectRatio(16f / 9).clip(RoundedCornerShape(16.dp)), false, chinese)
