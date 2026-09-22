@@ -314,6 +314,12 @@ body:has(.account-mobile) .mobile-sheet {
     border-radius: 50%;
     object-fit: cover;
 }
+.account-guest-icon {
+    width: 60%;
+    height: 60%;
+    flex: none;
+    color: #626269;
+}
 .desktop-guest-account {
     position: absolute;
     left: 13px;
