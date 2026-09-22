@@ -5,6 +5,8 @@ import SwiftUI
 struct NativeMapView: UIViewRepresentable {
   let topInset: CGFloat
   let bottomInset: CGFloat
+  var leftInset: CGFloat = 10
+  var rightInset: CGFloat = 10
   var appearance: MapAppearance = .explore
   var coordinateSpace: MapCoordinateSpace = .wgs84
   var places: [PlacePresentation] = []
@@ -54,7 +56,8 @@ struct NativeMapView: UIViewRepresentable {
     context.coordinator.placementDoubleTap = doubleTap
     map.addGestureRecognizer(doubleTap)
     map.addGestureRecognizer(tap)
-    map.layoutMargins = UIEdgeInsets(top: topInset, left: 10, bottom: bottomInset, right: 10)
+    map.layoutMargins = UIEdgeInsets(
+      top: topInset, left: leftInset, bottom: bottomInset, right: rightInset)
     var center = CLLocationCoordinate2D(latitude: 40.766, longitude: -74.077)
     #if DEBUG
       // Explicit simulator verification override; a startup fix can replace this fallback.
@@ -102,7 +105,7 @@ struct NativeMapView: UIViewRepresentable {
       coordinator.appearance = appearance
     }
     Self.updateMargins(
-      UIEdgeInsets(top: topInset, left: 10, bottom: bottomInset, right: 10), on: map)
+      UIEdgeInsets(top: topInset, left: leftInset, bottom: bottomInset, right: rightInset), on: map)
     map.showsUserLocation = showsUserLocation
     if !showsUserLocation && map.userTrackingMode != .none {
       map.setUserTrackingMode(.none, animated: false)

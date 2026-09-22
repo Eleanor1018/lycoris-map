@@ -36,6 +36,7 @@ struct PlaceResultsView: View {
         .padding(.horizontal, 3)
       }
     }
+    .accessibilityElement(children: .contain)
     .accessibilityIdentifier("places.results")
   }
 }

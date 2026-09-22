@@ -17,6 +17,7 @@ struct MapPanelContent: View {
   var onCategory: (PlaceCategory) -> Void = { _ in }
   let onSelect: (PlacePresentation) -> Void
   let onUnavailableAction: () -> Void
+  var singleColumnCategories = false
 
   var body: some View {
     List {
@@ -76,7 +77,7 @@ struct MapPanelContent: View {
 
   private var nearbyCategories: some View {
     VStack(alignment: .leading, spacing: 0) {
-      if dynamicTypeSize.isAccessibilitySize {
+      if singleColumnCategories || dynamicTypeSize.isAccessibilitySize {
         VStack(spacing: 12) {
           category(.toilet)
           category(.nursing)

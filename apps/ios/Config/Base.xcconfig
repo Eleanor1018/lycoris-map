@@ -11,7 +11,8 @@ CURRENT_PROJECT_VERSION = 2
 GENERATE_INFOPLIST_FILE = YES
 INFOPLIST_FILE = Config/Info.plist
 INFOPLIST_KEY_CFBundleDisplayName = Lycoris
-INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES
+// The explicit single-scene manifest protects the shared contribution journal.
+INFOPLIST_KEY_UIApplicationSceneManifest_Generation = NO
 INFOPLIST_KEY_UILaunchScreen_Generation = YES
 INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait
 INFOPLIST_KEY_LycorisAPIBaseURL = $(LYCORIS_API_BASE_URL)
