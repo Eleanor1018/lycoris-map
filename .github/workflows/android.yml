@@ -178,9 +178,16 @@ jobs:
             adb shell settings put secure show_ime_with_hard_keyboard 1
             test "$(adb shell settings get secure show_ime_with_hard_keyboard | tr -d '\r')" = 1
             sha256sum build/api26-apks/qa/app-qa.apk build/api26-apks/androidTest/qa/app-qa-androidTest.apk > build/api26-results/apk-sha256.txt
+            # This API 26 image's link verifier starts a background service on APK install.
+            # Give only that system package a short install-time exemption so it can verify
+            # App Links without crashing and covering the app with a system error dialog.
+            # Do not disable verification, suppress crash dialogs, or exempt Lycoris itself.
+            adb shell cmd deviceidle tempwhitelist -d 60000 com.android.statementservice
             adb install -r -t build/api26-apks/qa/app-qa.apk
             adb install -r -t build/api26-apks/androidTest/qa/app-qa-androidTest.apk
+            adb shell dumpsys window windows > build/api26-results/windows-before-tests.txt
             adb shell am instrument -w -r com.lycoris.maps.qa.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tee build/api26-results/instrumentation.txt
+            adb shell dumpsys window windows > build/api26-results/windows-after-tests.txt
             adb logcat -d -v threadtime > build/api26-results/logcat.txt
             python3 -c 'import pathlib, re; result = pathlib.Path("build/api26-results/instrumentation.txt").read_text(); success = re.search(r"(?m)^OK \(([1-9][0-9]*) tests?\)\s*$", result); assert success and re.search(r"(?m)^INSTRUMENTATION_CODE: -1\s*$", result), "Instrumentation did not finish with a nonempty successful result"; assert not re.search(r"(?m)^INSTRUMENTATION_STATUS_CODE: -[12]\s*$|INSTRUMENTATION_FAILED|INSTRUMENTATION_ABORTED|FAILURES!!!", result), "Instrumentation reported a test or runner failure"; print("API 26 instrumentation passed (" + success.group(1) + " tests reported; inspect the log for the expected opt-in backend skip)")'
 
