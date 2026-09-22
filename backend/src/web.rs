@@ -1,13 +1,8 @@
-//! HTTP 支撑：JSON 请求体提取、Cookie 读写与四类响应体辅助。
+//! HTTP extractors, cookies, and response helpers.
 //!
-//! 四类响应形状（见 `docs/rust-migration/api-contract.md` 1.3）在此显式选择，
-//! **不做全局统一包装**：
-//! - AuthController 的 `ApiResponse`；
-//! - 管理员成功体的普通 JSON；
-//! - 纯文本中文错误；
-//! - 空体。
-//!
-//! 以及安全入口固定的 401 JSON `{"message":"Spring Security Error"}`。
+//! Select the response shape at each route boundary; see [`crate::error`].
+//! Authentication failures retain their established JSON contract, including the
+//! legacy error text, so clients can recognize them without a schema change.
 
 use axum::body::Body;
 use axum::extract::{FromRequest, Request};

@@ -553,7 +553,7 @@ async fn java_bcrypt_vectors_and_legacy_upgrade() {
     let env = TestEnv::new().await;
     let hasher = PasswordHasher::new(4, 1);
 
-    // 温晓用 Java 6.5.7 生成的公开合成向量。
+    // Public synthetic BCrypt vector generated with Spring Security Crypto 6.5.7.
     let vectors: &[(&str, &str)] = &[
         (
             "c3ludGhldGljLXBhc3N3b3Jk",

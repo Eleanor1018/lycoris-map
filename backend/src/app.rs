@@ -1,9 +1,8 @@
-//! Axum 装配：AppState、Router 与健康检查。
+//! Axum routes, shared services, health checks, and middleware.
 //!
-//! 这里挂载健康检查、公开点位读取、阶段 2 认证/用户/头像/受控读取，以及阶段 3 的点位
-//! 写入/收藏/审核与图片提案/清理路由（43 个既有契约模板；`/health/*` 探针另列）。中间件固定
-//! 8 MiB 总请求上限、请求超时、服务端请求 ID + 按路由模板的访问日志，以及显式凭据白名单
-//! CORS；日志层最外层并附 `X-Request-ID`，CORS 仍包住所有错误来源。
+//! Keep CORS outside request failures so allowed clients can read their errors.
+//! The outer request log supplies a server-generated ID without logging secrets.
+//! Body limits, timeouts, and write-origin checks apply across feature routes.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -128,10 +127,10 @@ pub fn build_router(state: AppState) -> Router {
         .route("/health/live", get(health_live))
         .route("/health/ready", get(health_ready))
         .merge(crate::modules::markers::http::router())
-        // 阶段 3：点位写入/收藏/审核（18 个非图片路由）。
+        // Place mutations, bookmarks, moderation, and resumable image sessions.
         .merge(crate::modules::markers::write_http::router())
         .merge(crate::media::resumable::router())
-        // 阶段 2：AuthController（9 个中的 6 个非头像路由）
+        // Accounts and email verification.
         .route("/api/login", axum::routing::post(routes::auth::login))
         .route("/api/register", axum::routing::post(routes::auth::register))
         .route(
@@ -159,7 +158,7 @@ pub fn build_router(state: AppState) -> Router {
             axum::routing::post(routes::auth::change_password),
         )
         .route("/api/logout", axum::routing::post(routes::auth::logout))
-        // 阶段 2：AdminAuthController + AdminUserController（5 个）
+        // Admin verification and account management.
         .route(
             "/api/admin/verify",
             axum::routing::post(routes::admin::verify),
@@ -177,7 +176,7 @@ pub fn build_router(state: AppState) -> Router {
             "/api/admin/users/{id}/restore",
             axum::routing::post(routes::admin::restore_user),
         )
-        // 阶段 3：AdminMarkerController 图片提案与失效引用清理（全部 VerifiedAdmin）。
+        // Image moderation and missing-reference cleanup require VerifiedAdmin.
         .route(
             "/api/admin/markers/pending-images",
             get(routes::admin_markers::pending_images),
@@ -194,8 +193,8 @@ pub fn build_router(state: AppState) -> Router {
             "/api/admin/markers/cleanup-missing-images",
             axum::routing::post(routes::admin_markers::cleanup_missing_images),
         )
-        // 阶段 2：受控 `/uploads` 读取。目录白名单拆成显式路由：
-        // `avatars` 不加载会话（匿名可读，保持 Java 语义）；`markers` 接 `OptionalUser`。
+        // Keep media directories explicit: avatars are public, while marker images
+        // resolve an optional viewer and check current place visibility.
         .route(
             "/uploads/avatars/{filename}",
             get(routes::uploads::serve_avatar),

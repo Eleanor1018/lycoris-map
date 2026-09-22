@@ -1,29 +1,6 @@
-# Lycoris Rust 后端 Linux 发布镜像（阶段 4：Linux 发布基础）。
-#
-# 阶段划分：
-#   source   共享的源码与工具链环境（固定 Rust 1.98.1、SQLX_OFFLINE、Cargo.lock）；
-#   builder  离线 release 构建：`cargo build --release --locked`；
-#   test     独立测试运行器：fmt / clippy / 离线 SQLx 全 targets 编译 / 全部 cargo test；
-#   runtime  Debian stable slim，固定非 root UID/GID，只复制 release 二进制与 CA 证书。
-#
-# 可复现性：
-#   - `rust-toolchain.toml` 与 builder 标签都固定 1.98.1，不自动切换/下载其它工具链；
-#   - 复制 `Cargo.lock` 并以 `--locked` 构建，禁止解析升级任何 crate；
-#   - 不设置 `target-cpu=native`、不启用 `panic=abort`，保持与现有行为一致；
-#   - `release` 仅做符号 strip（Cargo.toml `[profile.release]`），不改变运行语义；
-#   - 基础镜像以官方 tag @ 已核对 digest 固定（温晓经官方 registry Bearer manifest 逐层核对）。
-#     受限网络下用**同一 digest** 的镜像站地址经 build arg 覆盖，不改变实际版本。
-#
-# 构建参数：
-#   RUST_BUILDER_IMAGE  默认 rust:1.98.1-slim-trixie@sha256:ce84a5ed…（官方，已核对）
-#   RUNTIME_IMAGE       默认 debian:trixie-slim@sha256:d7e12182…（官方，已核对）
-#   APP_UID / APP_GID   运行用户固定 UID/GID（默认 10001）
-#
-# 已核对 digest（2026-09-14）：
-#   rust:1.98.1-slim-trixie  sha256:ce84a5edd80c5f91e05c5533b1e53eb1da54028f33734dc06aa6b49fa190462d
-#                            linux/amd64 sha256:a2de23e559fd8afd260d22beb00f3987073ea0dcc2ba2646cccdaeda6a62a095
-#   debian:trixie-slim       sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
-#                            linux/amd64 sha256:abc9cb88a5587630d7f915f47b23b0668fe250fbfc6457aa4d52b534c1bbf73f
+# Multi-stage build: shared source, release builder, test runner, and non-root runtime.
+# Toolchains, base-image digests, and Cargo.lock pin the build inputs.
+# Build arguments may select mirrors of the same image digest.
 
 ARG RUST_BUILDER_IMAGE=rust:1.98.1-slim-trixie@sha256:ce84a5edd80c5f91e05c5533b1e53eb1da54028f33734dc06aa6b49fa190462d
 ARG RUNTIME_IMAGE=debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
