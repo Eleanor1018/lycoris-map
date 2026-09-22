@@ -268,6 +268,10 @@ export const uiMessages = {
     'OSM is the map source available in this version.': '此版本使用 OSM 作为地图来源。',
     'A map of accessible and friendly places.': '一张无障碍与友好设施地图。',
     'Place details are contributed by the community.': '点位信息由社区共同贡献。',
+    'Across mountains and seas, together.': '一起跨越山与海',
+    'Version {version}': '版本 {version}',
+    'View on GitHub': '访问 GitHub 仓库',
+    'Thank you to all our contributors.': '感谢所有贡献者。',
     'Map data': '地图数据',
     'Source code': '源代码',
 } as const

@@ -2798,6 +2798,50 @@
           }
         }
       }
+    },
+    "Version %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "版本 %@"
+          }
+        }
+      }
+    },
+    "Across mountains and seas, together.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一起跨越山与海"
+          }
+        }
+      }
+    },
+    "View on GitHub": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "访问 GitHub 仓库"
+          }
+        }
+      }
+    },
+    "Thank you to all our contributors.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "感谢所有贡献者。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

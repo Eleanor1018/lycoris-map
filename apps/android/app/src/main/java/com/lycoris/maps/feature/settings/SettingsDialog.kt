@@ -1,6 +1,8 @@
 package com.lycoris.maps.feature.settings
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.selectable
@@ -9,6 +11,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
+import com.lycoris.maps.R
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -60,20 +67,7 @@ fun SettingsDialog(kind: String, preferences: Preferences, onDismiss: () -> Unit
                     }
                 }
             })
-        "about" -> AlertDialog(onDismissRequest = onDismiss,
-            title = { Text(if (zh) "关于 Lycoris Maps" else "About Lycoris Maps") },
-            confirmButton = { TextButton(onDismiss) { Text(if (zh) "完成" else "Done") } }, text = {
-                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("Lycoris Maps", Modifier.weight(1f))
-                        Text(BuildConfig.VERSION_NAME)
-                    }
-                    Text(if (zh) "一款简洁的地图，帮你找到无障碍卫生间、母婴室和医疗机构。"
-                        else "A simple map for finding accessible toilets, nursing rooms, and medical institutions.")
-                    Text(if (zh) "Lycoris 分享链接可在 App 中打开点位，是否可见取决于你的访问权限。"
-                        else "Shared Lycoris links can open places in the app. Place availability depends on your access.")
-                }
-            })
+        "about" -> AboutDialog(zh = zh, onDismiss = onDismiss)
         "range" -> {
             var input by rememberSaveable { mutableStateOf(preferences.radiusMeters.toString()) }
             val parsed = parseRadius(input)
@@ -128,4 +122,59 @@ fun SettingsDialog(kind: String, preferences: Preferences, onDismiss: () -> Unit
             }
         })
     }
+}
+
+
+private const val REPOSITORY_URL = "https://github.com/Project-Lycoris/lycoris-map"
+
+@Composable
+private fun AboutDialog(zh: Boolean, onDismiss: () -> Unit) {
+    val uriHandler = LocalUriHandler.current
+    var linkFailed by remember { mutableStateOf(false) }
+    val openRepository = {
+        linkFailed = false
+        try {
+            uriHandler.openUri(REPOSITORY_URL)
+        } catch (_: IllegalArgumentException) {
+            linkFailed = true
+        } catch (_: SecurityException) {
+            linkFailed = true
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onDismiss) { Text(if (zh) "完成" else "Done") } },
+        text = {
+            Column(
+                Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(11.dp),
+            ) {
+                Image(painterResource(R.drawable.lycoris_mark), contentDescription = null,
+                    modifier = Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)))
+                Text("Lycoris Maps", style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+                Text((if (zh) "版本 " else "Version ") + BuildConfig.VERSION_NAME,
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (zh) "一起跨越山与海" else "Across mountains and seas, together.",
+                    Modifier.padding(top = 11.dp), style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary, textAlign = TextAlign.Center)
+                Text(if (zh) "一款简洁的地图，帮你找到无障碍卫生间、母婴室和医疗机构。"
+                    else "A simple map for finding accessible toilets, nursing rooms, and medical institutions.",
+                    textAlign = TextAlign.Center)
+                Button(onClick = openRepository, modifier = Modifier.fillMaxWidth().padding(top = 11.dp)) {
+                    Text(if (zh) "访问 GitHub 仓库" else "View on GitHub", textAlign = TextAlign.Center)
+                }
+                TextButton(onClick = openRepository) {
+                    Text("github.com/Project-Lycoris/lycoris-map", style = MaterialTheme.typography.bodySmall,
+                        textAlign = TextAlign.Center)
+                }
+                if (linkFailed) Text(if (zh) "无法打开链接，请在浏览器中访问上述地址。"
+                    else "Could not open the link. Visit the address above in your browser.",
+                    color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+                Text(if (zh) "感谢所有贡献者。" else "Thank you to all our contributors.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center)
+            }
+        },
+    )
 }
