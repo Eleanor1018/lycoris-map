@@ -40,6 +40,8 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 
+// Origin, owner, and epoch form one scope; user ID alone cannot reject a stale response
+// after logout/login or a service change.
 data class SessionIdentity(val origin: String, val publicId: String, val epoch: Long)
 
 data class AccountState(

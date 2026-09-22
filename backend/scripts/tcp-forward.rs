@@ -1,18 +1,10 @@
-//! 测试运行器专用的极简 TCP 回环转发器（仅标准库，`rustc -O` 直接编译）。
+//! Loopback-only forwarding for the Linux test container.
 //!
-//! 用途：在受控 Linux 测试容器内，把已授权的合成服务转发到容器回环 `127.0.0.1`，满足
-//! `tests/common/mod.rs` 的**回环地址强制校验**。它只做字节转发，不解析协议、不记录内容。
-//!
-//! 安全边界（本转发器自身强制，不依赖调用方）：
-//!   - `TCP_FORWARD_LISTEN` 必须是回环地址（`127.0.0.1`）；拒绝 `0.0.0.0`/外部/主机名；
-//!   - `TCP_FORWARD_UPSTREAM` 只允许 `host.docker.internal:55432` 或 `host.docker.internal:56379`；
-//!   - 监听端口必须等于上游端口（不跨接、不转 55433 等恢复环境）。
-//!
-//! 通过环境变量配置：
-//!   TCP_FORWARD_LISTEN    监听地址，例如 `127.0.0.1:55432`
-//!   TCP_FORWARD_UPSTREAM  上游地址，例如 `host.docker.internal:55432`
-//!
-//! 限制：只应指向温晓授权的合成测试服务；绝不指向 `lycoris-restore-review`、恢复库或生产地址。
+//! The standard-library helper exposes host synthetic services on container loopback
+//! so tests retain their normal target guards. It forwards bytes without logging them.
+//! `TCP_FORWARD_LISTEN` must be 127.0.0.1; the upstream must be host.docker.internal
+//! on port 55432 or 56379, with the same listen port. Production and restore databases
+//! are never valid targets.
 
 use std::env;
 use std::io::{self};

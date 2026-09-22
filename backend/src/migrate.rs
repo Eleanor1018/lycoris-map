@@ -1,11 +1,9 @@
-//! 迁移基线与启动校验。
+//! Embedded schema migrations and read-only startup verification.
 //!
-//! `migrations/0001_baseline.sql` 从 `docs/rust-migration/schema-baseline.sql` 精确派生，
-//! 只含 6 张表结构、约束与 PostGIS 扩展，无数据。
-//!
-//! 普通启动只调用 [`verify_applied`] 做只读校验，**不会自动执行 DDL**；对空库或需要
-//! 升级的库，必须显式运行 `lycoris-backend --migrate`。已有 Java 库的接管走
-//! [`crate::baseline::adopt_baseline`]（`--adopt-baseline`），不会把初始建表重复用于已有库。
+//! Normal startup calls [`verify_applied`] and never executes DDL. Apply changes
+//! explicitly with `--migrate`; already populated databases without SQLx history
+//! must pass [`crate::baseline::adopt_baseline`] before their baseline is registered.
+//! Applied migration files, including comments, must retain their original checksums.
 
 use std::collections::HashMap;
 

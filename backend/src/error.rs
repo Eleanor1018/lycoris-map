@@ -1,13 +1,8 @@
-//! 响应与错误形状。
+//! Explicit response shapes for the established API contract.
 //!
-//! 现有 Java 接口同时存在四种响应体（见 `docs/rust-migration/api-contract.md` 1.3）：
-//! 1. `ApiResponse`：`{"code":int,"message":str,"data":值或 null}`；
-//! 2. 普通 JSON（无 `code/message/data` 包装）；
-//! 3. 纯文本中文错误/提示；
-//! 4. 空体。
-//!
-//! 因此这里显式保留四类输出，由接口层按契约选择形状，**不做全局统一包裹**，
-//! 也不引入泛型 CRUD 或转发层。业务错误用 [`ApiError`]，引擎级错误用 [`AppError`]。
+//! Routes return an [`ApiResponse`] envelope, plain JSON, text, or an empty body.
+//! Do not add a global wrapper: existing clients distinguish these shapes.
+//! [`ApiError`] represents domain failures; [`AppError`] represents service failures.
 
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};

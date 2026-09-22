@@ -1,17 +1,9 @@
-//! 类型化 Redis 会话模块。
+//! Opaque Redis sessions with atomic field-level updates.
 //!
-//! 只提供本项目所需的五类操作：创建（可原子替换旧标识）、普通读取续期、
-//! 删除、管理员二次验证状态写入/清除、以及当前会话版本推进。不引入通用记录协议，
-//! 也不整份覆写身份对象（详见 `docs/rust-migration/auth-design.md`）。
-//!
-//! 设计要点：
-//! - 标识是两份 `Uuid v4` 的连续十六进制文本（64 ASCII），Redis key 是标识的 SHA-256，
-//!   因此 Cookie 不承载身份；日志也不会出现原始标识。
-//! - 新记录只在 Lua 中确认 key 不存在后写入，TTL 与创建原子完成；重复时重新生成标识，
-//!   绝不覆盖既有记录。替换已有会话时在同一 Lua 中删除旧 key。
-//! - 普通读取只取字段并延续 TTL，不轮换标识、不回写整份身份。
-//! - 所有字段级更新都在 Lua 中校验 key 存在且 `userId`/`sessionVersion`/观测角色
-//!   与预期一致，更新失败不隐式创建 key，从而避免退出后被旧请求复活。
+//! Cookies carry random identifiers, not identities; Redis keys hash those
+//! identifiers. Lua checks the observed user, role, and session version before
+//! mutations. A stale request must never recreate a logged-out session or overwrite
+//! a newer identity. Reads extend TTL without rotating the cookie.
 
 use std::collections::HashMap;
 use std::time::Duration;

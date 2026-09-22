@@ -1,20 +1,12 @@
-# Lycoris Rust 后端 Linux 发布演练（阶段 4：Linux 发布基础）。
-#
-# 用途：仅本地演练。构建/运行发布镜像、执行 Linux 测试运行器、验证只读根 + 持久上传卷 +
-#       非 root + SIGTERM 与健康检查。**不是**正式生产配置。
-#
-# 限制：
-#   - 端口只绑定回环 127.0.0.1；
-#   - 名称/卷/网络前缀统一为 lycoris-rust-release，不操作 roboparty/其它 Docker 项目；
-#   - 运行期复用温晓已授权的合成 PostgreSQL(55432)/Redis(56379)，经 host.docker.internal
-#     接入，仅用于演练，不得当作生产连接方式；
-#   - 绝不连接 lycoris-restore-review、恢复库或任何生产地址。
-#
-# 常用命令（在 backend/ 内）：
+# Local container checks for the Rust runtime; not production configuration.
+# Loopback-only ports and the lycoris-rust-release resource prefix isolate this stack.
+# PostgreSQL (55432) and Redis (56379) must be synthetic local services; never use
+# production or restored user data. The test runner validates these targets.
+# Commands from backend/:
 #   docker compose -f compose.release.yml build app
 #   docker compose -f compose.release.yml run --rm test
 #   docker compose -f compose.release.yml up -d app
-#   docker compose -f compose.release.yml run --rm negative   # 期望非零退出
+#   docker compose -f compose.release.yml run --rm negative   # must exit nonzero
 #   docker compose -f compose.release.yml down
 
 name: lycoris-rust-release

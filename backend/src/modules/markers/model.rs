@@ -125,11 +125,9 @@ impl MarkerDto {
     }
 }
 
-/// 资源级可见性判定的查看者。
-///
-/// 本阶段所有公开接口都以 `None` 调用 [`can_view`]：匿名只能看
-/// `is_public AND review_status='APPROVED'`。下一阶段接 `OptionalViewer` 时，
-/// 只需构造真实 `Viewer` 并传入，**不得**用会话或请求里的任何字段伪造身份。
+/// Identity used for resource-level visibility checks.
+/// Construct this from authenticated server state, never from request fields.
+/// Anonymous reads pass `None`; only administrators may view deactivated records.
 #[derive(Debug, Clone, Copy)]
 pub struct Viewer<'a> {
     pub public_id: Option<&'a str>,

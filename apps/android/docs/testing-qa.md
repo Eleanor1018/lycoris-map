@@ -75,10 +75,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
   -s apps/android/scripts -p 'qa_gateway_test.py' -v
 ```
 
-On 2026-09-20, all seven guard tests passed. A real local-backend HTTP smoke test also passed manifest validation, missing-header write rejection, session login, favorite add/read/remove with empty mutation responses, and logout. The favorite was removed after verification, restoring the synthetic account's prior favorite list. These checks do not establish Android UI, real sensor, microphone or physical-device behavior.
-
 Use `docker compose --env-file apps/android/app/build/qa/backend.env -f apps/android/scripts/qa.compose.yml stop` when the test stack is no longer needed. This preserves its synthetic database and uploads for later sessions.
-
 
 ## Opt-in native integration runner
 
@@ -169,7 +166,5 @@ Permission regressions also cover multi-user state parsing, QA-only manifest sco
 already-granted preservation, SDK 26–36 no-op behavior, fixed/unknown state rejection, foreground-user
 changes, failed or interrupted tests, uncertain grants, cleanup failures and success reporting only
 after verified restoration. They simulate commands and do not invoke adb or a backend.
-The underlying opt-in Android test and manual database oracle passed on 2026-09-20 (one created
-marker, one photo proposal, 763045 uploaded bytes and cleared staging). The reusable runner must
-also be executed on the chosen emulator to validate its full orchestration; offline checks alone
-do not establish that device result.
+Run the device runner against the chosen emulator to verify its full orchestration;
+offline guard checks alone do not establish a device result.

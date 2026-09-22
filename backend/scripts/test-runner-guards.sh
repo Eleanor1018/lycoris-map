@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Lycoris Rust 后端测试运行器的安全边界小测试（阶段 4）。
+# Target-guard regression checks for the Linux test runner.
 #
 # 目标：证明 run-linux-tests.sh 的固定 fixture / 回环监听 / 并发参数边界在任何网络访问与
 #       DDL 之前生效，且 tcp-forward 自身也强制回环与固定上游。

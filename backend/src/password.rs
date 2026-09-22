@@ -126,7 +126,7 @@ mod tests {
     use super::{is_encoded, looks_like_bcrypt, utf16_len, within_bcrypt_limit};
     use base64::Engine as _;
 
-    /// 温晓用 Java 21 / Spring Security Crypto 6.5.7 生成的公开合成向量
+    /// Public synthetic vectors generated with Java 21 / Spring Security Crypto 6.5.7.
     /// （password 列为 base64(UTF-8)）。cost 4 仅测试，生产 10。
     const JAVA_VECTORS: &[(&str, &str)] = &[
         (

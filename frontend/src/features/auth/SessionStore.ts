@@ -25,6 +25,8 @@ export function withSessionLock<T>(task: () => Promise<T>): Promise<T> {
     return pending
 }
 
+// A new account epoch invalidates private reads and cache scopes together.
+// Aborting alone is insufficient: a response may already be ready to publish.
 export class SessionStore {
     private snapshot: SessionSnapshot = {
         user: null,
