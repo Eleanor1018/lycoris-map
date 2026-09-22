@@ -1,9 +1,13 @@
 # Android typography and icon assets
 
+Roboto and its family variants are strictly prohibited in this project, including
+font dependencies, primary fonts and fallback configuration. Material 3 remains
+the component and type-scale system; it does not require a particular font family.
+
 The app owns its fonts and text scale in `core/designsystem/LycorisTypography.kt`.
 Interface text uses the packaged Noto Sans SC variable font for Chinese and Latin.
 Weights 400, 500, 600 and 700 resolve from the same local TTF, without a font provider,
-Google Play services or a font download. This covers the app theme, the search
+Google Play services or a font download. This covers the Compose and platform themes, the search
 `BasicTextField`, and native map cluster counts. Emoji and characters outside this
 font's repertoire still use Android's fallback fonts. Map-provider labels and
 system UI (keyboard, permission dialogs, share sheet) remain provider/system-owned.
