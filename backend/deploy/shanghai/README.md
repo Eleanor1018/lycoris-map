@@ -1,7 +1,9 @@
 # Shanghai deployment — lycoris-map.cn
 
 The mainland site uses its own PostgreSQL/PostGIS, Redis, uploads, sessions and
-secrets. It does not connect to or replicate the overseas account database.
+secrets. On September 23 a complete one-time database/original-image snapshot was
+restored locally; it does not connect to the overseas database at runtime or
+continuously replicate changes. See [data copy and rollback](DATA-COPY.md).
 The private gateway listens on `127.0.0.1:18080`; Rust on `127.0.0.1:18081`.
 The supplied domain certificate is served over private HTTPS on `127.0.0.1:18443`.
 Database/cache ports also bind only loopback. Initial ICP review must finish
@@ -40,7 +42,11 @@ Keep `/opt/lycoris/private/deploy.env` mode 0600. Its non-secret pins are:
 LYCORIS_APP_IMAGE=lycoris-backend:887ae40
 LYCORIS_WEB_IMAGE=nginx@sha256:ef8676b33d681f272ba429b27658bdd7e640963279714c96bddf1dc76307f7b6
 LYCORIS_WEB_ROOT=/opt/lycoris/releases/887ae40/frontend/dist
+LYCORIS_UPLOAD_ROOT=/opt/lycoris/data/uploads
 ```
+
+On the already restored host, `LYCORIS_UPLOAD_ROOT` instead points to
+`/opt/lycoris/data/uploads-import-20260923`, as recorded in `DATA-COPY.md`.
 
 From the release's `backend/deploy/shanghai` directory:
 
@@ -74,9 +80,10 @@ forward unchanged when enabling public HTTPS.
 Check readiness, public/nearby/search responses, protected-route 401s, static
 assets, `/admin` deep links, and an OSM tile twice (second request should HIT).
 Validate that nginx does not send a missing API/asset request to the SPA fallback.
-Confirm no HTTP listener exists on a non-loopback address. Authenticated flows
-need an independently provisioned account; an empty initial database does not
-contain the existing production users or places.
+Confirm no HTTP listener exists on a non-loopback address. After the September 23
+copy, existing accounts and captured password hashes are present. Users need a
+new Shanghai login; overseas sessions were not copied. Actual account login and
+mail delivery have not been included in the anonymous acceptance checks.
 
 ## Domain certificate
 
@@ -136,8 +143,9 @@ Bulk tile downloads/offline prefetch are not part of this deployment.
    tile relay is not evidence of any regulatory exemption.
 3. Configure and verify a mainland-reachable mail sender. Real email tests need
    an explicitly designated recipient; no delivery has been claimed by startup.
-4. Decide initial public-place import, ongoing moderation-based synchronization
-   and account behavior. This deployment does not implement two-way replication.
+4. The initial complete snapshot is imported. Decide ongoing moderation-based
+   synchronization and account behavior before accepting independent public
+   writes. This deployment does not implement two-way replication.
 5. Confirm the installed domain certificate remains valid, change the gateway listeners and DNS intentionally,
    enable `SESSION_COOKIE_SECURE=true`, and replace write origins with the
    exact HTTPS origins in use. Keep PostgreSQL, Redis and Rust on loopback.
@@ -209,11 +217,14 @@ Verified results:
   SSH 22 listens on public interfaces. Temporary build proxy settings and the
   build-only SSH reverse tunnel were removed; runtime does not depend on them.
 
-The initial database has **zero users and zero places**. No existing production
-data, credentials or sessions were copied. No administrator account was created;
-`bootstrap.json` stores only independent administrative secondary/reset secrets.
-SMTP remains unconfigured, so real registration/recovery email delivery and
-authenticated user workflows are not accepted as complete. Initial data import,
-account setup and two-region synchronization remain separate work before launch.
+At initial installation the database had **zero users and zero places**. The
+subsequent [September 23 copy](DATA-COPY.md) restored 62 accounts, 384 place
+records and 265 original images to a new database/directory and switched the
+private app after verification. Existing roles in the application data were
+preserved; no new administrator login was created. Shanghai's database role
+passwords, administrative secondary/reset secrets and verification secrets remain
+independent. Redis sessions were not copied. SMTP remains unconfigured, so real
+registration/recovery email delivery and authenticated user workflows are not
+accepted as complete. Two-region synchronization remains separate work.
 The domain resolves to the Shanghai IP, but no public HTTP/HTTPS listener or
 ICP/public-security application was enabled/submitted by this deployment.

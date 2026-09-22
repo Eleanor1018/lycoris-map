@@ -61,7 +61,7 @@ services:
       PASSWORD_MAX_CONCURRENCY: '2'
       MEDIA_MAX_CONCURRENCY: '1'
     volumes:
-      - /opt/lycoris/data/uploads:/var/lib/lycoris/uploads
+      - ${LYCORIS_UPLOAD_ROOT:-/opt/lycoris/data/uploads}:/var/lib/lycoris/uploads
     read_only: true
     tmpfs: ['/tmp:size=64m,mode=1777']
     cap_drop: [ALL]

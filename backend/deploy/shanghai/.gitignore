@@ -1,3 +1,5 @@
 __pycache__/
 .env
 !initialize.py
+!copy-snapshot.py
+!verify-copy.py
