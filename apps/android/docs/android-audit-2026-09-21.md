@@ -1,5 +1,67 @@
 # Android audit — 2026-09-21 / 2026-09-22
 
+## Follow-up on September 22
+
+Current product baseline: `d0601cb` on the visible `feat/android-native` checkout. The sections below
+this follow-up retain the earlier investigation history; they are not the latest acceptance status.
+
+| Check | Latest evidence |
+| --- | --- |
+| JVM, lint, QA and instrumentation build | 144 JVM tests passed; lint and builds passed |
+| Full API 36 CI | `35699537525`: 58 passed, 5 opt-in tests skipped, no failures |
+| Full API 26 CI before fixture correction | Same run: 56 passed, 2 failed, 5 skipped |
+| Isolated native backend | `backend-aosp-20260922-152104.log`: passed; login, encrypted session restore, favorites, idempotent creation and chunked upload |
+| Loaded detail rotation | `loaded-aosp-20260922-152623.log`: 1 passed; actual QA detail loaded, Activity recreated both ways, user camera retained |
+| Live provider cases | `online-aosp-20260922-152720.log`: 3 passed; OSM, Tianditu and Tencent rendered and recovered from background |
+| Backend stage diagnostics | 35 Python guard tests passed; updated native backend case passed again in `backend-aosp-20260922-154233.log` |
+| Cold-start keyboard regression | Local AOSP 36: `startup-aosp-20260922-154755.log`, 1 passed |
+
+The backend runner's database oracle found exactly one created marker and one image proposal, with
+763045 uploaded bytes. The earlier generic `ApiFailure.Network` did not recur; its cause remains
+undetermined. These writes used generated accounts and the isolated local QA database only.
+
+The provider run also checked Tianditu labels/overlays and Tianditu/OSM/Tianditu camera retention,
+plus Tencent-to-OSM switching. OSM reported `LoadFromCache` for the center tile and zero network tile
+loads; it proves cached rendering/lifecycle recovery, not fresh network reachability. Custom
+instrumentation receipt bundles also use status 0, so raw status-0 line counts are not test totals.
+
+API 26 logcat identified a separate environment fault at 03:35:37 UTC, before instrumentation began:
+`com.android.statementservice` crashed while starting its App Links verification service from the
+background. ActivityManager displayed its crash dialog. The later IME failure reported
+`windowFocused=false`, `immActive=false`. This is a candidate cause of lost focus, not proof that
+both configuration failures are fixed. MapLibre also logged `std::bad_alloc` after rotation;
+that renderer observation must not be silently discarded if it persists.
+
+CI fixture change `856e271` temporarily allows only this system verifier to start its service for
+60 seconds around APK installation. App Links verification and crash dialogs remain enabled, and
+Lycoris receives no exemption. API 26's
+[service-start policy](https://android.googlesource.com/platform/frameworks/base/+/android-8.0.0_r1/services/core/java/com/android/server/am/ActivityManagerService.java)
+includes the temporary device-idle allowlist. Window state is now saved before and after tests.
+Re-verification run `35699537525` removed the system-verifier crash and its dialog, but API 26 still
+failed: 47 passed, 12 failed, 4 skipped. Logcat now shows LatinIME opening as MainActivity starts,
+before any search-field touch. This hides primary navigation via the existing IME-responsive layout,
+so smoke/configuration tests fail to find their tabs. The opt-in loaded-detail case also failed in
+its setup before reaching its skip. This run does not establish that configuration handling passed.
+
+MainActivity now uses `stateHidden|adjustResize` to open the map without automatically showing the
+keyboard; it does not use `stateAlwaysHidden`. A new real-Activity case observes platform frames
+after window focus and verifies the untouched startup keeps the IME hidden and all three navigation
+tabs visible. Existing touch-to-open-IME, first-Back, and rotation assertions remain unchanged.
+This follows Android's [input visibility guidance](https://developer.android.com/develop/ui/views/touch-and-input/keyboard-input/visibility).
+API 26/36 CI re-verification of this change is pending.
+
+The backend integration test now emits bounded stage names with custom status code 2. The runner
+reports `backendStage` on failures without copying arbitrary text; it preserves an explicit primary
+failure over later cleanup, and attaches a secondary cleanup exception as suppressed. Existing
+environment guards, required test count, receipt validation and database oracle are unchanged.
+
+Still unaccepted: physical Xiaomi/realme reproduction, actual sensor heading, speech-service and
+permission-dialog behavior. The AOSP 36 device has a Galaxy S25-sized display; it is not Samsung
+hardware or One UI. Computer Use again failed to retain the floating Studio emulator as its input
+target, so this follow-up does not claim manual visual/gesture acceptance.
+
+## Earlier investigation
+
 Baseline `feat/android-native` commit `42460c7`. Sue executed the checks and implementation; Wen
 reviewed the evidence and corrected the test coordinates and Foundation API usage. Files touched:
 `MapPanel.kt`, `MapPanelTest.kt`, `HomePanelStabilityTest.kt` and this report. No other production file
