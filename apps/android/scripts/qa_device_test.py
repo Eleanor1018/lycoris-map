@@ -33,11 +33,36 @@ RECEIPT_KEYS = (
     "lycorisQaMarkerId", "lycorisQaUploadId", "lycorisQaCreationRequestId",
     "lycorisQaPhotoRequestId", "lycorisQaOwnerPublicId",
 )
+# Fixed allowlist of instrumentation stage names. Only these exact values may be reported.
+BACKEND_STAGES = (
+    "preflight", "login", "restore", "favorites", "create", "upload", "complete", "cleanup",
+)
 UUID_PATTERN = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 
 
 class QaDeviceFailure(Exception):
     """Contains only predetermined, non-sensitive diagnostic messages."""
+
+    def __init__(self, message, backend_stage=None):
+        super().__init__(message)
+        # Optional fixed stage name from BACKEND_STAGES; never arbitrary instrumentation text.
+        self.backend_stage = backend_stage if backend_stage in BACKEND_STAGES else None
+
+
+def reported_stage(output):
+    """Return the fixed stage that should be attributed to a failure, if any.
+
+    Prefer the explicit failure marker the test emits once, so a later cleanup failure cannot
+    rewrite the original cause. Without it, fall back to the last fixed stage reported — this
+    still includes cleanup, so a crash during cleanup remains localizable.
+    """
+    failed = re.findall(r"^INSTRUMENTATION_STATUS: lycorisQaFailedStage=([A-Za-z0-9_]*)\s*$", output, re.MULTILINE)
+    for stage in failed:
+        if stage in BACKEND_STAGES:
+            return stage
+    stages = re.findall(r"^INSTRUMENTATION_STATUS: lycorisQaStage=([A-Za-z0-9_]*)\s*$", output, re.MULTILINE)
+    legal = [stage for stage in stages if stage in BACKEND_STAGES]
+    return legal[-1] if legal else None
 
 
 def canonical_uuid(value):
@@ -282,29 +307,30 @@ def instrument_command(username, password, user_id):
 
 
 def parse_instrumentation(output, expected_owner):
+    stage = reported_stage(output)
     if (not re.search(r"^OK \(1 test\)\s*$", output, re.MULTILINE)
             or re.findall(r"^INSTRUMENTATION_CODE: (-?\d+)\s*$", output, re.MULTILINE) != ["-1"]
             or re.search(r"^INSTRUMENTATION_STATUS_CODE: -[1-9]\d*\s*$", output, re.MULTILINE)
             or re.search(r"(?:FAILURES!!!|INSTRUMENTATION_FAILED|INSTRUMENTATION_ABORTED|INSTRUMENTATION_RESULT: shortMsg=)", output)):
-        raise QaDeviceFailure("The fixed live integration test did not pass; skipped tests are not success.")
+        raise QaDeviceFailure("The fixed live integration test did not pass; skipped tests are not success.", stage)
     classes = re.findall(r"^INSTRUMENTATION_STATUS: class=(.*)$", output, re.MULTILINE)
     methods = re.findall(r"^INSTRUMENTATION_STATUS: test=(.*)$", output, re.MULTILINE)
     if not classes or set(classes) != {TEST_CLASS} or not methods or set(methods) != {TEST_METHOD}:
-        raise QaDeviceFailure("Unexpected instrumentation test identity.")
+        raise QaDeviceFailure("Unexpected instrumentation test identity.", stage)
     receipt = {}
     for key in RECEIPT_KEYS:
         values = re.findall(r"^INSTRUMENTATION_STATUS: " + re.escape(key) + r"=(.*)$", output, re.MULTILINE)
         if len(values) != 1:
-            raise QaDeviceFailure("Missing or repeated QA database receipt.")
+            raise QaDeviceFailure("Missing or repeated QA database receipt.", stage)
         receipt[key] = values[0].strip()
     marker = receipt[RECEIPT_KEYS[0]]
     if not re.fullmatch(r"[1-9][0-9]{0,18}", marker) or int(marker) > 2**63 - 1:
-        raise QaDeviceFailure("Invalid marker ID in QA receipt.")
+        raise QaDeviceFailure("Invalid marker ID in QA receipt.", stage)
     receipt[RECEIPT_KEYS[0]] = int(marker)
     for key in RECEIPT_KEYS[1:]:
         receipt[key] = canonical_uuid(receipt[key])
     if receipt["lycorisQaOwnerPublicId"] != canonical_uuid(expected_owner):
-        raise QaDeviceFailure("The QA receipt belongs to a different synthetic account.")
+        raise QaDeviceFailure("The QA receipt belongs to a different synthetic account.", stage)
     return receipt
 
 
@@ -354,6 +380,7 @@ def main(argv=None):
         parser.error("Invalid explicit adb serial.")
     log = None
     stage = "setup"
+    backend_stage = None
     try:
         user = read_alice()
         logs = STATE / "device-tests"
@@ -388,7 +415,13 @@ def main(argv=None):
             stage = "instrumentation"
             output = log.run([*prefix, "shell", "-T", "sh"], "Run guarded live QA integration",
                              input_text=instrument_command(user["username"], user["password"], user_id), timeout=300)
+            # Capture the last reported fixed stage before validating, so a failing stage survives
+            # any later permission-restoration failure in the context-manager finally.
+            backend_stage = reported_stage(output)
             receipt = parse_instrumentation(output, user["publicId"])
+            # Native integration passed. A later database-oracle or host permission-restoration
+            # failure must not be attributed to its last successful backend stage (cleanup).
+            backend_stage = None
             stage = "database-oracle"
             oracle = database_oracle(receipt)
             log.write("Read-only QA oracle: " + json.dumps(oracle, separators=(",", ":")))
@@ -402,6 +435,10 @@ def main(argv=None):
         message, code = "Interrupted; the selected QA device may still be finishing the test.", 130
     except QaDeviceFailure as error:
         message, code = str(error), 1
+        # The error's own fixed stage (for example the instrumentation stage) wins over any
+        # coarse stage variable that later cleanup might otherwise advance.
+        if error.backend_stage is not None:
+            backend_stage = error.backend_stage
     except Exception:
         # Never format subprocess exceptions, arguments, environment or malformed credential contents.
         message, code = "QA prerequisite or verification failed; no production fallback was attempted.", 1
@@ -409,6 +446,8 @@ def main(argv=None):
         if log:
             log.close()
     result = {"status": "failed", "stage": stage, "message": message}
+    if backend_stage in BACKEND_STAGES:
+        result["backendStage"] = backend_stage
     if log:
         result["log"] = str(log.path.relative_to(ANDROID))
     print(json.dumps(result, separators=(",", ":")))

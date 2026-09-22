@@ -35,6 +35,7 @@ fun LycorisRoot(model: HomeViewModel) {
     val viewport by model.places.viewport.collectAsStateWithLifecycle()
     val search by model.search.collectAsStateWithLifecycle()
     val nearby by model.places.nearby.collectAsStateWithLifecycle()
+    val nearbyCategory by model.nearbyCategory.collectAsStateWithLifecycle()
     val detail by model.places.detail.collectAsStateWithLifecycle()
     val allowInitialCenter by model.allowInitialCenter.collectAsStateWithLifecycle()
     val picking by model.pickingLocation.collectAsStateWithLifecycle()
@@ -80,7 +81,7 @@ fun LycorisRoot(model: HomeViewModel) {
     fun close() {
         devices.cancelVoice()
         if (page == SecondaryPage.ACCOUNT && accountPage in setOf(AccountPage.EDIT_PROFILE, AccountPage.PASSWORD)) accountPage = AccountPage.PROFILE
-        else if (page == SecondaryPage.ACCOUNT && accountPage == AccountPage.REGISTER) accountPage = AccountPage.LOGIN
+        else if (page == SecondaryPage.ACCOUNT && accountPage in setOf(AccountPage.REGISTER, AccountPage.RESET)) accountPage = AccountPage.LOGIN
         else model.closeSecondary()
     }
     BackHandler(picking) { model.cancelPicking() }
@@ -124,11 +125,18 @@ fun LycorisRoot(model: HomeViewModel) {
             when (page) {
                 SecondaryPage.SEARCH -> placeItems(search, model.container.clients, account, zh, model::detail, model::search)
                 SecondaryPage.NEARBY -> {
-                    item(key = "nearby-categories", contentType = "categories") { Column {
-                    if (devices.location.fix == null) Text(if (zh) "以地图中心查找附近" else "Searching near the map center", Modifier.padding(horizontal = 30.dp, vertical = 8.dp), style = MaterialTheme.typography.bodySmall)
-                    NearbyCategories(zh, { model.nearby(it) })
-                    Spacer(Modifier.height(16.dp))
-                    } }
+                    item(key = "nearby-subtitle", contentType = "summary") {
+                        Column(Modifier.padding(horizontal = 30.dp).padding(bottom = 11.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+                            val radiusText = if (preferences.radiusMeters % 1000 == 0) "${preferences.radiusMeters / 1000}km" else "${preferences.radiusMeters}m"
+                            val categoryLabel = nearbyCategories.firstOrNull { it.key == nearbyCategory.wireValue }
+                                ?.let { if (zh) it.zh else it.en } ?: categoryName(nearbyCategory.wireValue, zh)
+                            Text("$categoryLabel · $radiusText", style = MaterialTheme.typography.bodyMedium)
+                            if (devices.location.fix == null) Text(
+                                if (zh) "以地图中心查找附近" else "Searching near the map center",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
                     placeItems(nearby, model.container.clients, account, zh, model::detail, { model.nearby(null) })
                 }
                 SecondaryPage.DETAIL -> item(key = "place-detail", contentType = "detail") { Column {

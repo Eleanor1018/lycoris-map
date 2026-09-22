@@ -9,8 +9,11 @@ import android.speech.SpeechRecognizer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -89,16 +92,27 @@ class AppSmokeTest {
             Triple("Medical Institutions", "医疗机构", PlaceCategory.FRIENDLY_CLINIC),
         )
         // All three are visible at the initial middle detent, without expanding first.
-        categories.forEach { (english, chinese, _) -> compose.onNode(text(english, chinese)).assertIsDisplayed() }
+        categories.forEach { (english, chinese, _) -> compose.onNode(categoryCard(english, chinese)).assertIsDisplayed() }
         categories.forEach { (english, chinese, category) ->
-            compose.onNode(text(english, chinese) and hasClickAction()).performClick()
+            compose.onNode(categoryCard(english, chinese)).performClick()
             compose.onNode(heading("Nearby", "附近点位")).assertIsDisplayed()
+            var radiusMeters = 0
             withModel {
                 assertEquals(SecondaryPage.NEARBY, it.page.value)
                 assertEquals(category, it.nearbyCategory.value)
+                radiusMeters = it.preferences.value.radiusMeters
             }
+            // Entering a category must show its result list, not the three category cards again.
+            categories.forEach { (en, zh, _) ->
+                compose.onAllNodes(categoryCard(en, zh)).assertCountEquals(0)
+            }
+            // The selected category and search radius appear as a short subtitle row.
+            val range = if (radiusMeters % 1000 == 0) "${radiusMeters / 1000}km" else "${radiusMeters}m"
+            compose.onNode(text("$english · $range", "$chinese · $range")).assertIsDisplayed()
             closePanel()
+            // Closing returns to the original three-category entry point.
             compose.onNode(heading("Find Nearby", "查找附近")).assertIsDisplayed()
+            categories.forEach { (en, zh, _) -> compose.onNode(categoryCard(en, zh)).assertIsDisplayed() }
             compose.onNode(tab("Explore", "探索")).assertIsSelected()
         }
     }
@@ -147,7 +161,45 @@ class AppSmokeTest {
         compose.onNode(text("Cancel", "取消") and hasClickAction()).performClick()
         compose.onNode(isDialog()).assertDoesNotExist()
         withModel { assertEquals(originalRadius, it.preferences.value.radiusMeters) }
-        compose.onNode(tab("Settings", "设置")).assertIsSelected()
+        // HomeScreen hides the bottom navigation while the IME inset exceeds the nav inset. Wait for
+        // the real window to report the keyboard hidden before checking the tab, so an in-flight
+        // close animation is not mistaken for the product keeping the keyboard up.
+        awaitWindowImeHidden(5_000)
+        compose.onNode(tab("Settings", "设置")).assertIsDisplayed().assertIsSelected()
+    }
+
+    /** Wait on the real window insets for the IME to become fully hidden; diagnostics are concise. */
+    private fun awaitWindowImeHidden(timeoutMillis: Long) {
+        try {
+            compose.waitUntil(timeoutMillis) {
+                var hidden = false
+                scenario!!.onActivity { activity ->
+                    val insets = ViewCompat.getRootWindowInsets(activity.window.decorView)
+                    hidden = insets != null &&
+                        !insets.isVisible(WindowInsetsCompat.Type.ime()) &&
+                        insets.getInsets(WindowInsetsCompat.Type.ime()).bottom == 0
+                }
+                hidden
+            }
+        } catch (timeout: ComposeTimeoutException) {
+            throw AssertionError("The window never reported the keyboard hidden. ${imeWindowDiagnostics()}", timeout)
+        }
+    }
+
+    /** Reads only window/inset state on the Activity; never calls Compose test APIs on the UI thread. */
+    private fun imeWindowDiagnostics(): String {
+        var report = "window diagnostics unavailable"
+        runCatching {
+            scenario!!.onActivity { activity ->
+                val decor = activity.window.decorView
+                val insets = ViewCompat.getRootWindowInsets(decor)
+                report = "windowFocus=${decor.hasWindowFocus()}, " +
+                    "imeVisible=${insets?.isVisible(WindowInsetsCompat.Type.ime())}, " +
+                    "imeBottom=${insets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom}, " +
+                    "rootSize=${decor.width}x${decor.height}"
+            }
+        }
+        return report
     }
 
     @Test fun searchTypePersistsAcrossRecreationAndAboutShowsInstalledVersion() {
@@ -219,6 +271,12 @@ class AppSmokeTest {
         compose.onNode(hasSetTextAction() and text("Email", "邮箱")).assertExists()
         back()
         compose.onNode(heading("Log In", "登录")).assertIsDisplayed()
+        expandPanel()
+        compose.onNode(text("Forgot password?", "忘记密码？") and hasClickAction()).performScrollTo().assertIsDisplayed().performClick()
+        compose.onNode(heading("Reset Password", "重置密码")).assertIsDisplayed()
+        back()
+        compose.onNode(heading("Log In", "登录")).assertIsDisplayed()
+        withModel { assertEquals(SecondaryPage.ACCOUNT, it.page.value) }
         back()
         compose.onNode(heading("Find Nearby", "查找附近")).assertIsDisplayed()
         withModel { assertNull(it.page.value) }
@@ -226,6 +284,9 @@ class AppSmokeTest {
         compose.onNode(tab("Bookmarks", "收藏")).performClick()
         compose.onNode(text("Log in", "登录") and hasClickAction()).performScrollTo().performClick()
         compose.onNode(heading("Log In", "登录")).assertIsDisplayed()
+        expandPanel()
+        compose.onNode(text("Forgot password?", "忘记密码？") and hasClickAction()).performScrollTo().assertIsDisplayed().performClick()
+        compose.onNode(heading("Reset Password", "重置密码")).assertIsDisplayed()
         closePanel()
         compose.onNode(tab("Bookmarks", "收藏")).assertIsSelected()
         compose.onNode(heading("Bookmarks", "收藏")).assertIsDisplayed()
@@ -322,6 +383,11 @@ class AppSmokeTest {
     }
     private fun withModel(block: (HomeViewModel) -> Unit) {
         scenario!!.onActivity { block(ViewModelProvider(it)[HomeViewModel::class.java]) }
+    }
+    // A place row can also contain the Chinese category label, but it is not a category card.
+    private fun categoryCard(english: String, chinese: String) = hasClickAction() and SemanticsMatcher("category card: $english") { node ->
+        val labels = node.config.getOrNull(SemanticsProperties.Text)?.map { it.text }
+        labels == listOf(english) || labels == listOf(chinese)
     }
     private fun text(english: String, chinese: String) = hasText(english) or hasText(chinese)
     private fun description(english: String, chinese: String) = hasContentDescription(english) or hasContentDescription(chinese)

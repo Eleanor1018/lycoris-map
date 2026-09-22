@@ -90,6 +90,55 @@ class PlaceRepositoryTest {
         assertEquals(1, repository.viewport.value.places.size)
     }
 
+    @Test fun nearbyRequestPathAndQueryMatchTheSelectedCategory() = withRepository { server, repository ->
+        for (category in listOf(PlaceCategory.ACCESSIBLE_TOILET, PlaceCategory.BABY_ROOM, PlaceCategory.FRIENDLY_CLINIC)) {
+            server.enqueue(MockResponse().setBody("[${place.replace("baby_room", category.wireValue)}]"))
+            repository.loadNearby(31.2, 121.5, 1500, category, Language.EN).join()
+            assertEquals(category, repository.nearby.value.places.single().placeCategory)
+            val url = requireNotNull(server.takeRequest(2, TimeUnit.SECONDS)).requestUrl!!
+            assertEquals("/api/markers/nearby", url.encodedPath)
+            assertEquals("31.2", url.queryParameter("lat"))
+            assertEquals("121.5", url.queryParameter("lng"))
+            assertEquals("1500", url.queryParameter("radius"))
+            assertEquals(category.wireValue, url.queryParameter("category"))
+            assertEquals("en", url.queryParameter("lang"))
+        }
+    }
+
+    @Test fun nearbyDistinguishesEmptySuccessFromFailureAndRetryRecovers() = withRepository { server, repository ->
+        server.enqueue(MockResponse().setBody("[]"))
+        repository.loadNearby(31.2, 121.5, 1000, PlaceCategory.BABY_ROOM, Language.EN).join()
+        assertTrue("after empty: ${repository.nearby.value}", repository.nearby.value.loaded)
+        assertTrue(repository.nearby.value.places.isEmpty())
+        assertNull("after empty: ${repository.nearby.value}", repository.nearby.value.failure)
+
+        server.enqueue(MockResponse().setResponseCode(503))
+        repository.loadNearby(31.2, 121.5, 1000, PlaceCategory.BABY_ROOM, Language.EN).join()
+        assertTrue("after 503: ${repository.nearby.value}", repository.nearby.value.failure is ApiFailure.Http)
+        assertTrue(repository.nearby.value.places.isEmpty())
+
+        server.enqueue(MockResponse().setBody("[$place]"))
+        repository.loadNearby(31.2, 121.5, 1000, PlaceCategory.BABY_ROOM, Language.EN).join()
+        assertNull(repository.nearby.value.failure)
+        assertTrue(repository.nearby.value.loaded)
+        assertEquals(1, repository.nearby.value.places.size)
+    }
+
+    @Test fun fastCategorySwitchKeepsTheLatestCategoryResult() = withRepository { server, repository ->
+        val toilet = place.replace("baby_room", "accessible_toilet")
+        val medical = place.replace("baby_room", "friendly_clinic")
+        // The first category's response is slow; switching quickly must not let it overwrite the second.
+        server.enqueue(MockResponse().setBody("[$toilet]").setBodyDelay(300, TimeUnit.MILLISECONDS))
+        val first = repository.loadNearby(31.2, 121.5, 1000, PlaceCategory.ACCESSIBLE_TOILET, Language.EN)
+        assertNotNull(server.takeRequest(2, TimeUnit.SECONDS))
+        server.enqueue(MockResponse().setBody("[$medical]"))
+        repository.loadNearby(31.2, 121.5, 1000, PlaceCategory.FRIENDLY_CLINIC, Language.EN).join()
+        first.join()
+        assertEquals(PlaceCategory.FRIENDLY_CLINIC, repository.nearby.value.places.single().placeCategory)
+        assertTrue(repository.nearby.value.loaded)
+        assertNull(repository.nearby.value.failure)
+    }
+
     @Test fun crossingDateLineMakesTwoRequestsAndDeduplicates() = withRepository { server, repository ->
         server.enqueue(MockResponse().setBody("[$place]"))
         server.enqueue(MockResponse().setBody("[$place]"))
