@@ -20,10 +20,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.sp
 import coil3.ImageLoader
 import coil3.compose.SubcomposeAsyncImage
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
@@ -32,6 +30,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.lycoris.maps.core.data.AccountState
 import com.lycoris.maps.core.data.PlaceListState
+import com.lycoris.maps.core.designsystem.LycorisTextStyles
 import com.lycoris.maps.core.designsystem.LycorisColors
 import com.lycoris.maps.core.model.Language
 import com.lycoris.maps.core.model.Marker
@@ -65,11 +64,11 @@ private fun PlaceRow(place: Marker, clients: ApiClients, account: AccountState, 
                 Column {
                     if (!place.markImage.isNullOrBlank()) PlacePhoto(place, clients, account, Modifier.fillMaxWidth().aspectRatio(16f / 9).clip(RoundedCornerShape(16.dp)), false, chinese)
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(place.title, fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
+                        Text(place.title, style = LycorisTextStyles.PlaceTitle)
                         Text(categoryName(place.category, chinese), style = MaterialTheme.typography.labelMedium, color = LycorisColors.SecondaryText)
                         PlaceVenueTag(place, chinese)
                         PlaceHours(place, chinese)
-                        place.description?.takeIf { it.isNotBlank() }?.let { Text(it, fontSize = 15.sp, lineHeight = 20.sp, color = LycorisColors.SecondaryText, maxLines = 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
+                        place.description?.takeIf { it.isNotBlank() }?.let { Text(it, style = LycorisTextStyles.PlaceSummary, color = LycorisColors.SecondaryText, maxLines = 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) }
                     }
                 }
             }
@@ -81,11 +80,11 @@ fun PlaceDetailContent(place: Marker, clients: ApiClients, account: AccountState
     Column(Modifier.fillMaxWidth().padding(horizontal = 30.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(categoryName(place.category, chinese), Modifier.weight(1f), color = LycorisColors.SecondaryText)
-            Text(distanceLabel(referenceLat, referenceLng, place.lat, place.lng), fontSize = 15.sp, color = LycorisColors.SecondaryText)
+            Text(distanceLabel(referenceLat, referenceLng, place.lat, place.lng), style = LycorisTextStyles.PlaceDistance, color = LycorisColors.SecondaryText)
         }
         PlaceMetadataRow(place, chinese)
         if (!place.markImage.isNullOrBlank()) PlacePhoto(place, clients, account, Modifier.fillMaxWidth().aspectRatio(16f / 9).clip(RoundedCornerShape(16.dp)), true, chinese)
-        place.description?.takeIf(String::isNotBlank)?.let { Text(it, fontSize = 16.sp, lineHeight = 23.sp) }
+        place.description?.takeIf(String::isNotBlank)?.let { Text(it, style = LycorisTextStyles.PlaceDescription) }
         if (place.reviewStatus != "APPROVED") Text(if (chinese) "待审核" else "Pending review", color = LycorisColors.Primary)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
             IconButton(onShare) { Icon(Icons.Rounded.Share, if (chinese) "分享点位" else "Share place") }

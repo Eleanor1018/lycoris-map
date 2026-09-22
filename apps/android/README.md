@@ -2,6 +2,8 @@
 
 Native Kotlin / Jetpack Compose application. The Android design is Figma page `32:2454`; implementation and acceptance progress are recorded in `docs/progress.md`.
 
+Application fonts are packaged with the APK. The pinned text sizes, font provenance, accessibility behavior and local icon sources are documented in [Typography and icons](docs/typography.md).
+
 ## Toolchain
 
 - Android SDK 37, Build Tools 36.0.0; minimum API 26.

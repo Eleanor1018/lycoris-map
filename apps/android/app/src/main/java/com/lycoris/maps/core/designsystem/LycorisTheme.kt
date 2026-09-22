@@ -2,7 +2,6 @@ package com.lycoris.maps.core.designsystem
 
 import androidx.compose.foundation.Image
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -37,7 +36,7 @@ fun LycorisTheme(content: @Composable () -> Unit) {
             onSurfaceVariant = LycorisColors.SecondaryText,
             background = LycorisColors.Surface,
         ),
-        typography = Typography(),
+        typography = LycorisTypography,
         content = content,
     )
 }

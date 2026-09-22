@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import com.lycoris.maps.core.designsystem.LycorisNativeFonts
 import com.lycoris.maps.core.device.DeviceLocation
 import com.lycoris.maps.core.device.HeadingState
 import com.lycoris.maps.core.model.Marker
@@ -67,6 +68,7 @@ fun PlaceLayers(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
+    val clusterTypeface = remember(context) { LycorisNativeFonts.medium(context) }
     val selected by rememberUpdatedState(onSelect)
     val map = state.map
     val ready = state.ready
@@ -83,7 +85,9 @@ fun PlaceLayers(
             null
         }
     }
-    val renderer = remember(map, density) { map?.let { PlaceRenderer(state, it, density) { id -> selected(id) } } }
+    val renderer = remember(map, density, clusterTypeface) {
+        map?.let { PlaceRenderer(state, it, density, clusterTypeface) { id -> selected(id) } }
+    }
 
     DisposableEffect(renderer) {
         renderer?.listen()
@@ -147,6 +151,7 @@ private class PlaceRenderer(
     private val state: NativeMapState,
     private val map: MapLibreMap,
     private val density: Float,
+    private val clusterTypeface: Typeface,
     private val onSelect: (Long) -> Unit,
 ) {
     private var disposed = false
@@ -270,7 +275,7 @@ private class PlaceRenderer(
             if (symbol.clustered) {
                 val key = symbol.imageKey()
                 requiredImages.add(key)
-                if (key !in imageNames) addImage(active, key, clusterBitmap(symbol.count, symbol.category, density))
+                if (key !in imageNames) addImage(active, key, clusterBitmap(symbol.count, symbol.category, density, clusterTypeface))
             }
         }
         active.getSourceAs<GeoJsonSource>(PLACE_SOURCE)?.setGeoJson(features)
@@ -400,8 +405,8 @@ internal fun categoryColor(category: PlaceCategory?): Int = when (category) {
 }
 private fun colorHex(category: PlaceCategory?) = "#%06X".format(categoryColor(category) and 0xFFFFFF)
 
-/** System-font count on a native circle avoids a network glyph server or fabricated design asset. */
-internal fun clusterBitmap(count: Int, category: PlaceCategory?, density: Float): Bitmap {
+/** Packaged-font count on a native circle stays independent of ROM fonts and network glyph servers. */
+internal fun clusterBitmap(count: Int, category: PlaceCategory?, density: Float, typeface: Typeface): Bitmap {
     val side = (48 * density).roundToInt()
     val bitmap = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888).apply { this.density = (160 * density).roundToInt() }
     val canvas = Canvas(bitmap)
@@ -412,7 +417,7 @@ internal fun clusterBitmap(count: Int, category: PlaceCategory?, density: Float)
     paint.color = categoryColor(category)
     canvas.drawCircle(center, center, 20 * density, paint)
     paint.color = if (category == null || category == PlaceCategory.OTHER) Color.WHITE else 0xFF1D1B20.toInt()
-    paint.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+    paint.typeface = typeface
     paint.textSize = 14 * density
     paint.textAlign = Paint.Align.CENTER
     val label = count.toString()
