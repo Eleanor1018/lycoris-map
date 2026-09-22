@@ -175,3 +175,12 @@ credentials are bundled. The 21 `AccountTests` cover normalized addresses/code
 payloads, recovery/private-data invalidation even if subsequent reads fail,
 cooldown feedback, and the existing session/bookmark regressions. These use
 in-process fixtures and send no real email.
+
+The optional Rust-backed UI suites require preseeded synthetic accounts now;
+their old auto-registration fallback cannot omit a verification code. Supply
+`LYCORIS_I4_FIXTURE_JSON` and a distinct `LYCORIS_I4_SECOND_FIXTURE_JSON` as JSON
+objects with `username`, `email`, `password`, and `LYCORIS_I5_FIXTURE_JSON` with
+`username`, `password`. These must be accounts in the loopback synthetic stack,
+never production accounts. The tests retain their synthetic-marker preflight.
+Registration/code security is covered by the dedicated Rust HTTP suite and native
+account contract tests; these existing UI suites cover logged-in workflows.

@@ -300,7 +300,11 @@ import XCTest
     }
     let key = "lycoris.i5.synthetic-account"
     let fixture: Fixture
-    if let bytes = UserDefaults.standard.data(forKey: key),
+    if let raw = ProcessInfo.processInfo.environment["LYCORIS_I5_FIXTURE_JSON"],
+      let saved = try? JSONDecoder().decode(Fixture.self, from: Data(raw.utf8))
+    {
+      fixture = saved
+    } else if let bytes = UserDefaults.standard.data(forKey: key),
       let saved = try? JSONDecoder().decode(Fixture.self, from: bytes)
     {
       fixture = saved
@@ -310,19 +314,22 @@ import XCTest
       UserDefaults.standard.set(try JSONEncoder().encode(fixture), forKey: key)
     }
     let session = URLSession(configuration: .ephemeral)
-    func authenticate(_ registering: Bool) async throws -> Int {
+    func authenticate() async throws -> Int {
       var request = URLRequest(
-        url: base.appendingPathComponent(registering ? "api/register" : "api/login"))
+        url: base.appendingPathComponent("api/login"))
       request.httpMethod = "POST"
       request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-      var fields = ["username": fixture.username, "password": fixture.password]
-      if registering { fields["email"] = "\(fixture.username)@example.invalid" }
+      let fields = ["username": fixture.username, "password": fixture.password]
       request.httpBody = try JSONEncoder().encode(fields)
       let (_, response) = try await session.data(for: request)
       return (response as? HTTPURLResponse)?.statusCode ?? 0
     }
-    let login = try await authenticate(false)
-    let status = login == 401 ? try await authenticate(true) : login
+    let status = try await authenticate()
+    if status == 401 {
+      throw XCTSkip(
+        "Seed a verified loopback fixture and supply LYCORIS_I5_FIXTURE_JSON; unverified auto-registration is no longer supported."
+      )
+    }
     guard status == 200 else {
       XCTFail("Synthetic account unavailable")
       throw URLError(.userAuthenticationRequired)
