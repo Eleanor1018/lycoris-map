@@ -159,7 +159,7 @@ private enum WriteWaitError: Error { case missingWrite }
     row.tap()
     XCTAssertTrue(app.buttons["place.edit"].waitForExistence(timeout: 8))
     app.buttons["place.edit"].tap()
-    signInIfNeeded(app)
+    try signInIfNeeded(app)
     let picker = app.buttons["contribution.venue"]
     XCTAssertTrue(picker.waitForExistence(timeout: 10))
     attach(app, "metadata-editor-venue")
@@ -199,7 +199,7 @@ private enum WriteWaitError: Error { case missingWrite }
     try await resetFixture()
     let app = launch(now: "2026-09-20T03:00:00Z")
     // Use the explicit map-selection entry above the new contribution form.
-    signInViaContribute(app)
+    try signInViaContribute(app)
     let useLocation = app.buttons["contribution.confirm-location"]
     XCTAssertTrue(useLocation.waitForExistence(timeout: 10))
     // Tap the map to choose a coordinate, then wait for the button to enable.
@@ -229,7 +229,7 @@ private enum WriteWaitError: Error { case missingWrite }
   func testCurrentLocationDraftCanChooseAnotherLocationWithoutLosingFields() async throws {
     try await resetFixture()
     let app = launch(now: "2026-09-20T03:00:00Z")
-    signInViaContribute(app, chooseOther: false)
+    try signInViaContribute(app, chooseOther: false)
     let title = app.textFields["contribution.title"]
     XCTAssertTrue(title.waitForExistence(timeout: 20), "The simulated GPS fix should create the draft")
     let changeLocation = app.buttons["contribution.location"]
@@ -273,7 +273,7 @@ private enum WriteWaitError: Error { case missingWrite }
   func testDeniedLocationFallsBackToExplicitMapSelection() async throws {
     try await resetFixture()
     let app = launch(language: "zh", locale: true, now: "2026-09-20T03:00:00Z")
-    signInViaContribute(app, chooseOther: false)
+    try signInViaContribute(app, chooseOther: false)
     if app.textFields["contribution.title"].waitForExistence(timeout: 3) {
       throw XCTSkip("Run this case separately with simulator location permission denied")
     }
@@ -315,12 +315,12 @@ private enum WriteWaitError: Error { case missingWrite }
   }
 
   /// Default creation uses GPS; choosing another point is an explicit action.
-  private func signInViaContribute(_ app: XCUIApplication, chooseOther: Bool = true) {
+  private func signInViaContribute(_ app: XCUIApplication, chooseOther: Bool = true) throws {
     let contribute = app.buttons["map.contribute"]
     XCTAssertTrue(contribute.waitForExistence(timeout: 10))
     XCTAssertTrue(contribute.isHittable)
     contribute.tap()
-    signInIfNeeded(app)
+    try signInIfNeeded(app)
     guard chooseOther else { return }
     let changeLocation = app.buttons["contribution.location"]
     let confirm = app.buttons["contribution.confirm-location"]
@@ -331,12 +331,12 @@ private enum WriteWaitError: Error { case missingWrite }
     XCTAssertTrue(confirm.waitForExistence(timeout: 10))
   }
 
-  private func signInIfNeeded(_ app: XCUIApplication) {
+  private func signInIfNeeded(_ app: XCUIApplication) throws {
     if app.textFields["auth.username"].waitForExistence(timeout: 8) {
       fill(app.textFields["auth.username"], fixtureAccount.username)
       fill(app.secureTextFields["auth.password"], fixtureAccount.password)
       app.secureTextFields["auth.password"].typeText("\n")
-      declinePasswordSave(app)
+      try dismissPasswordSaveAlert(in: app)
     }
   }
 
@@ -359,18 +359,6 @@ private enum WriteWaitError: Error { case missingWrite }
       element.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count))
     }
     element.typeText(value)
-  }
-
-  private func declinePasswordSave(_ app: XCUIApplication) {
-    for host in [app, XCUIApplication(bundleIdentifier: "com.apple.springboard")] {
-      let button = host.buttons.matching(
-        NSPredicate(format: "label IN %@", ["Not Now", "以后", "以后再说"])
-      ).firstMatch
-      if button.waitForExistence(timeout: 3) {
-        button.tap()
-        return
-      }
-    }
   }
 
   private func attach(_ app: XCUIApplication, _ name: String) {

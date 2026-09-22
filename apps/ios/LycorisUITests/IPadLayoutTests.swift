@@ -17,8 +17,9 @@ import XCTest
       guard UIDevice.current.userInterfaceIdiom == .pad else {
         throw XCTSkip("This suite verifies the native iPad sidebar layout.")
       }
-      originalOrientation = XCUIDevice.shared.orientation
-      XCUIDevice.shared.orientation = .landscapeLeft
+      let orientation = XCUIDevice.shared.orientation
+      originalOrientation = orientation.isPortrait || orientation.isLandscape ? orientation : .portrait
+      XCUIDevice.shared.orientation = .portrait
     }
   }
 
@@ -30,7 +31,7 @@ import XCTest
     try await super.tearDown()
   }
 
-  func testAccessibilityTextKeepsSidebarAndSettingsReachable() {
+  func testAccessibilityTextKeepsSidebarAndSettingsReachable() throws {
     let app = XCUIApplication()
     app.launchArguments = [
       "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-lycoris.language", "en",
@@ -39,6 +40,7 @@ import XCTest
     ]
     app.launch()
     XCTAssertTrue(app.buttons["map.sidebar.search"].waitForExistence(timeout: 10))
+    try rotate(.landscapeLeft, in: app)
     assertNavigationAndMap(app)
     XCTAssertGreaterThanOrEqual(app.buttons["map.sidebar.settings"].frame.height, 44)
     XCTAssertGreaterThanOrEqual(app.buttons["map.sidebar.account"].frame.height, 44)
@@ -46,22 +48,27 @@ import XCTest
     attach(app, "ipad-accessibility-sidebar")
 
     app.buttons["map.sidebar.settings"].tap()
+    let done = app.buttons["settings.home.done"]
+    try require(done.waitForExistence(timeout: 8), "Settings did not open", in: app)
+    let form = app.descendants(matching: .any).matching(identifier: "settings.home.form").firstMatch
+    try require(form.waitForExistence(timeout: 5), "Settings form is missing", in: app)
     let about = app.buttons["settings.about"]
-    XCTAssertTrue(about.waitForExistence(timeout: 8))
+    // Native Form rows may not enter the accessibility tree until scrolled into view.
     for _ in 0..<4 {
-      if about.isHittable { break }
-      app.swipeUp()
+      if about.exists && about.isHittable { break }
+      form.swipeUp()
     }
     XCTAssertTrue(about.isHittable)
-    XCTAssertTrue(app.buttons["settings.home.done"].isHittable)
+    XCTAssertTrue(done.isHittable)
     attach(app, "ipad-accessibility-settings")
-    app.buttons["settings.home.done"].tap()
+    done.tap()
+    XCTAssertTrue(done.waitForNonExistence(timeout: 5))
     XCTAssertTrue(app.buttons["map.sidebar.close"].waitForExistence(timeout: 5))
   }
 
   func testSearchCloseAndReopenPreservesQueryAndMap() async throws {
     try await resetFixture()
-    let app = launch()
+    let app = try launch()
     XCTAssertFalse(app.buttons["map.sidebar.bookmarks"].exists)
     let search = app.textFields["map.search"]
     search.tap()
@@ -81,16 +88,38 @@ import XCTest
     XCTAssertTrue(search.waitForExistence(timeout: 5))
     XCTAssertEqual(search.value as? String, "Metro Accessible Toilet")
     XCTAssertTrue(app.buttons["place.row.21"].waitForExistence(timeout: 5))
-    rotate(.portrait, in: app)
+    try rotate(.portrait, in: app)
     XCTAssertEqual(search.value as? String, "Metro Accessible Toilet")
     XCTAssertTrue(app.buttons["place.row.21"].isHittable)
     assertNavigationAndMap(app)
     attach(app, "ipad-search-reopened-portrait")
   }
 
+  func testBothLandscapeLaunchesAcceptSearchAndSettingsTaps() async throws {
+    try await resetFixture()
+    for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight] {
+      let app = try launch(in: orientation)
+      let search = app.textFields["map.search"]
+      search.tap()
+      search.typeText("Metro Accessible Toilet")
+      try require(app.buttons["place.row.21"].waitForExistence(timeout: 8),
+                  "Landscape launch search did not produce a result", in: app)
+      app.buttons["map.sidebar.settings"].tap()
+      let done = app.buttons["settings.home.done"]
+      try require(done.waitForExistence(timeout: 5), "Landscape launch settings did not open", in: app)
+      XCTAssertTrue(app.buttons["settings.language"].isHittable)
+      XCTAssertTrue(done.isHittable)
+      done.tap()
+      XCTAssertTrue(done.waitForNonExistence(timeout: 5))
+      XCTAssertEqual(search.value as? String, "Metro Accessible Toilet")
+      attach(app, "ipad-cold-launch-\(orientation.rawValue)")
+      app.terminate()
+    }
+  }
+
   func testNearbyDetailsSurviveRotationAndCloseKeepsNavigation() async throws {
     try await resetFixture()
-    let app = launch()
+    let app = try launch()
     app.buttons["map.category.baby_room"].tap()
     let row = app.buttons["place.row.23"]
     XCTAssertTrue(row.waitForExistence(timeout: 8))
@@ -104,7 +133,7 @@ import XCTest
     assertNavigationAndMap(app)
     attach(app, "ipad-nearby-detail-landscape")
 
-    rotate(.portrait, in: app)
+    try rotate(.portrait, in: app)
     XCTAssertEqual(title.label, "Nursing Room No Tag")
     XCTAssertTrue(title.isHittable)
     XCTAssertTrue(app.buttons["place.navigate"].isHittable)
@@ -118,7 +147,7 @@ import XCTest
     app.buttons["header.closeButton"].tap()
     XCTAssertTrue(title.waitForExistence(timeout: 5))
 
-    rotate(.landscapeRight, in: app)
+    try rotate(.landscapeRight, in: app)
     XCTAssertEqual(title.label, "Nursing Room No Tag")
     attach(app, "ipad-detail-rotation-preserved")
 
@@ -130,7 +159,7 @@ import XCTest
 
   func testNativeSettingsAndLoginExposeAuthenticatedBookmarks() async throws {
     try await resetFixture()
-    let app = launch()
+    let app = try launch()
     XCTAssertFalse(app.buttons["map.sidebar.bookmarks"].exists)
     app.buttons["map.sidebar.settings"].tap()
     let language = app.buttons["settings.language"]
@@ -147,7 +176,7 @@ import XCTest
     XCTAssertTrue(closeSettings.waitForNonExistence(timeout: 5))
 
     app.buttons["map.sidebar.account"].tap()
-    signIn(app)
+    try signIn(app)
     XCTAssertTrue(app.buttons["profile.avatar"].waitForExistence(timeout: 8))
     app.buttons["account.close"].tap()
     let bookmarks = app.buttons["map.sidebar.bookmarks"]
@@ -178,17 +207,17 @@ import XCTest
 
   func testContributionEditorRemainsModalAndRetainsDraftAcrossRotation() async throws {
     try await resetFixture()
-    let app = launch()
+    let app = try launch()
     let search = app.textFields["map.search"]
     search.tap()
     search.typeText("Metro Accessible Toilet")
     let row = app.buttons["place.row.21"]
-    XCTAssertTrue(row.waitForExistence(timeout: 8))
+    try require(row.waitForExistence(timeout: 8), "Search did not produce the point to edit", in: app)
     row.tap()
     let edit = app.buttons["place.edit"]
     XCTAssertTrue(edit.waitForExistence(timeout: 5))
     edit.tap()
-    signIn(app)
+    try signIn(app)
     let title = app.textFields["contribution.title"]
     XCTAssertTrue(title.waitForExistence(timeout: 10))
     XCTAssertEqual(title.value as? String, "Metro Accessible Toilet")
@@ -196,7 +225,7 @@ import XCTest
     XCTAssertFalse(app.buttons["contribution.location"].exists)
     replace(title, with: "iPad rotation draft")
     title.typeText("\n")
-    rotate(.portrait, in: app)
+    try rotate(.portrait, in: app)
     XCTAssertEqual(title.value as? String, "iPad rotation draft")
     XCTAssertTrue(app.buttons["contribution.close"].isHittable)
     attach(app, "ipad-native-contribution-portrait")
@@ -212,12 +241,13 @@ import XCTest
     app.buttons["contribution.close"].tap()
   }
 
-  private func launch() -> XCUIApplication {
+  private func launch(in initialOrientation: UIDeviceOrientation = .portrait) throws -> XCUIApplication {
     let app = XCUIApplication()
     app.launchArguments = [
       "-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-lycoris.language", "en",
       "-lycoris.searchType", "all", "-lycoris-test-center", "31.2304,121.4737",
     ]
+    XCUIDevice.shared.orientation = initialOrientation
     app.launch()
     XCTAssertTrue(app.buttons["map.sidebar.search"].waitForExistence(timeout: 10))
     let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
@@ -225,7 +255,13 @@ import XCTest
       NSPredicate(format: "label IN %@", ["Allow While Using App", "使用App时允许", "使用 App 时允许"])
     ).firstMatch
     if allow.waitForExistence(timeout: 2) { allow.tap() }
-    XCTAssertTrue(content(in: app).waitForExistence(timeout: 5))
+    try require(content(in: app).waitForExistence(timeout: 5), "Sidebar did not open", in: app)
+    if initialOrientation.isLandscape {
+      // Observe the launch result without sending a second orientation event.
+      try waitForOrientation(initialOrientation, in: app)
+    } else {
+      try rotate(.landscapeLeft, in: app)
+    }
     return app
   }
 
@@ -243,32 +279,44 @@ import XCTest
     XCTAssertTrue(app.maps.firstMatch.isHittable, file: file, line: line)
   }
 
-  private func rotate(_ orientation: UIDeviceOrientation, in app: XCUIApplication) {
+  private func rotate(_ orientation: UIDeviceOrientation, in app: XCUIApplication) throws {
     XCUIDevice.shared.orientation = orientation
+    try waitForOrientation(orientation, in: app)
+  }
+
+  private func waitForOrientation(_ orientation: UIDeviceOrientation, in app: XCUIApplication) throws {
     let isLandscape = orientation.isLandscape
     let settled = XCTNSPredicateExpectation(
       predicate: NSPredicate { _, _ in
         let frame = app.frame
         return isLandscape ? frame.width > frame.height : frame.height > frame.width
       }, object: app)
-    XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 8), .completed)
+    try require(
+      XCTWaiter.wait(for: [settled], timeout: 8) == .completed,
+      "App window did not reach \(orientation.isLandscape ? "landscape" : "portrait") orientation",
+      in: app)
   }
 
-  private func signIn(_ app: XCUIApplication) {
+  private func signIn(_ app: XCUIApplication) throws {
     let username = app.textFields["auth.username"]
     XCTAssertTrue(username.waitForExistence(timeout: 8))
     replace(username, with: "ios_metadata_fixture")
     let password = app.secureTextFields["auth.password"]
     replace(password, with: "Metadata-Fixture-1")
     password.typeText("\n")
-    for host in [app, XCUIApplication(bundleIdentifier: "com.apple.springboard")] {
-      let notNow = host.buttons.matching(
-        NSPredicate(format: "label IN %@", ["Not Now", "以后", "以后再说"])
-      ).firstMatch
-      if notNow.waitForExistence(timeout: 2) {
-        notNow.tap()
-        break
-      }
+    try dismissPasswordSaveAlert(in: app)
+  }
+
+  private struct InteractionFailure: Error {}
+
+  private func require(
+    _ condition: Bool, _ message: String, in app: XCUIApplication,
+    file: StaticString = #filePath, line: UInt = #line
+  ) throws {
+    guard condition else {
+      attach(app, message)
+      XCTFail(message, file: file, line: line)
+      throw InteractionFailure()
     }
   }
 

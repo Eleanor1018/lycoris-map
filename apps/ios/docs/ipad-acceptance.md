@@ -2,6 +2,8 @@
 
 日期：2026-09-21 至 2026-09-22。分支：`feat/ios-ipad`。版本：0.1.0（2）。
 
+后续完整矩阵重跑与交互测试修复见 [iPad 自动化交互故障排查](ipad-test-stability.md)；下文保留首次适配验收记录。
+
 ## 实现范围
 
 - 同一 SwiftUI / MapKit 应用覆盖 iPhone 与 iPad；iPhone 竖屏，iPad 四方向。
