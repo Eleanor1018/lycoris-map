@@ -144,6 +144,55 @@ class AppConfigurationTest {
         compose.onNode(text("Log In", "登录") and hasClickAction()).assertIsNotEnabled()
     }
 
+    @Test fun coldStartKeepsImeHiddenAndShowsPrimaryNavigation() {
+        // No touch happens here: the map must open without the IME, and the primary navigation
+        // must actually be laid out and drawn rather than hidden behind an unintended keyboard.
+        val manager = context.getSystemService(InputMethodManager::class.java)
+        val selected = Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+        assertTrue("This device must have a selected, enabled system IME; the test does not change global keyboard settings",
+            !selected.isNullOrBlank() && manager.enabledInputMethodList.any { it.id == selected })
+
+        var focused = false
+        compose.waitUntil(10_000) {
+            scenario!!.onActivity { focused = it.window.decorView.hasWindowFocus() }
+            focused
+        }
+        // Let the platform process frames after focus arrives; Compose's test clock alone does
+        // not drive the real input method. Choreographer callbacks are not proof of GPU rendering.
+        awaitPlatformFrames(6)
+        awaitIme(false, "An untouched cold start must not show the system keyboard")
+        // Re-check after additional real frames: no touch occurred, so the IME must stay hidden.
+        awaitPlatformFrames(6)
+        awaitIme(false, "The keyboard must remain hidden while the user has not touched any field")
+
+        compose.onNode(tab("Explore", "探索")).assertIsDisplayed().assertIsSelected()
+        compose.onNode(tab("Bookmarks", "收藏")).assertIsDisplayed()
+        compose.onNode(tab("Settings", "设置")).assertIsDisplayed()
+        withModel { assertNull(it.page.value) }
+    }
+
+    /** Wait for platform frames without changing a system keyboard or animation setting. */
+    private fun awaitPlatformFrames(count: Int) {
+        val latch = java.util.concurrent.CountDownLatch(count)
+        lateinit var choreographer: android.view.Choreographer
+        lateinit var callback: android.view.Choreographer.FrameCallback
+        scenario!!.onActivity {
+            choreographer = android.view.Choreographer.getInstance()
+            callback = object : android.view.Choreographer.FrameCallback {
+                override fun doFrame(frameTimeNanos: Long) {
+                    latch.countDown()
+                    if (latch.count > 0) choreographer.postFrameCallback(this)
+                }
+            }
+            choreographer.postFrameCallback(callback)
+        }
+        try {
+            assertTrue("The window did not receive $count platform frames", latch.await(10, java.util.concurrent.TimeUnit.SECONDS))
+        } finally {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync { choreographer.removeFrameCallback(callback) }
+        }
+    }
+
     @Test fun actualOrientationRebuildRetainsPrimarySelectionCameraAndSelectedPlaceId() {
         requestConfiguration(Configuration.ORIENTATION_PORTRAIT)
         compose.onNode(tab("Settings", "设置")).performClick()
