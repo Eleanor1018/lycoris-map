@@ -419,6 +419,9 @@ def main(argv=None):
             # any later permission-restoration failure in the context-manager finally.
             backend_stage = reported_stage(output)
             receipt = parse_instrumentation(output, user["publicId"])
+            # Native integration passed. A later database-oracle or host permission-restoration
+            # failure must not be attributed to its last successful backend stage (cleanup).
+            backend_stage = None
             stage = "database-oracle"
             oracle = database_oracle(receipt)
             log.write("Read-only QA oracle: " + json.dumps(oracle, separators=(",", ":")))
