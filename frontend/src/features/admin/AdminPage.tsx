@@ -91,8 +91,21 @@ export default function AdminPage() {
                 <section className={`admin-gate ${state === 'anonymous' ? 'admin-login' : ''}`}>
                     {state === 'anonymous' ? (
                         <>
-                            <h2>{ui.message(flow.view === 'register' ? 'Register' : 'Login')}</h2>
-                            <AuthForm register={flow.view === 'register'} mobile={false} />
+                            <h2>
+                                {ui.message(
+                                    flow.view === 'reset'
+                                        ? 'Reset Password'
+                                        : flow.view === 'register'
+                                          ? 'Register'
+                                          : 'Login',
+                                )}
+                            </h2>
+                            <AuthForm
+                                key={flow.view}
+                                register={flow.view === 'register'}
+                                reset={flow.view === 'reset'}
+                                mobile={false}
+                            />
                         </>
                     ) : state === 'verify' ? (
                         <Verification key={session.epoch} admin={admin} />

@@ -18,7 +18,12 @@ it('never retries registration whose account was created before a 503', async ()
     )
     vi.stubGlobal('fetch', fetch)
     await expect(
-        register({ username: 'S4', email: 's4@example.test', password: 'synthetic' }),
+        register({
+            username: 'S4',
+            email: 's4@example.test',
+            password: 'synthetic',
+            verificationCode: '123456',
+        }),
     ).rejects.toMatchObject({ status: 503, message: '账号已创建，请稍后登录' })
     expect(fetch).toHaveBeenCalledTimes(1)
 })

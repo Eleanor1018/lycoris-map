@@ -23,15 +23,17 @@ export function AccountDialog({
     if (!flow) return null
     const view = flow.view
     const title =
-        view === 'register'
-            ? 'Register'
-            : view === 'login'
-              ? 'Login'
-              : view === 'password'
-                ? 'Change Password'
-                : view === 'created'
-                  ? 'My Places'
-                  : 'Account'
+        view === 'reset'
+            ? 'Reset Password'
+            : view === 'register'
+              ? 'Register'
+              : view === 'login'
+                ? 'Login'
+                : view === 'password'
+                  ? 'Change Password'
+                  : view === 'created'
+                    ? 'My Places'
+                    : 'Account'
     return (
         <Dialog.Root
             open={view !== null}
@@ -79,10 +81,11 @@ export function AccountDialog({
                             <Dialog.Title id="account-title" tabIndex={-1}>
                                 {ui.message(title)}
                             </Dialog.Title>
-                            {(view === 'login' || view === 'register') && (
+                            {(view === 'login' || view === 'register' || view === 'reset') && (
                                 <AuthForm
                                     key={view}
                                     register={view === 'register'}
+                                    reset={view === 'reset'}
                                     mobile={mobile}
                                 />
                             )}

@@ -236,7 +236,11 @@ export class SessionStore {
             throw new Error('Could not confirm updated profile. Refresh and try again.')
         this.publish({ user })
     }
-    private async transition(task: () => Promise<unknown>, requireOwner: boolean) {
+    private async transition(
+        task: () => Promise<unknown>,
+        requireOwner: boolean,
+        reconcileAfter = true,
+    ) {
         if (this.snapshot.busy) throw new Error('Please wait for the current account request.')
         const previous = this.snapshot.scope
         this.publish({ busy: true, error: null })
@@ -260,6 +264,12 @@ export class SessionStore {
                     // Do not abort Set-Cookie responses or start a second cookie
                     // write while this one can still complete in the browser.
                     await task()
+                    // Recovery is complete once acknowledged; a failed follow-up read
+                    // must not turn a successful password reset into a retry prompt.
+                    if (!reconcileAfter) {
+                        this.discard('anonymous')
+                        return null
+                    }
                     const epoch = this.snapshot.epoch
                     const user = await this.me()
                     if (epoch === this.snapshot.epoch) this.adopt(user)
@@ -290,6 +300,8 @@ export class SessionStore {
     }
     login = (input: api.LoginInput) => this.transition(() => api.login(input), false)
     register = (input: api.RegisterInput) => this.transition(() => api.register(input), false)
+    resetPassword = (input: api.ResetPasswordInput) =>
+        this.transition(() => api.resetPassword(input), false, false)
     logout = () =>
         this.transition(async () => {
             try {
