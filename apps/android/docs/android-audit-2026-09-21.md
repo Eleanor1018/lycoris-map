@@ -2,14 +2,15 @@
 
 ## Follow-up on September 22
 
-Current product baseline: `d0601cb` on the visible `feat/android-native` checkout. The sections below
-this follow-up retain the earlier investigation history; they are not the latest acceptance status.
+Follow-up began at `d0601cb` on the visible `feat/android-native` checkout. Product fix `e88e6b9`
+adds the cold-start keyboard policy; `4720e7b` adds the latest diagnostic comparison. The sections
+below this follow-up retain earlier investigation history, not the latest acceptance status.
 
 | Check | Latest evidence |
 | --- | --- |
 | JVM, lint, QA and instrumentation build | 144 JVM tests passed; lint and builds passed |
-| Full API 36 CI | `35701516811`: 59 passed, 5 opt-in tests skipped, no failures |
-| Full API 26 CI before fixture correction | Same run: 56 passed, 2 failed, 5 skipped |
+| Full API 36 CI | `35703545585`: 59 passed, 5 opt-in tests skipped, no failures |
+| Full API 26 CI before fixture correction | `35682828661`: 56 passed, 2 failed, 5 skipped |
 | Isolated native backend | `backend-aosp-20260922-152104.log`: passed; login, encrypted session restore, favorites, idempotent creation and chunked upload |
 | Loaded detail rotation | `loaded-aosp-20260922-152623.log`: 1 passed; actual QA detail loaded, Activity recreated both ways, user camera retained |
 | Live provider cases | `online-aosp-20260922-152720.log`: 3 passed; OSM, Tianditu and Tencent rendered and recovered from background |
@@ -61,7 +62,19 @@ API 26 failure. The original emulator was resumed after this diagnostic; its con
 changed. API 26 still logged native renderer allocation failures. Its next CI run switches only the
 emulator to the supported `-gpu software` backend, keeping the app's SDK and rendering code unchanged.
 Android documents [`swiftshader_indirect` as deprecated](https://developer.android.com/studio/run/emulator-acceleration).
-This is a diagnostic environment comparison, not a claimed renderer fix.
+Comparison run `35703545585` still reports 57 passed, 2 failed, 5 skipped on API 26; API 36 remains
+59 passed and 5 skipped (64 unique XML test cases, despite Gradle's progress counter saying 69).
+Both emulator backends logged 23 `std::bad_alloc` entries. Software mode does not resolve the
+renderer issue. At the rotation timeout the recreated window is focused, 640x320, landscape, and
+reports IME hidden with zero bottom inset. The rotation cause remains open.
+
+The range failure is now confirmed as persistent: five seconds after Cancel the dialog is gone,
+but its window reports `imeVisible=true`, `imeBottom=246`, and the Settings tab remains hidden.
+The range dialog now registers its own focus/keyboard dismissal callback from inside AlertDialog's
+content, and invokes it before Cancel, Done or normal dismiss removes the dialog. The Activity's
+outer focus manager cannot clear the dialog's focused text field. Radius validation and all existing
+assertions are unchanged. This candidate awaits the same API 26 regression; passing JVM/lint/build
+alone is not acceptance.
 
 The backend integration test now emits bounded stage names with custom status code 2. The runner
 reports `backendStage` on failures without copying arbitrary text; it preserves an explicit primary
