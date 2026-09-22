@@ -3,13 +3,14 @@
 ## Follow-up on September 22
 
 Follow-up began at `d0601cb` on the visible `feat/android-native` checkout. Product fix `e88e6b9`
-adds the cold-start keyboard policy; `4720e7b` adds the latest diagnostic comparison. The sections
+adds the cold-start keyboard policy; `1954cad` fixes range-dialog keyboard dismissal. The sections
 below this follow-up retain earlier investigation history, not the latest acceptance status.
 
 | Check | Latest evidence |
 | --- | --- |
 | JVM, lint, QA and instrumentation build | 144 JVM tests passed; lint and builds passed |
-| Full API 36 CI | `35703545585`: 59 passed, 5 opt-in tests skipped, no failures |
+| Full API 36 CI | `35705457344` / `1954cad`: 59 passed, 5 opt-in tests skipped, no failures |
+| Full API 26 CI | Same run: 58 passed, 1 rotation failure, 5 opt-in tests skipped |
 | Full API 26 CI before fixture correction | `35682828661`: 56 passed, 2 failed, 5 skipped |
 | Isolated native backend | `backend-aosp-20260922-152104.log`: passed; login, encrypted session restore, favorites, idempotent creation and chunked upload |
 | Loaded detail rotation | `loaded-aosp-20260922-152623.log`: 1 passed; actual QA detail loaded, Activity recreated both ways, user camera retained |
@@ -73,8 +74,19 @@ but its window reports `imeVisible=true`, `imeBottom=246`, and the Settings tab 
 The range dialog now registers its own focus/keyboard dismissal callback from inside AlertDialog's
 content, and invokes it before Cancel, Done or normal dismiss removes the dialog. The Activity's
 outer focus manager cannot clear the dialog's focused text field. Radius validation and all existing
-assertions are unchanged. This candidate awaits the same API 26 regression; passing JVM/lint/build
-alone is not acceptance.
+assertions are unchanged. Fix `1954cad` passed the unchanged range regression locally
+(`range-aosp-20260922-163234.log`) and in CI `35705457344` on both API 26 and API 36. The full API 26
+result is now 58 passed, 1 failed (rotation), 5 skipped; API 36 has 59 passed and 5 skipped.
+Both counts are 64 actual test methods, excluding progress/receipt duplication. JVM's 144 tests,
+lint, all APK builds and 16 KB ZIP alignment also passed in that run. API 26 still records 23 native
+allocation errors; the successful keyboard regression does not establish map-renderer acceptance.
+
+The remaining reproducible automated failure is
+`actualOrientationRebuildRetainsPrimarySelectionCameraAndSelectedPlaceId` on API 26. It times out
+waiting for Compose to idle after the first portrait-to-landscape Activity recreation, before
+asserting the restored camera. The new window is focused and reports no keyboard at the timeout;
+changing emulator software-renderer mode and matching the viewport on AOSP 36 did not identify its
+cause. Keep this as an open compatibility blocker, not an accepted or skipped test.
 
 The backend integration test now emits bounded stage names with custom status code 2. The runner
 reports `backendStage` on failures without copying arbitrary text; it preserves an explicit primary
