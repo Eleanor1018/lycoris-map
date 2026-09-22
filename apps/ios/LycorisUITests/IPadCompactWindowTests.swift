@@ -15,13 +15,16 @@ import XCTest
       guard UIDevice.current.userInterfaceIdiom == .pad else {
         throw XCTSkip("Run this layout-transition case on an iPad mini (A17 Pro).")
       }
-      originalOrientation = XCUIDevice.shared.orientation
+      let orientation = XCUIDevice.shared.orientation
+      originalOrientation = orientation.isPortrait || orientation.isLandscape ? orientation : .portrait
+      XCUIApplication().terminate()
       XCUIDevice.shared.orientation = .portrait
     }
   }
 
   override func tearDown() async throws {
     await MainActor.run {
+      XCUIApplication().terminate()
       if let originalOrientation { XCUIDevice.shared.orientation = originalOrientation }
       originalOrientation = nil
     }
@@ -52,14 +55,14 @@ import XCTest
     XCTAssertEqual(search.value as? String, query)
     attach(app, "ipad-mini-compact-search")
 
-    rotate(.landscapeLeft, in: app, wide: true)
+    try rotate(.landscapeLeft, in: app, wide: true)
     XCTAssertEqual(app.frame.width, 1133, accuracy: 1)
     XCTAssertEqual(search.value as? String, query)
     XCTAssertTrue(row.waitForExistence(timeout: 5))
     XCTAssertTrue(row.isHittable)
     attach(app, "ipad-mini-wide-search")
 
-    rotate(.portrait, in: app, wide: false)
+    try rotate(.portrait, in: app, wide: false)
     XCTAssertEqual(search.value as? String, query)
     XCTAssertTrue(row.waitForExistence(timeout: 5))
     XCTAssertTrue(row.isHittable)
@@ -67,12 +70,12 @@ import XCTest
     assertSelectedPlace(in: app)
     attach(app, "ipad-mini-compact-selected-place")
 
-    rotate(.landscapeRight, in: app, wide: true)
+    try rotate(.landscapeRight, in: app, wide: true)
     assertSelectedPlace(in: app)
     XCTAssertTrue(app.maps.firstMatch.isHittable)
     attach(app, "ipad-mini-wide-selected-place")
 
-    rotate(.portrait, in: app, wide: false)
+    try rotate(.portrait, in: app, wide: false)
     assertSelectedPlace(in: app)
     attach(app, "ipad-mini-compact-selected-place-restored")
   }
@@ -99,16 +102,22 @@ import XCTest
 
   private func rotate(
     _ orientation: UIDeviceOrientation, in app: XCUIApplication, wide: Bool
-  ) {
+  ) throws {
     XCUIDevice.shared.orientation = orientation
     let settled = XCTNSPredicateExpectation(
       predicate: NSPredicate { _, _ in
         let frame = app.frame
         return wide ? frame.width > frame.height : frame.height > frame.width
       }, object: app)
-    XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 8), .completed)
+    guard XCTWaiter.wait(for: [settled], timeout: 8) == .completed else {
+      attach(app, "ipad-mini-orientation-not-reached")
+      XCTFail("App window did not reach \(wide ? "landscape" : "portrait") orientation")
+      throw OrientationFailure()
+    }
     assertLayout(in: app, wide: wide)
   }
+
+  private struct OrientationFailure: Error {}
 
   private func allowLocationIfRequested() {
     let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
