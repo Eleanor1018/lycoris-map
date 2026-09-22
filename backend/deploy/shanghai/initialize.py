@@ -30,7 +30,10 @@ def main():
     env = {
         'DATABASE_URL': f'postgres://lycoris:{app_password}@127.0.0.1:15432/lycoris',
         'REDIS_URL': 'redis://127.0.0.1:16379',
-        'WRITE_ALLOWED_ORIGINS': 'http://127.0.0.1:18080,http://localhost:18080',
+        'WRITE_ALLOWED_ORIGINS': ','.join([
+            'http://127.0.0.1:18080', 'http://localhost:18080',
+            'https://lycoris-map.cn:18443', 'https://www.lycoris-map.cn:18443',
+        ]),
         'CORS_ALLOWED_ORIGINS': '',
         # HTTP is restricted to loopback and transported through encrypted SSH.
         # Enable Secure and replace origins before publishing HTTPS after filing.

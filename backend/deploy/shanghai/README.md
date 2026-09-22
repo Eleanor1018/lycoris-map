@@ -47,7 +47,7 @@ From the release's `backend/deploy/shanghai` directory:
 ```sh
 sudo docker compose --env-file /opt/lycoris/private/deploy.env config --quiet
 sudo docker compose --env-file /opt/lycoris/private/deploy.env up -d postgres redis
-sudo docker compose --env-file /opt/lycoris/private/deploy.env run --rm --no-deps app --migrate
+sudo docker compose --env-file /opt/lycoris/private/deploy.env run --rm --no-deps app --migrate </dev/null
 sudo docker compose --env-file /opt/lycoris/private/deploy.env up -d app web
 ```
 
@@ -67,8 +67,8 @@ ssh -N -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
 ```
 
 Open `http://127.0.0.1:18080`. Both local paths are loopback; the network leg
-between the Mac and Shanghai is encrypted SSH. Private HTTP cookies use their
-own name and explicit localhost Origin allowlist. Do not carry these settings
+between the Mac and Shanghai is encrypted SSH. Private cookies use their own
+name and explicit localhost/private HTTPS Origin allowlist. Do not carry these settings
 forward unchanged when enabling public HTTPS.
 
 Check readiness, public/nearby/search responses, protected-route 401s, static
@@ -178,3 +178,42 @@ deployment workflow.
   after ICP approval and public launch, submit within 30 days through
   [the national public-security platform](https://beian.mps.gov.cn/).
   It needs a reachable site and is not a substitute for initial ICP approval.
+
+## Installation acceptance — 2026-09-23
+
+The private Shanghai installation is running on `111.229.9.16` with Docker
+29.8.1, Compose 5.5.1 and nginx 1.30.5. All four containers are healthy. The
+backend/PostGIS images were built natively for Linux amd64 from the pinned
+inputs, and SQLx migrations 1–7 succeeded. A validated initial custom-format
+database backup is in `/opt/lycoris/backups/initial-887ae40`.
+
+Verified results:
+
+- Frontend `pnpm build` (including strict TypeScript checks) passed. Its uploaded
+  archive matched SHA256
+  `43d4c25817e4270fdfa8746d6397b3f5cb52a043f181e44c7a982968cff8f54f`.
+- nginx configuration validation passed under the actual non-root container
+  identity. Both certificate hostnames returned HTTP 200 with certificate and
+  hostname verification enabled. TLS 1.2 and TLS 1.3 worked; OpenSSL verification
+  returned 0 (OK). HTTPS `/health/ready` reports both PostgreSQL and Redis OK.
+- Fourteen HTTP smoke checks passed, covering the homepage/admin deep link,
+  public/search/nearby/viewport endpoints, unauthenticated reads, missing routes
+  and assets, invalid tile coordinates, and allowed/disallowed login Origins.
+  An empty-credential HTTPS login returns the expected 401, not a network error.
+- The real gateway returned an OSM PNG, then a cache HIT on the repeated request.
+  A fresh headless Chrome profile rendered the HTTPS homepage with TLS 1.3,
+  35 loaded map tiles, no JavaScript page errors and no HTTP 5xx responses.
+  Host mapping was limited to that verification browser; the Mac hosts file
+  was not changed. Computer Use itself could not connect during this run.
+- All application listeners remain loopback-only, including HTTPS 18443. Only
+  SSH 22 listens on public interfaces. Temporary build proxy settings and the
+  build-only SSH reverse tunnel were removed; runtime does not depend on them.
+
+The initial database has **zero users and zero places**. No existing production
+data, credentials or sessions were copied. No administrator account was created;
+`bootstrap.json` stores only independent administrative secondary/reset secrets.
+SMTP remains unconfigured, so real registration/recovery email delivery and
+authenticated user workflows are not accepted as complete. Initial data import,
+account setup and two-region synchronization remain separate work before launch.
+The domain resolves to the Shanghai IP, but no public HTTP/HTTPS listener or
+ICP/public-security application was enabled/submitted by this deployment.
