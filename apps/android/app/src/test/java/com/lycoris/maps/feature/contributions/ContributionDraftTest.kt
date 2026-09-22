@@ -34,6 +34,18 @@ class ContributionDraftTest {
         assertFalse("Legacy edits must not overwrite a classification added on the server", oldEdit.frozenBody().contains("venueType"))
     }
 
+    @Test fun newVenueTypesSurviveCreateEditAndDraftPersistence() {
+        for (venue in listOf("public_toilet", "airport")) {
+            val marker = Marker(17, 31.2, 121.5, "accessible_toilet", "Place", venueType = venue)
+            val draft = ContributionDraft(UUID.randomUUID().toString(), "a", "https://example.test/", marker.lat, marker.lng,
+                ContributionFields.fromMarker(marker), original = marker)
+            val restored = LycorisJson.decodeFromString<ContributionDraft>(LycorisJson.encodeToString(draft))
+            assertTrue(restored.fields.isValid())
+            assertEquals(venue, LycorisJson.decodeFromString<EditMarkerRequest>(restored.copy(fields = restored.fields.copy(title = "Updated")).frozenBody()).venueType)
+            assertEquals(venue, LycorisJson.decodeFromString<CreateMarkerRequest>(restored.copy(original = null).frozenBody()).venueType)
+        }
+    }
+
     @Test fun validationCountsUnicodeScalarsAndRequiresCompleteHours() {
         val fields = ContributionFields(title = "😀".repeat(120))
         assertTrue(fields.isValid())
