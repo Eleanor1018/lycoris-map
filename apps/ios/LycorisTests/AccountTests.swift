@@ -20,6 +20,52 @@ struct AccountTests {
           table: "Network"))
   }
 
+  @Test func emailVerificationNormalizesAddressAndUsesPurposeBoundCode() async throws {
+    let api = AccountFixture()
+    let store = AccountStore(api: api)
+    try await store.sendEmailCode(email: " User@Example.test ", reset: false)
+    #expect(await api.emailFields?["email"] == "user@example.test")
+    #expect(await api.emailFields?["purpose"] == "register")
+    #expect(
+      await store.authenticate(
+        username: "fixture", email: " User@Example.test ", password: "new-password", register: true,
+        verificationCode: "123456"))
+    #expect(await api.loginFields?["verificationCode"] == "123456")
+    #expect(await api.loginFields?["email"] == "user@example.test")
+  }
+
+  @Test func recoveryInvalidatesPrivateDataAndReturnsToAnonymous() async throws {
+    let api = AccountFixture()
+    let store = AccountStore(api: api)
+    await store.restore()
+    await store.loadLibrary()
+    #expect(!store.bookmarks.isEmpty)
+    await api.setFailure(503)  // Recovery must not depend on a subsequent session read.
+    #expect(
+      await store.resetPassword(
+        email: " User@Example.test ", code: "123456", password: "new-password"))
+    #expect(await api.emailFields?["email"] == "user@example.test")
+    #expect(await api.emailFields?["verificationCode"] == "123456")
+    #expect(await api.emailFields?["newPassword"] == "new-password")
+    #expect(store.user == nil && store.bookmarks.isEmpty && store.created.isEmpty)
+    #expect(
+      store.message == String(appLocalized: "Password reset. Please log in with your new password.")
+    )
+  }
+
+  @Test func wrongCodeLockUsesServerDeadlineWithoutPretendingRecoverySucceeded() async {
+    let api = AccountFixture()
+    await api.lockVerification()
+    let store = AccountStore(api: api)
+    let before = Date()
+    #expect(
+      !(await store.resetPassword(
+        email: "user@example.test", code: "000000", password: "new-password")))
+    #expect(store.verificationLockedUntil.timeIntervalSince(before) >= 3590)
+    #expect(
+      store.message == String(appLocalized: "Too many incorrect codes. Try again in one hour."))
+  }
+
   private func waitFor(_ condition: () async -> Bool) async throws {
     for _ in 0..<200 {
       if await condition() { return }
@@ -290,6 +336,9 @@ private actor AccountFixture: AccountServing {
   var favoriteWrites = 0
   var createdReads = 0
   var loginFields: [String: String]?
+  var emailFields: [String: String]?
+  var verificationLocked = false
+  func lockVerification() { verificationLocked = true }
   func rejectFavorite(_ status: Int) { favoriteFailure = status }
   func rejectFavoritesRead(_ status: Int) { favoritesReadFailure = status }
   var shouldHold = false
@@ -346,7 +395,14 @@ private actor AccountFixture: AccountServing {
       return Data(
         "{\"code\":0,\"data\":{\"publicId\":\"\(identity)\",\"username\":\"\(identity)\",\"nickname\":\"\(nickname ?? identity)\"}}"
           .utf8)
-    case "api/login":
+    case "api/auth/email-code", "api/auth/reset-password":
+      if verificationLocked {
+        throw AccountFailure(status: 429, code: 42931, retryAfterSeconds: 3598)
+      }
+      emailFields = try JSONDecoder().decode([String: String].self, from: request.body!)
+      if request.path == "api/auth/reset-password" { identity = nil }
+      return Data(#"{"code":0,"data":null}"#.utf8)
+    case "api/login", "api/register":
       let fields = try JSONDecoder().decode([String: String].self, from: request.body!)
       loginFields = fields
       identity = fields["username"]

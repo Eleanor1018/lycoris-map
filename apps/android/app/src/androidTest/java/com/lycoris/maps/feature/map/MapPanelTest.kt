@@ -21,7 +21,13 @@ import org.junit.Rule
 import org.junit.Test
 
 class MapPanelTest {
-    @get:Rule val compose = createComposeRule()
+    // Some CI images disable global animations; supply a non-zero motion scale so the settle fling
+    // is a real animation rather than an instantaneous jump, without changing global settings.
+    @get:Rule val compose = createComposeRule(
+        effectContext = object : androidx.compose.ui.MotionDurationScale {
+            override val scaleFactor = 1f
+        },
+    )
 
     @Test fun changingContentHeightKeepsMiddleHeaderStableDuringLayout() {
         val extraHeight = mutableStateOf(80.dp)
@@ -161,6 +167,146 @@ class MapPanelTest {
         }
         compose.waitUntil(5_000) { kotlin.math.abs(visible - expected) < 2f }
         compose.runOnIdle { assertEquals(expected, visible, 2f) }
+    }
+
+    // A held drag whose underlying result set grows must keep the finger's progress. The
+    // list is short enough not to scroll internally, so the drag reaches the sheet through
+    // the LazyColumn's touch target rather than the grabber.
+    @Test fun contentResizeDuringHeldListDragKeepsFingerProgress() {
+        contentResizeDuringHeldDragKeepsFingerProgress(dragFrom = "panel-list")
+    }
+
+    // The same held-content-growth case must also hold when the gesture starts on the grabber
+    // and is owned by the outer anchoredDraggable.
+    @Test fun contentResizeDuringHeldGrabberDragKeepsFingerProgress() {
+        contentResizeDuringHeldDragKeepsFingerProgress(dragFrom = "panel-grabber")
+    }
+
+    private fun contentResizeDuringHeldDragKeepsFingerProgress(dragFrom: String) {
+        val extraResults = mutableStateOf(0)
+        var headerY = 0f
+        compose.setContent {
+            LycorisTheme {
+                BoxWithConstraints(Modifier.fillMaxWidth().height(620.dp), contentAlignment = Alignment.BottomCenter) {
+                    val density = LocalDensity.current
+                    MapPanel(with(density) { maxHeight.toPx() }, with(density) { 284.dp.toPx() },
+                        PanelStop.MIDDLE, "Nearby", {}, {}) {
+                        item("header") {
+                            Box(Modifier.fillMaxWidth().height(120.dp)
+                                .onGloballyPositioned { headerY = it.positionInRoot().y }) {
+                                Text("Nearby categories")
+                            }
+                        }
+                        items(2, key = { "nearby-$it" }) { Text("Nearby result $it", Modifier.fillMaxWidth().height(72.dp)) }
+                        items(extraResults.value, key = { "late-$it" }) { Text("Late result $it", Modifier.fillMaxWidth().height(72.dp)) }
+                    }
+                }
+            }
+        }
+        compose.waitForIdle()
+        val middleY = headerY
+        // Press on the chosen surface and drag the sheet downward without releasing. Touch
+        // coordinates are root-relative, so the gesture is dispatched on the root.
+        val start = compose.onNodeWithTag(dragFrom).fetchSemanticsNode().boundsInRoot.center
+        val rootOrigin = compose.onRoot().fetchSemanticsNode().boundsInRoot.topLeft
+        try {
+            compose.onRoot().performTouchInput { down(start - rootOrigin) }
+            repeat(4) {
+                compose.onRoot().performTouchInput { moveBy(Offset(0f, 40f)) }
+                compose.waitForIdle()
+            }
+            val heldY = headerY
+            assertTrue("A held downward drag must move the panel away from its middle detent", heldY > middleY + 1f)
+            // An asynchronous result set arrives while the finger is still down.
+            compose.runOnIdle { extraResults.value = 6 }
+            compose.waitForIdle()
+            val afterResizeY = headerY
+            assertEquals(
+                "Content growth during a held drag must keep the finger's progress; middleY=$middleY heldY=$heldY afterResizeY=$afterResizeY",
+                heldY, afterResizeY, 1f,
+            )
+        } finally {
+            compose.onRoot().performTouchInput { up() }
+        }
+    }
+
+    // A new finger drag must interrupt the previous fling/animation instead of fighting it.
+    @Test fun newHandleDragInterruptsPreviousFling() {
+        var headerY = 0f
+        compose.setContent {
+            LycorisTheme {
+                BoxWithConstraints(Modifier.fillMaxWidth().height(620.dp), contentAlignment = Alignment.BottomCenter) {
+                    val density = LocalDensity.current
+                    MapPanel(with(density) { maxHeight.toPx() }, with(density) { 284.dp.toPx() },
+                        PanelStop.MIDDLE, "Nearby", {}, {}) {
+                        item("header") {
+                            Box(Modifier.fillMaxWidth().height(120.dp)
+                                .onGloballyPositioned { headerY = it.positionInRoot().y }) {
+                                Text("Nearby categories")
+                            }
+                        }
+                        items(6, key = { "nearby-$it" }) { Text("Nearby result $it", Modifier.fillMaxWidth().height(72.dp)) }
+                    }
+                }
+            }
+        }
+        // Let the first layout settle with the clock auto-advancing, then pause it.
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitForIdle()
+        val middleY = headerY
+        val rootOrigin = compose.onRoot().fetchSemanticsNode().boundsInRoot.topLeft
+        var pointerDown = false
+        try {
+            // A fast upward fling on the grabber, released while its settle animation is still
+            // running (the paused clock cannot finish the spring).
+            val flingHandle = compose.onNodeWithTag("panel-grabber").fetchSemanticsNode().boundsInRoot.center
+            compose.onRoot().performTouchInput {
+                down(flingHandle - rootOrigin)
+                moveBy(Offset(0f, -120f))
+                moveBy(Offset(0f, -60f))
+                up()
+            }
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            val flingFirst = headerY
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            val flingSecond = headerY
+            // The animation must still be changing between two consecutive frames, which shows it
+            // is in progress; flingSecond > 1 is only a sanity check that it is not pinned at the top.
+            assertTrue("The upward fling must have moved the sheet", flingFirst < middleY - 1f)
+            assertTrue(
+                "The settle animation must still be running between frames; first=$flingFirst second=$flingSecond",
+                kotlin.math.abs(flingSecond - flingFirst) > 0.5f,
+            )
+            assertTrue("The sheet must not be pinned at the top while the animation runs", flingSecond > 1f)
+            // Re-fetch the handle: the panel moved, so the pre-fling coordinate may now sit on the list.
+            val heldHandle = compose.onNodeWithTag("panel-grabber").fetchSemanticsNode().boundsInRoot.center
+            compose.onRoot().performTouchInput { down(heldHandle - rootOrigin) }
+            pointerDown = true
+            repeat(4) {
+                compose.onRoot().performTouchInput { moveBy(Offset(0f, 40f)) }
+                compose.waitForIdle()
+            }
+            // Advance a single frame and read immediately: the second drag must have moved the sheet.
+            compose.mainClock.advanceTimeByFrame()
+            compose.waitForIdle()
+            val heldY = headerY
+            assertTrue("The second drag must move the sheet downward from the fling position", heldY > flingSecond + 1f)
+            // The interrupted fling must not pull the sheet back while the finger still holds.
+            compose.mainClock.advanceTimeBy(200)
+            compose.waitForIdle()
+            val stillHeldY = headerY
+            assertEquals(
+                "The interrupted fling must not move the sheet while the finger holds; flingSecond=$flingSecond heldY=$heldY stillHeldY=$stillHeldY",
+                heldY, stillHeldY, 1f,
+            )
+        } finally {
+            if (pointerDown) compose.onRoot().performTouchInput { up() }
+            compose.mainClock.autoAdvance = true
+        }
     }
 
     @Test fun fiveThousandRowsComposeOnlyNearTheViewportAndLastRowIsReachable() {

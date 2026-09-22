@@ -68,7 +68,7 @@ class PermissionLog:
         if arguments == ["sh"]:
             assert self.granted
             assert shlex.split(input_text)[2:4] == ["--user", "10"]
-            return successful_output()
+            return stage_status("lycorisQaStage", "cleanup") + successful_output()
         assert arguments in (["pm", "grant", "--user", "10", runner.APP_ID, runner.LOCAL_NETWORK_PERMISSION],
                              ["pm", "revoke", "--user", "10", runner.APP_ID, runner.LOCAL_NETWORK_PERMISSION]), command
         if arguments[1] == "grant":
@@ -91,6 +91,12 @@ class PermissionLog:
         return [command[5:] for command in self.commands if command[5:7] in (["pm", "grant"], ["pm", "revoke"])]
 
 
+def stage_status(key, value):
+    """A real custom-status-code 2 bundle line, matching Instrumentation.sendStatus output."""
+    return (f"INSTRUMENTATION_STATUS: {key}={value}\n"
+            "INSTRUMENTATION_STATUS_CODE: 2\n")
+
+
 def successful_output():
     fields = dict(zip(runner.RECEIPT_KEYS, ("6", UPLOAD, CREATION, PHOTO, OWNER)))
     status = "\n".join("INSTRUMENTATION_STATUS: " + key + "=" + value for key, value in fields.items())
@@ -107,6 +113,77 @@ class DeviceRunnerTest(unittest.TestCase):
         receipt = runner.parse_instrumentation(successful_output(), OWNER)
         self.assertEqual(6, receipt["lycorisQaMarkerId"])
         self.assertEqual(PHOTO, receipt["lycorisQaPhotoRequestId"])
+
+    def test_stage_trace_success_still_parses(self):
+        output = successful_output()
+        for name in ("preflight", "login", "restore", "favorites", "create", "upload", "complete", "cleanup"):
+            output = output + stage_status("lycorisQaStage", name)
+        # A full success trace must still be accepted exactly as before; stage recording is
+        # diagnostic only and never participates in the success decision.
+        self.assertEqual(6, runner.parse_instrumentation(output, OWNER)["lycorisQaMarkerId"])
+
+    def test_primary_failure_stage_wins_over_later_cleanup_failure(self):
+        output = (stage_status("lycorisQaStage", "preflight")
+                  + stage_status("lycorisQaStage", "login")
+                  + stage_status("lycorisQaStage", "create")
+                  + stage_status("lycorisQaFailedStage", "create")
+                  + stage_status("lycorisQaStage", "cleanup")
+                  + "FAILURES!!!\n")
+        self.assertEqual("create", runner.reported_stage(output))
+        with self.assertRaises(runner.QaDeviceFailure) as caught:
+            runner.parse_instrumentation(output, OWNER)
+        self.assertEqual("create", caught.exception.backend_stage)
+
+    def test_cleanup_only_failure_is_labelled_cleanup(self):
+        output = (stage_status("lycorisQaStage", "complete")
+                  + stage_status("lycorisQaStage", "cleanup")
+                  + stage_status("lycorisQaFailedStage", "cleanup")
+                  + "FAILURES!!!\n")
+        self.assertEqual("cleanup", runner.reported_stage(output))
+        with self.assertRaises(runner.QaDeviceFailure) as caught:
+            runner.parse_instrumentation(output, OWNER)
+        self.assertEqual("cleanup", caught.exception.backend_stage)
+
+    def test_without_a_failed_marker_the_last_reported_stage_is_used(self):
+        output = (stage_status("lycorisQaStage", "upload")
+                  + stage_status("lycorisQaStage", "cleanup")
+                  + "FAILURES!!!\n")
+        self.assertEqual("cleanup", runner.reported_stage(output))
+
+    def test_unlisted_or_arbitrary_stage_values_are_not_echoed(self):
+        for value in ("upload;DROP", "production", "staging", ""):
+            output = (stage_status("lycorisQaStage", value) + stage_status("lycorisQaFailedStage", value) + "FAILURES!!!\n")
+            self.assertIsNone(runner.reported_stage(output))
+
+    def test_main_reports_only_the_fixed_backend_stage_on_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            android = Path(temporary)
+            log = PermissionLog(granted=True)
+            log.path = android / "app/build/qa/device-tests/synthetic.log"
+            failing = (stage_status("lycorisQaStage", "preflight")
+                       + stage_status("lycorisQaStage", "login")
+                       + stage_status("lycorisQaFailedStage", "login")
+                       + stage_status("lycorisQaStage", "cleanup")
+                       + stage_status("lycorisQaFailedStage", "not_a_stage")
+                       + "FAILURES!!!\n")
+            original = PermissionLog.run
+            def run(command, label, input_text=None, timeout=60):
+                if command[3:] == ["shell", "-T", "sh"]:
+                    return failing
+                return original(log, command, label, input_text, timeout)
+            output = io.StringIO()
+            with patch.object(runner, "ANDROID", android), patch.object(runner, "STATE", android / "app/build/qa"), \
+                    patch.object(runner, "read_alice", return_value={"username": "synthetic", "password": "private", "publicId": OWNER}), \
+                    patch.object(runner, "CommandLog", return_value=log), patch.object(runner, "executable", return_value=PREFIX[0]), \
+                    patch.object(runner, "verify_local_environment"), \
+                    patch.object(runner, "checked_apks", return_value=[android / "qa.apk", android / "test.apk"]), \
+                    patch.object(PermissionLog, "run", side_effect=run), redirect_stdout(output):
+                code = runner.main(["--serial", PREFIX[2]])
+            result = json.loads(output.getvalue())
+            self.assertEqual(1, code)
+            self.assertEqual("failed", result["status"])
+            self.assertEqual("login", result["backendStage"])
+            self.assertNotIn("not_a_stage", output.getvalue())
 
     def test_skips_failures_crashes_missing_code_and_wrong_class_are_not_success(self):
         base = successful_output()
@@ -315,8 +392,8 @@ class LocalNetworkPermissionTest(unittest.TestCase):
             with patch.object(PermissionLog, "run", return_value=value), self.assertRaises(runner.QaDeviceFailure):
                 runner.current_user(PREFIX, PermissionLog())
 
-    def test_main_prints_passed_only_after_restore_and_never_after_restore_failure(self):
-        for revoke_error in (False, True):
+    def test_main_does_not_attribute_oracle_or_permission_failure_to_a_passed_backend(self):
+        for revoke_error, oracle_error in ((False, False), (True, False), (False, True)):
             with tempfile.TemporaryDirectory() as temporary:
                 android = Path(temporary)
                 log = PermissionLog(revoke_error=revoke_error)
@@ -340,11 +417,13 @@ class LocalNetworkPermissionTest(unittest.TestCase):
                         patch.object(runner, "executable", return_value=PREFIX[0]), \
                         patch.object(runner, "verify_local_environment", side_effect=preflight), \
                         patch.object(runner, "checked_apks", side_effect=apks), \
-                        patch.object(runner, "database_oracle", return_value=oracle), redirect_stdout(output):
+                        patch.object(runner, "database_oracle", return_value=oracle,
+                                     side_effect=runner.QaDeviceFailure("Synthetic oracle failure.") if oracle_error else None), redirect_stdout(output):
                     code = runner.main(["--serial", PREFIX[2]])
                 result = json.loads(output.getvalue())
-                self.assertEqual(1 if revoke_error else 0, code)
-                self.assertEqual("failed" if revoke_error else "passed", result["status"])
+                self.assertEqual(1 if revoke_error or oracle_error else 0, code)
+                self.assertEqual("failed" if revoke_error or oracle_error else "passed", result["status"])
+                self.assertNotIn("backendStage", result)
                 self.assertEqual(revoke_error, log.granted)
                 self.assertEqual(["environment", "apks"], events)
 

@@ -89,6 +89,8 @@ impl SameSitePolicy {
 /// 运行配置。刻意不实现 `Debug`，避免连接串或密码出现在日志中。
 #[derive(Clone)]
 pub struct Config {
+    pub smtp: Option<crate::email_verification::SmtpConfig>,
+    pub email_verification_secret: Option<String>,
     pub database_url: String,
     pub redis_url: String,
     pub server_host: IpAddr,
@@ -151,6 +153,8 @@ impl Config {
     /// （例如独立 Cookie 名与随机 Redis 命名空间）。
     pub fn new(database_url: impl Into<String>, redis_url: impl Into<String>) -> Self {
         Self {
+            smtp: None,
+            email_verification_secret: None,
             database_url: database_url.into(),
             redis_url: redis_url.into(),
             server_host: IpAddr::from([127, 0, 0, 1]),
@@ -191,6 +195,15 @@ impl Config {
     }
 
     pub fn from_env() -> Result<Self, ConfigError> {
+        let smtp = crate::email_verification::SmtpConfig::from_env()?;
+        let email_verification_secret = optional("EMAIL_VERIFICATION_SECRET");
+        if smtp.is_some()
+            && email_verification_secret
+                .as_ref()
+                .is_none_or(|key| key.len() < 32)
+        {
+            return Err(ConfigError::Invalid("EMAIL_VERIFICATION_SECRET"));
+        }
         let database_url = required("DATABASE_URL")?;
         // 只校验格式；错误信息不携带连接串本身，避免泄露密码。
         sqlx::postgres::PgConnectOptions::from_str(&database_url)
@@ -242,6 +255,8 @@ impl Config {
         };
 
         Ok(Self {
+            smtp,
+            email_verification_secret,
             database_url,
             redis_url,
             server_host,

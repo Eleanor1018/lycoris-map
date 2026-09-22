@@ -150,3 +150,10 @@ safe deletion semantics even to the older frontend's DELETE requests.
 Do not restart the pre-migration binary as a simple rollback: its migration
 validation does not recognize migration 4. Prefer a compatible corrective
 release. Restoring a database snapshot requires reconciling subsequent writes.
+
+## Email verification rollout
+
+Compose now also requires the private `smtp.env`. Before deploying the email
+verification image, follow [the coordinated rollout](EMAIL_VERIFICATION.md).
+Migration 0007 is additive, but mandatory registration codes require the matching
+Web and native releases; do not switch the backend ahead of the live form.

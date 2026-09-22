@@ -144,6 +144,55 @@ class AppConfigurationTest {
         compose.onNode(text("Log In", "登录") and hasClickAction()).assertIsNotEnabled()
     }
 
+    @Test fun coldStartKeepsImeHiddenAndShowsPrimaryNavigation() {
+        // No touch happens here: the map must open without the IME, and the primary navigation
+        // must actually be laid out and drawn rather than hidden behind an unintended keyboard.
+        val manager = context.getSystemService(InputMethodManager::class.java)
+        val selected = Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+        assertTrue("This device must have a selected, enabled system IME; the test does not change global keyboard settings",
+            !selected.isNullOrBlank() && manager.enabledInputMethodList.any { it.id == selected })
+
+        var focused = false
+        compose.waitUntil(10_000) {
+            scenario!!.onActivity { focused = it.window.decorView.hasWindowFocus() }
+            focused
+        }
+        // Let the platform process frames after focus arrives; Compose's test clock alone does
+        // not drive the real input method. Choreographer callbacks are not proof of GPU rendering.
+        awaitPlatformFrames(6)
+        awaitIme(false, "An untouched cold start must not show the system keyboard")
+        // Re-check after additional real frames: no touch occurred, so the IME must stay hidden.
+        awaitPlatformFrames(6)
+        awaitIme(false, "The keyboard must remain hidden while the user has not touched any field")
+
+        compose.onNode(tab("Explore", "探索")).assertIsDisplayed().assertIsSelected()
+        compose.onNode(tab("Bookmarks", "收藏")).assertIsDisplayed()
+        compose.onNode(tab("Settings", "设置")).assertIsDisplayed()
+        withModel { assertNull(it.page.value) }
+    }
+
+    /** Wait for platform frames without changing a system keyboard or animation setting. */
+    private fun awaitPlatformFrames(count: Int) {
+        val latch = java.util.concurrent.CountDownLatch(count)
+        lateinit var choreographer: android.view.Choreographer
+        lateinit var callback: android.view.Choreographer.FrameCallback
+        scenario!!.onActivity {
+            choreographer = android.view.Choreographer.getInstance()
+            callback = object : android.view.Choreographer.FrameCallback {
+                override fun doFrame(frameTimeNanos: Long) {
+                    latch.countDown()
+                    if (latch.count > 0) choreographer.postFrameCallback(this)
+                }
+            }
+            choreographer.postFrameCallback(callback)
+        }
+        try {
+            assertTrue("The window did not receive $count platform frames", latch.await(10, java.util.concurrent.TimeUnit.SECONDS))
+        } finally {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync { choreographer.removeFrameCallback(callback) }
+        }
+    }
+
     @Test fun actualOrientationRebuildRetainsPrimarySelectionCameraAndSelectedPlaceId() {
         requestConfiguration(Configuration.ORIENTATION_PORTRAIT)
         compose.onNode(tab("Settings", "设置")).performClick()
@@ -280,7 +329,81 @@ class AppConfigurationTest {
             assertEquals("The device must honor this Activity's orientation request", orientation, it.resources.configuration.orientation)
             if (requiresRebuild) assertNotSame("A real configuration change must rebuild MainActivity", before, it)
         }
-        compose.waitForIdle()
+        val mainClockBefore = runCatching { compose.mainClock.currentTime }.getOrNull()
+        val uptimeBefore = android.os.SystemClock.uptimeMillis()
+        val recomposerBefore = recomposerDiagnostics()
+        try {
+            compose.waitForIdle()
+        } catch (failure: Throwable) {
+            // Attach fixed-key window/inset facts without calling Compose test APIs from the UI
+            // thread, and without masking the original idle timeout.
+            val uptimeAfter = android.os.SystemClock.uptimeMillis()
+            val mainClockAfter = runCatching { compose.mainClock.currentTime }.getOrNull()
+            throw AssertionError(
+                "Post-rotation waitForIdle failed. ${orientationWindowDiagnostics()} " +
+                    "mainClockBefore=$mainClockBefore mainClockAfter=$mainClockAfter " +
+                    "uptimeDeltaMs=${uptimeAfter - uptimeBefore} " +
+                    "recomposerBefore=$recomposerBefore recomposerAfter=${recomposerDiagnostics()}",
+                failure,
+            )
+        }
+    }
+
+    /** Reads only window/inset state on the Activity; never touches Compose semantics. */
+    private fun orientationWindowDiagnostics(): String {
+        var report = "window diagnostics unavailable"
+        runCatching {
+            scenario!!.onActivity { activity ->
+                val decor = activity.window.decorView
+                val insets = ViewCompat.getRootWindowInsets(decor)
+                fun bottom(type: Int) = insets?.getInsets(type)?.bottom ?: -1
+                fun top(type: Int) = insets?.getInsets(type)?.top ?: -1
+                report = "decor=${decor.width}x${decor.height}, windowFocus=${decor.hasWindowFocus()}, " +
+                    "orientation=${activity.resources.configuration.orientation}, " +
+                    "statusTop=${top(WindowInsetsCompat.Type.statusBars())}, statusVisible=${insets?.isVisible(WindowInsetsCompat.Type.statusBars())}, " +
+                    "navBottom=${bottom(WindowInsetsCompat.Type.navigationBars())}, navVisible=${insets?.isVisible(WindowInsetsCompat.Type.navigationBars())}, " +
+                    "imeBottom=${bottom(WindowInsetsCompat.Type.ime())}, imeVisible=${insets?.isVisible(WindowInsetsCompat.Type.ime())} " +
+                    viewRootDiagnostics(decor)
+            }
+        }
+        return report
+    }
+
+    /** Best-effort view-tree facts; no forced measure/layout and no Compose semantic APIs. */
+    private fun viewRootDiagnostics(decor: View): String {
+        val roots = mutableListOf<String>()
+        var views = 0
+        var attached = 0
+        var layoutRequested = 0
+        val pending = java.util.ArrayDeque<View>()
+        pending.add(decor)
+        while (pending.isNotEmpty()) {
+            val view = pending.removeFirst()
+            views++
+            if (view.isAttachedToWindow) attached++
+            if (view.isLayoutRequested) layoutRequested++
+            if (view is androidx.compose.ui.platform.ViewRootForTest) {
+                roots += "root(hasPendingMeasureOrLayout=${view.hasPendingMeasureOrLayout}," +
+                    "layoutRequested=${view.view.isLayoutRequested},attached=${view.view.isAttachedToWindow}," +
+                    "visibility=${view.view.visibility},size=${view.view.width}x${view.view.height}," +
+                    "lifecycleResumed=${view.isLifecycleInResumedState})"
+            }
+            if (view is ViewGroup) for (index in 0 until view.childCount) pending.add(view.getChildAt(index))
+        }
+        val rootsReport = "viewRoots=${roots.size}" + if (roots.isEmpty()) "" else " " + roots.joinToString("|")
+        return "views=$views attachedViews=$attached layoutRequestedViews=$layoutRequested $rootsReport"
+    }
+
+    /** Public Recomposer facts only; state is a Flow and is not collected here. */
+    @OptIn(androidx.compose.runtime.InternalComposeApi::class)
+    private fun recomposerDiagnostics(): String {
+        var report = "recomposer diagnostics unavailable"
+        runCatching {
+            report = androidx.compose.runtime.Recomposer.runningRecomposers.value.joinToString("|") { recomposer ->
+                "recomposer(hasPendingWork=${recomposer.hasPendingWork},changeCount=${recomposer.changeCount})"
+            }.ifEmpty { "recomposerCount=0" }
+        }
+        return report
     }
 
     private data class NativeMap(val activity: MainActivity, val view: MapView, val map: MapLibreMap)

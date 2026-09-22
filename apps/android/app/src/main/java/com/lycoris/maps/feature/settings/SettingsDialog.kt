@@ -10,6 +10,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -75,12 +77,29 @@ fun SettingsDialog(kind: String, preferences: Preferences, onDismiss: () -> Unit
         "range" -> {
             var input by rememberSaveable { mutableStateOf(preferences.radiusMeters.toString()) }
             val parsed = parseRadius(input)
-            AlertDialog(onDismissRequest = onDismiss, title = { Text(if (zh) "搜索范围" else "Search range") }, text = {
+            // The dialog's own focus manager/keyboard are only available inside the AlertDialog
+            // content composition (the dialog window), not from this outer function body. The
+            // content registers a dismiss callback here; every close path calls it before onDismiss.
+            val dismissInput = remember { mutableStateOf<(() -> Unit)?>(null) }
+            val close = {
+                dismissInput.value?.invoke()
+                onDismiss()
+            }
+            AlertDialog(onDismissRequest = close, title = { Text(if (zh) "搜索范围" else "Search range") }, text = {
+                val dialogFocus = LocalFocusManager.current
+                val dialogKeyboard = LocalSoftwareKeyboardController.current
+                DisposableEffect(dialogFocus, dialogKeyboard) {
+                    dismissInput.value = {
+                        dialogFocus.clearFocus(force = true)
+                        dialogKeyboard?.hide()
+                    }
+                    onDispose { dismissInput.value = null }
+                }
                 OutlinedTextField(input, { input = it }, singleLine = true, suffix = { Text("m") },
                     label = { Text(if (zh) "距离" else "Distance") }, isError = parsed == null,
                     supportingText = { Text("1–50,000 m") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-            }, confirmButton = { TextButton({ parsed?.let(onRadius); onDismiss() }, enabled = parsed != null) { Text(if (zh) "完成" else "Done") } },
-                dismissButton = { TextButton(onDismiss) { Text(if (zh) "取消" else "Cancel") } })
+            }, confirmButton = { TextButton({ parsed?.let(onRadius); close() }, enabled = parsed != null) { Text(if (zh) "完成" else "Done") } },
+                dismissButton = { TextButton(close) { Text(if (zh) "取消" else "Cancel") } })
         }
         "source" -> AlertDialog(onDismissRequest = onDismiss, confirmButton = { TextButton(onDismiss) { Text(if (zh) "完成" else "Done") } }, text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {

@@ -12,6 +12,7 @@ vi.mock('@/shared/api/session', () => ({
     fetchMe: vi.fn(),
     login: vi.fn(),
     register: vi.fn(),
+    resetPassword: vi.fn(),
     logout: vi.fn(),
     changePassword: vi.fn(),
 }))
@@ -141,6 +142,7 @@ it('does not retry a registration whose account was already created', async () =
         store.register({
             username: 'synthetic',
             email: 'synthetic@example.invalid',
+            verificationCode: '123456',
             password: 'synthetic-only',
         }),
     ).rejects.toMatchObject({ message: '账号已创建，请稍后登录' })
@@ -249,4 +251,23 @@ it('aborts a blocking private request as soon as logout is requested', async () 
     await rejected
     await logout
     expect(store.getSnapshot().user).toBeNull()
+})
+
+it('keeps an acknowledged recovery successful when later session reads are unavailable', async () => {
+    const client = new QueryClient(),
+        store = new SessionStore(client)
+    await store.refresh()
+    const scope = store.getSnapshot().scope!
+    client.setQueryData(privateKeys.favorites(scope), [1])
+    vi.mocked(api.fetchMe).mockRejectedValue(new Error('offline'))
+    vi.mocked(api.resetPassword).mockResolvedValue(undefined)
+    await store.resetPassword({
+        email: 'test@example.test',
+        verificationCode: '123456',
+        newPassword: 'new-password',
+    })
+    expect(api.resetPassword).toHaveBeenCalledOnce()
+    expect(store.getSnapshot().status).toBe('anonymous')
+    expect(store.getSnapshot().busy).toBe(false)
+    expect(client.getQueryData(privateKeys.favorites(scope))).toBeUndefined()
 })

@@ -706,3 +706,10 @@ python scripts/test_verify_release_linux.py
   仅临时测试库名等真正动态 SQL 使用运行期 `AssertSqlSafe`。`.sqlx` 已在本工作树生成并校验。
 - 不包含应用容器，不接入生产，不保存真实数据；不操作 `lycoris-restore-review` 容器。
 - 认证最终形态（CSRF、多因素等）另案重设计，本轮不引入 JWT/OAuth。
+
+## Email verification
+
+Registration requires a six-digit `verificationCode`. Password recovery uses the
+same email service with a separate `reset_password` purpose. Configure SMTP and
+`EMAIL_VERIFICATION_SECRET` on the server; there is no verification bypass when
+mail is unconfigured. See [the email verification contract and rollout](deploy/production/EMAIL_VERIFICATION.md).

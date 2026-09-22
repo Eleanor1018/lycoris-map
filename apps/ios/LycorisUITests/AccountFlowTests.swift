@@ -29,18 +29,13 @@ final class AccountFlowTests: LocalBackendTestCase {
     let session = URLSession(configuration: .ephemeral)
     let (_, status) = try await request(
       session, "api/login", fields: ["username": fixture.username, "password": fixture.password])
-    if status == 401 {
-      app.buttons["auth.switch"].tap()
-      XCTAssertTrue(app.textFields["auth.email"].exists)
-      attach(app, "i4-register")
-      fill(app.textFields["auth.email"], fixture.email)
-      fill(app.textFields["auth.username"], fixture.username)
-      fill(app.secureTextFields["auth.password"], fixture.password)
-    } else {
-      XCTAssertEqual(status, 200)
-      fill(app.textFields["auth.username"], fixture.username)
-      fill(app.secureTextFields["auth.password"], fixture.password)
+    guard status == 200 else {
+      throw XCTSkip(
+        "Seed a verified loopback fixture and supply LYCORIS_I4_FIXTURE_JSON; unverified auto-registration is no longer supported."
+      )
     }
+    fill(app.textFields["auth.username"], fixture.username)
+    fill(app.secureTextFields["auth.password"], fixture.password)
     app.secureTextFields["auth.password"].typeText("\n")
     XCTAssertTrue(app.buttons["profile.save"].waitForExistence(timeout: 12), app.debugDescription)
     declinePasswordSave(app)
@@ -257,15 +252,9 @@ final class AccountFlowTests: LocalBackendTestCase {
     let session = URLSession(configuration: .ephemeral)
     let (_, status) = try await request(
       session, "api/login", fields: ["username": fixture.username, "password": fixture.password])
-    if status == 401 {
-      let (_, registered) = try await request(
-        session, "api/register",
-        fields: [
-          "username": fixture.username, "email": fixture.email, "password": fixture.password,
-        ])
-      XCTAssertEqual(registered, 200)
-    } else {
-      XCTAssertEqual(status, 200)
+    guard status == 200 else {
+      throw XCTSkip(
+        "Seed a distinct verified loopback fixture and supply LYCORIS_I4_SECOND_FIXTURE_JSON.")
     }
     var remove = URLRequest(url: base.appendingPathComponent("api/markers/1/favorite"))
     remove.httpMethod = "DELETE"
@@ -389,6 +378,14 @@ final class AccountFlowTests: LocalBackendTestCase {
   }
 
   private func fixtureAccount(key: String = "lycoris.i4.synthetic-account") -> Fixture {
+    let variable =
+      key == "lycoris.i4.second-account"
+      ? "LYCORIS_I4_SECOND_FIXTURE_JSON" : "LYCORIS_I4_FIXTURE_JSON"
+    if let raw = ProcessInfo.processInfo.environment[variable],
+      let fixture = try? JSONDecoder().decode(Fixture.self, from: Data(raw.utf8))
+    {
+      return fixture
+    }
     if let data = UserDefaults.standard.data(forKey: key),
       let fixture = try? JSONDecoder().decode(Fixture.self, from: data)
     {

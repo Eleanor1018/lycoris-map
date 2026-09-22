@@ -132,7 +132,11 @@ pub async fn register(
     }
 
     let username = request.username.unwrap_or_default().trim().to_string();
-    let email = request.email.unwrap_or_default().trim().to_lowercase();
+    let email = match crate::email_verification::normalize_email(&request.email.unwrap_or_default())
+    {
+        Ok(email) => email,
+        Err(error) => return super::email::code_error(error),
+    };
     let password = request.password.unwrap_or_default();
     let nickname = match request.nickname {
         Some(raw) if !raw.trim().is_empty() => raw.trim().to_string(),
@@ -152,6 +156,19 @@ pub async fn register(
         || !password::within_bcrypt_limit(&password)
     {
         return register_rejected();
+    }
+
+    if let Err(error) = state
+        .email_codes
+        .consume(
+            &email,
+            crate::email_verification::Purpose::Register,
+            "register",
+            request.verification_code.as_deref().unwrap_or_default(),
+        )
+        .await
+    {
+        return super::email::code_error(error);
     }
 
     // 哈希在持锁前完成，缩短 advisory lock 临界区。
@@ -216,6 +233,11 @@ async fn insert_registered_user(
     }
 
     let user = users::insert_user(&mut *tx, username, nickname, email, password_hash)
+        .await
+        .map_err(|_| ())?;
+    sqlx::query("UPDATE users SET email_verified_at = now() WHERE id = $1")
+        .bind(user.id)
+        .execute(&mut *tx)
         .await
         .map_err(|_| ())?;
     tx.commit().await.map_err(|_| ())?;

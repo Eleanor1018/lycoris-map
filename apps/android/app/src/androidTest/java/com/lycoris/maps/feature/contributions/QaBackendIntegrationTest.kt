@@ -48,6 +48,19 @@ class QaBackendIntegrationTest {
         private const val ORIGIN = "http://10.0.2.2:18187/"
         private const val USERNAME_ARGUMENT = "lycorisQaUsername"
         private const val PASSWORD_ARGUMENT = "lycorisQaPassword"
+        // Fixed stage names the runner maps to a bounded backendStage value. Code 2 is a custom
+        // status code, so it is never mistaken for a passing test result (code 0).
+        private const val STAGE_STATUS_CODE = 2
+        private fun reportStage(name: String) {
+            InstrumentationRegistry.getInstrumentation().sendStatus(
+                STAGE_STATUS_CODE, Bundle().apply { putString("lycorisQaStage", name) },
+            )
+        }
+        private fun reportFailedStage(name: String) {
+            InstrumentationRegistry.getInstrumentation().sendStatus(
+                STAGE_STATUS_CODE, Bundle().apply { putString("lycorisQaFailedStage", name) },
+            )
+        }
     }
 
     @Test fun realRustSessionFavoritesIdempotentCreationAndResumableImage() = runBlocking {
@@ -73,7 +86,14 @@ class QaBackendIntegrationTest {
         var account: AccountRepository? = null
         var originalFavorite: Boolean? = null
         var sentinelId: Long? = null
+        var currentStage = "preflight"
+        var primaryFailure: Throwable? = null
+        fun markStage(name: String) {
+            currentStage = name
+            reportStage(name)
+        }
         try {
+            markStage("preflight")
             var cookies = SessionCookieJar(ORIGIN.toHttpUrl(), persistence)
             var clients = clients(cookies)
             val manifest = verifiedManifest(clients)
@@ -84,6 +104,7 @@ class QaBackendIntegrationTest {
                 sentinel.description == manifest.sentinel.description && sentinel.userPublicId == manifest.sentinel.ownerPublicId &&
                 sentinel.clientRequestId == manifest.sentinel.clientRequestId && sentinel.publiclyVisible)
             // ApiClients(testEnvironment=true) independently repeats preflight before EVERY mutation, including login.
+            markStage("login")
             var repository = AccountRepository(clients, scope)
             account = repository
             val signedIn = repository.login(username, password!!)
@@ -92,6 +113,7 @@ class QaBackendIntegrationTest {
             assertTrue("Encrypted cookie file was not written", directory.listFiles().orEmpty().any { it.extension == "bin" && it.length() > 29 })
 
             // Recreate persistence, cookie jar and repository; no login is sent for the restored session.
+            markStage("restore")
             scope.coroutineContext[Job]!!.cancelAndJoin()
             scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
             persistence = EncryptedCookiePersistence(isolatedContext, persistenceNamespace)
@@ -103,6 +125,7 @@ class QaBackendIntegrationTest {
             assertTrue("Fresh repository could not restore the encrypted session", repository.state.value.user?.publicId == signedIn.publicId)
             val identity = repository.identity() ?: error("Synthetic session was not restored")
 
+            markStage("favorites")
             repository.refreshFavorites(Language.EN)
             originalFavorite = favoriteMarkerId in repository.state.value.favoriteIds
             if (originalFavorite == true) repository.toggleFavorite(favoriteMarkerId, Language.EN)
@@ -115,6 +138,7 @@ class QaBackendIntegrationTest {
             repository.refreshFavorites(Language.EN)
             assertFalse("Favorite removal did not persist", repository.state.value.favoriteIds.contains(favoriteMarkerId))
 
+            markStage("create")
             val requestId = UUID.randomUUID().toString()
             val contribution = ContributionDraft(
                 id = requestId, owner = identity.publicId, origin = identity.origin,
@@ -134,6 +158,7 @@ class QaBackendIntegrationTest {
             val createdList = repository.withAuthenticatedRead(expectedIdentity = identity) { api, _ -> api.createdPlaces("en").requireBody() }
             assertEquals("The same create key produced multiple markers", 1, createdList.count { it.clientRequestId == requestId })
 
+            markStage("upload")
             val importer = PhotoImporter(isolatedContext, PhotoFiles(File(directory, "photos")))
             val original = syntheticImage(File(directory, "synthetic-source.jpg"))
             val photo = importer.importStream { original.inputStream() }
@@ -165,6 +190,7 @@ class QaBackendIntegrationTest {
                     receipt = reconciled
                 }
             }
+            markStage("complete")
             val complete = transport.complete(identity, created.id, receipt.uploadId)
             assertTrue(UploadReceiptPolicy.valid(complete, uploadDraft, receipt))
             assertEquals("COMPLETED", complete.status)
@@ -182,21 +208,42 @@ class QaBackendIntegrationTest {
                 putString("lycorisQaPhotoRequestId", photo.id)
                 putString("lycorisQaOwnerPublicId", identity.publicId)
             })
+        } catch (failure: Throwable) {
+            // Record the true failing stage once; the runner prefers this marker over any later
+            // stage so a cleanup failure cannot rewrite the original cause.
+            primaryFailure = failure
+            reportFailedStage(currentStage)
+            throw failure
         } finally {
+            reportStage("cleanup")
             withContext(NonCancellable + Dispatchers.IO) {
                 try {
-                    val current = account
-                    val id = sentinelId
-                    val wasFavorite = originalFavorite
-                    if (current != null && id != null && wasFavorite != null) {
-                        val identity = current.identity()
-                        if (identity != null) restoreFavorite(current, identity, id, wasFavorite)
+                    try {
+                        val current = account
+                        val id = sentinelId
+                        val wasFavorite = originalFavorite
+                        if (current != null && id != null && wasFavorite != null) {
+                            val identity = current.identity()
+                            if (identity != null) restoreFavorite(current, identity, id, wasFavorite)
+                        }
+                        if (current?.identity() != null) current.logout()
+                    } finally {
+                        // These best-effort teardown steps are part of cleanup, so a failure in them
+                        // is reported as cleanup rather than replacing another failure.
+                        scope.coroutineContext[Job]!!.cancelAndJoin()
+                        persistence.clear()
+                        directory.deleteRecursively()
                     }
-                    if (current?.identity() != null) current.logout()
-                } finally {
-                    scope.coroutineContext[Job]!!.cancelAndJoin()
-                    persistence.clear()
-                    directory.deleteRecursively()
+                } catch (cleanupFailure: Throwable) {
+                    // Never replace a primary test failure with the cleanup failure; if cleanup is
+                    // the only failure, mark it and rethrow so the run is not reported as success.
+                    val original = primaryFailure
+                    if (original != null) {
+                        original.addSuppressed(cleanupFailure)
+                    } else {
+                        reportFailedStage("cleanup")
+                        throw cleanupFailure
+                    }
                 }
             }
         }

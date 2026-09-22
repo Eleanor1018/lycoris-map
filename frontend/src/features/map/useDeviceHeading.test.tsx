@@ -10,6 +10,7 @@ function orientation(values: Record<string, unknown>, type = 'deviceorientation'
     ) as DeviceOrientationEvent
 }
 beforeEach(() => {
+    localStorage.clear()
     vi.useFakeTimers()
 })
 afterEach(() => {
@@ -87,7 +88,6 @@ it('reports unsupported when no touch device needs a gesture', async () => {
     })
     const module = await freshModule()
     expect(module.headingPermissionRequired()).toBe(false)
-    expect(await module.requestDeviceHeading()).toBe('unsupported')
     expect(await module.enableDeviceHeading()).toBe('unsupported')
 })
 
@@ -181,20 +181,30 @@ it('turns a synchronous requestPermission throw into a retryable prompt', async 
     expect(result.current).toBe('prompt')
 })
 
-it('restores a previous grant on mount without a gesture and then reads the compass', async () => {
+it('recognizes existing compass access from valid events without calling requestPermission', async () => {
     touchDevice()
     const module = await freshModule()
     const requestPermission = vi.fn(async () => 'granted')
     vi.stubGlobal('DeviceOrientationEvent', { requestPermission })
-    const { result } = renderHook(() => module.useDeviceHeading(true))
+    const { result } = renderHook(() => ({
+        heading: module.useDeviceHeading(true),
+        permission: module.useHeadingPermission(),
+    }))
+    expect(result.current.permission).toBe('prompt')
+    act(() => {
+        window.dispatchEvent(orientation({ alpha: 90, absolute: false }))
+        vi.advanceTimersByTime(20)
+    })
+    expect(result.current.permission).toBe('prompt')
     await act(async () => {})
     act(() => {
         window.dispatchEvent(orientation({ webkitCompassHeading: 90, webkitCompassAccuracy: 5 }))
         vi.advanceTimersByTime(20)
     })
-    expect(result.current).toBe(90)
+    expect(result.current.heading).toBe(90)
+    expect(result.current.permission).toBe('granted')
     expect(module.headingPermissionRequired()).toBe(true)
-    expect(requestPermission.mock.calls.length).toBeLessThanOrEqual(1)
+    expect(requestPermission).not.toHaveBeenCalled()
 })
 
 it('asks for an explicit grant only when enabled and never opens a second prompt', async () => {
@@ -209,4 +219,23 @@ it('asks for an explicit grant only when enabled and never opens a second prompt
     })
     expect(requestPermission).toHaveBeenCalledWith(true)
     expect(requestPermission).toHaveBeenCalledTimes(1)
+})
+
+it('never treats a stored choice as current browser permission after a reload', async () => {
+    const requestPermission = vi.fn(async () => 'granted')
+    touchDevice(true, requestPermission)
+    const first = await freshModule()
+    await first.enableDeviceHeading()
+    expect(first.hasRememberedHeadingChoice()).toBe(true)
+    const reloaded = await freshModule()
+    const { result } = renderHook(() => reloaded.useHeadingPermission())
+    await act(async () => {})
+    expect(result.current).toBe('prompt')
+    expect(requestPermission).toHaveBeenCalledTimes(1)
+    requestPermission.mockResolvedValue('denied')
+    await act(async () => {
+        await reloaded.enableDeviceHeading()
+    })
+    expect(result.current).toBe('denied')
+    expect(requestPermission).toHaveBeenCalledTimes(2)
 })

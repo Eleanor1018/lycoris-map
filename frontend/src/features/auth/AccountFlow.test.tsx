@@ -148,11 +148,12 @@ it('cancelling login clears the queued bookmark and restores keyboard focus', as
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(places.setFavorite).not.toHaveBeenCalled()
 })
-it('registers with the existing contract and keeps verification disabled', async () => {
+it('registers with a six-digit verification code', async () => {
     setup()
     await openAccount()
     fireEvent.click(screen.getByRole('button', { name: 'Register Here.' }))
-    expect(screen.getByLabelText('Verification Code')).toBeDisabled()
+    expect(screen.getByLabelText('Verification Code')).toBeEnabled()
+    fireEvent.change(screen.getByLabelText('Verification Code'), { target: { value: '123456' } })
     fireEvent.change(screen.getByLabelText('Email', { exact: true }), {
         target: { value: 'S4@example.test' },
     })
@@ -162,11 +163,13 @@ it('registers with the existing contract and keeps verification disabled', async
     fireEvent.change(screen.getByLabelText('Password', { exact: true }), {
         target: { value: 'synthetic-password' },
     })
+    fireEvent.change(screen.getByLabelText('Verification Code'), { target: { value: '123456' } })
     fireEvent.submit(screen.getByLabelText('Password', { exact: true }).closest('form')!)
     await waitFor(() =>
         expect(api.register).toHaveBeenCalledWith({
             username: 'S4',
             email: 's4@example.test',
+            verificationCode: '123456',
             password: 'synthetic-password',
         }),
     )
@@ -268,3 +271,51 @@ it.each(['login', 'register'])(
         expect(api.register).not.toHaveBeenCalled()
     },
 )
+
+it('sends a code, prevents immediate resend and reports a server cooldown', async () => {
+    const send = vi.spyOn(api, 'sendEmailCode').mockRejectedValue(
+        new ApiError(429, 'Too many incorrect codes. Try again in one hour.', {
+            code: 42931,
+            body: JSON.stringify({ data: { retryAfterSeconds: 3600 } }),
+        }),
+    )
+    setup()
+    await openAccount()
+    fireEvent.click(screen.getByRole('button', { name: 'Register Here.' }))
+    fireEvent.change(screen.getByLabelText('Email', { exact: true }), {
+        target: { value: 'TEST@example.test' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Send code' }))
+    await waitFor(() => expect(send).toHaveBeenCalledWith('test@example.test', 'register', 'en'))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Too many incorrect codes')
+    expect(screen.getByRole('button', { name: /Resend in/ })).toBeDisabled()
+    expect(screen.getByLabelText('Verification Code')).toBeDisabled()
+})
+it('finishes password recovery then returns to login without signing in', async () => {
+    const reset = vi.spyOn(api, 'resetPassword').mockResolvedValue(undefined)
+    vi.spyOn(api, 'sendEmailCode').mockResolvedValue(undefined)
+    setup()
+    await openAccount()
+    fireEvent.click(screen.getByRole('button', { name: 'Forgot password?' }))
+    fireEvent.change(screen.getByLabelText('Email', { exact: true }), {
+        target: { value: 'TEST@example.test' },
+    })
+    fireEvent.change(screen.getByLabelText('New Password'), { target: { value: 'new-secret' } })
+    fireEvent.change(screen.getByLabelText('Confirm Password'), { target: { value: 'new-secret' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send code' }))
+    await screen.findByText('A code has been sent. It expires in 10 minutes.')
+    fireEvent.change(screen.getByLabelText('Verification Code'), { target: { value: '654321' } })
+    fireEvent.submit(screen.getByLabelText('New Password').closest('form')!)
+    await waitFor(() =>
+        expect(reset).toHaveBeenCalledWith({
+            email: 'test@example.test',
+            verificationCode: '654321',
+            newPassword: 'new-secret',
+        }),
+    )
+    expect(
+        await screen.findByText('Password reset. Please log in with your new password.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Login$/ })).toBeInTheDocument()
+    expect(api.login).not.toHaveBeenCalled()
+})
