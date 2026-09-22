@@ -23,7 +23,7 @@ async function osmTile(request) {
     // Fixed provider/path only: never forward cookies, credentials or arbitrary URLs.
     // OSM requires stable application identification and the real web Referer.
     const headers = new Headers({
-        'User-Agent': 'LycorisMaps/1.0 (+https://lycoris-map.com)',
+        'User-Agent': 'LycorisMaps/1.1.0 (+https://lycoris-map.com)',
         Accept: 'image/png',
     })
     for (const name of ['Referer', 'If-None-Match', 'If-Modified-Since']) {

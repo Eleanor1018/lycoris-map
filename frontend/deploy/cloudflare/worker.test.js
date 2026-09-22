@@ -10,7 +10,7 @@ test('OSM requests use a fixed upstream, preserve attribution headers and never 
         assert.equal(request.headers.get('Cache-Control'), null)
         assert.equal(request.headers.get('Pragma'), null)
         assert.equal(request.headers.get('Referer'), 'https://lycoris-map.com/')
-        assert.match(request.headers.get('User-Agent'), /^LycorisMaps\/1\.0 /)
+        assert.match(request.headers.get('User-Agent'), /^LycorisMaps\/1\.1\.0 /)
         assert.deepEqual(options, { redirect: 'manual', cf: { cacheEverything: true } })
         return new Response('tile', {
             headers: {
