@@ -67,6 +67,7 @@ fun AccountPanel(
     onMyPlaces: () -> Unit,
 ) {
     val account by accounts.state.collectAsStateWithLifecycle()
+    var passwordReset by remember { mutableStateOf(false) }
     // Logout clears the identity before its suspension returns. Keep its navigation callback
     // outside the identity-keyed form scope, while still cancelling when this whole panel closes.
     val panelScope = rememberCoroutineScope()
@@ -100,18 +101,34 @@ fun AccountPanel(
             action.photoFailure?.let {
                 AccountNotice(language.text("无法读取这张图片，请选择另一张图片。", "This image could not be read. Choose another image."), language) { action.dismiss() }
             }
+            if (passwordReset && effectivePage == AccountPage.LOGIN) {
+                AccountNotice(language.text("密码已重置，请使用新密码登录。", "Password reset. Sign in with your new password."), language) { passwordReset = false }
+            }
             when (effectivePage) {
                 AccountPage.LOGIN -> LoginForm(language, busy,
                     onSubmit = { username, password -> submit {
+                        passwordReset = false
                         val user = accounts.login(username, password)
                         if (accounts.identity()?.publicId == user.publicId) currentOnSignedIn()
                     } },
                     onRegister = { currentOnPage(AccountPage.REGISTER) },
+                    onForgot = { currentOnPage(AccountPage.RESET) },
                 )
                 AccountPage.REGISTER -> RegisterForm(language, busy,
-                    onSubmit = { username, nickname, email, password -> submit {
-                        val user = accounts.register(username, nickname, email, password)
+                    onSubmit = { username, nickname, email, password, code -> submit {
+                        val user = accounts.register(username, nickname, email, password, code)
                         if (accounts.identity()?.publicId == user.publicId) currentOnSignedIn()
+                    } },
+                    onLogin = { currentOnPage(AccountPage.LOGIN) },
+                    failure = action.failure,
+                    onSendCode = { email -> accounts.sendEmailCode(email, false, if (language == Language.ZH) "zh" else "en"); Unit },
+                )
+                AccountPage.RESET -> RecoveryForm(language, busy, action.failure,
+                    onSendCode = { email -> accounts.sendEmailCode(email, true, if (language == Language.ZH) "zh" else "en"); Unit },
+                    onSubmit = { email, code, password -> submit {
+                        accounts.resetPassword(email, code, password)
+                        passwordReset = true
+                        currentOnPage(AccountPage.LOGIN)
                     } },
                     onLogin = { currentOnPage(AccountPage.LOGIN) },
                 )
@@ -176,7 +193,7 @@ private class AccountAction(private val scope: CoroutineScope) {
 }
 
 @Composable
-internal fun LoginForm(language: Language, busy: Boolean, onSubmit: (String, String) -> Unit, onRegister: () -> Unit) {
+internal fun LoginForm(language: Language, busy: Boolean, onSubmit: (String, String) -> Unit, onRegister: () -> Unit, onForgot: () -> Unit = {}) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     val ready = username.isNotBlank() && password.isNotEmpty() && !busy
@@ -185,6 +202,9 @@ internal fun LoginForm(language: Language, busy: Boolean, onSubmit: (String, Str
         AccountField(password, { password = it }, language.text("密码", "Password"), enabled = !busy, password = true, language = language,
             imeAction = ImeAction.Done, onDone = { if (ready) onSubmit(username, password) })
         AccountButton(language.text("登录", "Log In"), busy, ready) { onSubmit(username, password) }
+        TextButton(onClick = onForgot, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+            Text(language.text("忘记密码？", "Forgot password?"))
+        }
         TextButton(onClick = onRegister, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Text(language.text("创建账号", "Create an Account"), textAlign = TextAlign.Center)
         }
@@ -192,23 +212,91 @@ internal fun LoginForm(language: Language, busy: Boolean, onSubmit: (String, Str
 }
 
 @Composable
-internal fun RegisterForm(language: Language, busy: Boolean, onSubmit: (String, String, String, String) -> Unit, onLogin: () -> Unit) {
+internal fun RegisterForm(language: Language, busy: Boolean, onSubmit: (String, String, String, String, String) -> Unit, onLogin: () -> Unit,
+    failure: ApiFailure? = null, onSendCode: suspend (String) -> Unit) {
     var username by remember { mutableStateOf("") }
     var nickname by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    val ready = username.isNotBlank() && email.isNotBlank() && password.isNotEmpty() && !busy
+    var code by remember { mutableStateOf("") }
+    LaunchedEffect(email) { code = "" }
+    val ready = username.isNotBlank() && email.isNotBlank() && password.isNotEmpty() && code.length == 6 && !busy
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         AccountField(username, { username = it }, language.text("账号", "Username"), enabled = !busy)
         AccountField(nickname, { nickname = it }, language.text("昵称（可选）", "Display Name (optional)"), enabled = !busy, capitalization = KeyboardCapitalization.Words)
         AccountField(email, { email = it }, language.text("邮箱", "Email"), enabled = !busy, keyboardType = KeyboardType.Email)
         AccountField(password, { password = it }, language.text("密码", "Password"), enabled = !busy, password = true, language = language,
-            imeAction = ImeAction.Done, onDone = { if (ready) onSubmit(username, nickname, email, password) })
-        AccountButton(language.text("注册", "Register"), busy, ready) { onSubmit(username, nickname, email, password) }
+            imeAction = ImeAction.Next)
+        val codeBlocked = EmailCodeField(email, code, { code = it }, language, busy, failure, onSendCode)
+        AccountButton(language.text("注册", "Register"), busy, ready && !codeBlocked) { onSubmit(username, nickname, email, password, code) }
         TextButton(onClick = onLogin, enabled = !busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
             Text(language.text("已有账号？登录", "Already have an account? Log In"), textAlign = TextAlign.Center)
         }
     }
+}
+
+@Composable
+private fun EmailCodeField(email: String, code: String, onCode: (String) -> Unit, language: Language,
+    busy: Boolean, failure: ApiFailure?, send: suspend (String) -> Unit): Boolean {
+    val scope = rememberCoroutineScope()
+    val currentEmail by rememberUpdatedState(email)
+    var sending by remember { mutableStateOf(false) }
+    var retryAt by remember(email) { mutableLongStateOf(0L) }
+    var lockedUntil by remember(email) { mutableLongStateOf(0L) }
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var notice by remember(email) { mutableStateOf<String?>(null) }
+    fun receiveFailure(error: ApiFailure) {
+        notice = accountFailureMessage(error, language, AccountPage.RESET)
+        if (error is ApiFailure.Http && error.status == 429) {
+            val seconds = error.retryAfterSeconds ?: if (error.serviceCode == 42931) 3600 else 60
+            retryAt = System.currentTimeMillis() + seconds.coerceIn(1, 86400) * 1000L
+            if (error.serviceCode == 42931) lockedUntil = retryAt
+        }
+    }
+    LaunchedEffect(failure) { if (failure != null) receiveFailure(failure) }
+    LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); kotlinx.coroutines.delay(1000) } }
+    val remaining = ((maxOf(retryAt, lockedUntil) - now + 999) / 1000).coerceAtLeast(0)
+    AccountField(code, { onCode(it.filter { c -> c in '0'..'9' }.take(6)) }, language.text("验证码", "Verification Code"),
+        enabled = !busy && !sending && lockedUntil <= now, keyboardType = KeyboardType.Number)
+    OutlinedButton(onClick = {
+        if (!sending) {
+            sending = true; notice = null
+            val recipient = email
+            scope.launch {
+                try {
+                    send(recipient)
+                    if (currentEmail != recipient) return@launch
+                    onCode(""); retryAt = System.currentTimeMillis() + 60000
+                    notice = language.text("验证码已发送，10 分钟内有效。", "A code has been sent. It expires in 10 minutes.")
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (error: ApiFailure) { if (currentEmail == recipient) receiveFailure(error) }
+                finally { sending = false }
+            }
+        }
+    }, enabled = !busy && !sending && remaining == 0L && email.contains('@'),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp), shape = RoundedCornerShape(22.dp)) {
+        Text(if (remaining > 0) language.text("${remaining} 秒后重发", "Resend in ${remaining}s")
+            else if (sending) language.text("正在发送…", "Sending…") else language.text("发送验证码", "Send code"))
+    }
+    notice?.let { Text(it, style = MaterialTheme.typography.bodySmall, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+    return sending || lockedUntil > now
+}
+
+@Composable
+private fun RecoveryForm(language: Language, busy: Boolean, failure: ApiFailure?, onSendCode: suspend (String) -> Unit,
+    onSubmit: (String, String, String) -> Unit, onLogin: () -> Unit) {
+    var email by remember { mutableStateOf("") }
+    var code by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var confirmation by remember { mutableStateOf("") }
+    LaunchedEffect(email) { code = "" }
+    AccountField(email, { email = it }, language.text("邮箱", "Email"), enabled = !busy, keyboardType = KeyboardType.Email)
+    AccountField(password, { password = it }, language.text("新密码", "New Password"), enabled = !busy, password = true, language = language)
+    AccountField(confirmation, { confirmation = it }, language.text("确认密码", "Confirm Password"), enabled = !busy, password = true, language = language)
+    val codeBlocked = EmailCodeField(email, code, { code = it }, language, busy, failure, onSendCode)
+    AccountButton(language.text("重置密码", "Reset Password"), busy,
+        !busy && !codeBlocked && email.contains('@') && code.length == 6 && password.length >= 4 && password == confirmation) { onSubmit(email, code, password) }
+    TextButton(onClick = onLogin, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text(language.text("返回登录", "Back to login")) }
 }
 
 @Composable

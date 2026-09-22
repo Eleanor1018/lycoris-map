@@ -17,6 +17,7 @@ sealed class ApiFailure(message: String) : IOException(message) {
         val serviceCode: Int? = null,
         val requestId: String? = null,
         val serviceMessage: String? = null,
+        val retryAfterSeconds: Int? = null,
     ) : ApiFailure("HTTP $status${requestId?.let { " (request $it)" }.orEmpty()}")
     class Network(val timedOut: Boolean) : ApiFailure(if (timedOut) "Request timed out" else "Network unavailable")
     class InvalidResponse : ApiFailure("Invalid service response")
@@ -45,7 +46,7 @@ fun Response<*>.requireSuccess() {
     val code = runCatching { objectValue?.get("code")?.jsonPrimitive?.intOrNull }.getOrNull()
     val message = runCatching { objectValue?.get("message")?.jsonPrimitive?.content }
         .getOrNull()?.take(300)?.filter { !it.isISOControl() || it == '\n' }
-    throw ApiFailure.Http(code(), code, requestId, message)
+    throw ApiFailure.Http(code(), code, requestId, message, headers()["Retry-After"]?.toIntOrNull())
 }
 
 fun <T : Any> Response<T>.requireBody(): T {
