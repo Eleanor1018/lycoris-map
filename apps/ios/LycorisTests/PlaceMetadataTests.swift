@@ -1,11 +1,12 @@
 import Foundation
 import Testing
+import UIKit
 
 @testable import Lycoris
 
 /// Contract and behavior coverage for the place venue tag and the server-time
 /// opening status. These tests mirror `reference/openingStatus.ts` and the
-/// eight-value venue contract; they never touch a network or a real backend.
+/// controlled venue contract; they never touch a network or a real backend.
 struct PlaceMetadataTests {
   // MARK: - Venue DTO contract
 
@@ -13,7 +14,7 @@ struct PlaceMetadataTests {
     let expected: [(String, PlaceVenue)] = [
       ("metro", .metro), ("hospital", .hospital), ("mall", .mall),
       ("railway_station", .railwayStation), ("school", .school), ("other", .other),
-      ("public_toilet", .publicToilet), ("airport", .airport),
+      ("airport", .airport), ("public_toilet", .publicToilet),
     ]
     for (raw, venue) in expected {
       let marker = try decodeMarker(venueType: raw)
@@ -26,6 +27,34 @@ struct PlaceMetadataTests {
       #expect(en != zh)
     }
     #expect(PlaceVenue.allCases.count == 8)
+  }
+
+  @Test func newVenuesSurviveEditingAndDraftRestoration() throws {
+    for (raw, english, chinese) in [
+      ("airport", "Airport", "飞机场"), ("public_toilet", "Public toilet", "公共卫生间"),
+    ] {
+      let marker = try decodeMarker(venueType: raw)
+      let venue = try #require(marker.venue)
+      #expect(venue.title(language: .english) == english)
+      #expect(venue.title(language: .chinese) == chinese)
+      #expect(UIImage(systemName: venue.symbol) != nil)
+      let place = PlacePresentation(marker: marker, origin: nil, located: false, baseURL: nil)
+      #expect(PlaceAccessibility.placeLabel(place, language: .english).contains(english))
+      #expect(PlaceAccessibility.placeLabel(place, language: .chinese).contains(chinese))
+
+      var edit = draft(original: marker)
+      #expect(edit.fields.venueType == venue && edit.fields.unknownVenueType == nil)
+      edit.fields.title = "Updated title"
+      let restored = try JSONDecoder().decode(
+        ContributionDraft.self, from: JSONEncoder().encode(edit))
+      #expect(restored.fields.venueType == venue)
+      #expect(try json(restored)["venueType"] as? String == raw)
+
+      var new = draft()
+      new.fields.title = "New toilet"
+      new.fields.venueType = venue
+      #expect(try json(new)["venueType"] as? String == raw)
+    }
   }
 
   @Test func missingNullAndUnknownVenueNeverFailDecodingNorInventATag() throws {

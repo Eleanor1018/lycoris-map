@@ -4,8 +4,8 @@
 
 ## 行为与数据契约
 
-- 无障碍卫生间在点位列表、详情中显示场所标签：地铁站、医院、商场、火车站、学校、其他。使用原生 SwiftUI Label、SF Symbols 和动态字体；其他点位类别不显示该标签。
-- 对齐 Axum `venueType` 的六个值：`metro`、`hospital`、`mall`、`railway_station`、`school`、`other`。缺失、null 或未知值不伪装成“其他”，也不使整个点位解码失败。
+- 无障碍卫生间在点位列表、详情中显示场所标签：地铁站、医院、商场、火车站、学校、飞机场、公共卫生间、其他。使用原生 SwiftUI Label、SF Symbols 和动态字体；其他点位类别不显示该标签。
+- 对齐 Axum `venueType` 的八个值：`metro`、`hospital`、`mall`、`railway_station`、`school`、`airport`、`public_toilet`、`other`。缺失、null 或未知值不伪装成“其他”，也不使整个点位解码失败。
 - 新建／编辑表单使用原生 Picker。新建卫生间默认“其他”；离开卫生间类别时清除标签，重新切回才恢复默认。旧草稿或未知标签仅修改文字时，不提交一个猜测的标签。
 - 营业时间以轻色背景突出，状态同时使用文字与图标。距结束营业不超过 30 分钟且仍在营业时显示“即将结束营业”。详情使用独立提醒标签。
 - 时间判断使用服务端 `hoursTimezone`，不使用用户设备时区推断远处点位状态。当前服务端返回部署级 `APP_AVAILABILITY_ZONE`（默认 `Asia/Shanghai`），不是逐点独立配置。
@@ -16,6 +16,7 @@
 ## 对应的已有服务端与 Web 实现
 
 - Axum／迁移：`59dcb70243e8b0af1c1d9a9d250fb7b8d263fafe`，迁移 `0005_marker_venue_type.sql`。
+- 2026-09-22：当前 iPad 分支补齐 `airport` / `public_toilet`；契约核对后端提交 `a8ea241` 的迁移 `0006_add_public_toilet_airport_venues.sql`。沿用独立 iOS 标签提交 `f5a4f72` 的字段、中文名称与 SF Symbols，补充当前分支的原生 Picker、显示与提交验证。iPhone、iPad 共用同一枚举和组件。
 - Web 标签／营业状态：`dac5c4113adc6c8f78a0cc9b10d5d8fe9b3584eb`。
 - 本次仅只读核对真实接口：`GET https://api.lycoris-map.com/api/markers/411?lang=zh` 返回 HTTP 200、`venueType: mall`、`hoursTimezone: Asia/Shanghai`、`10:00–22:00`。
 - 数据库字段与现有点位分类已由之前的标签任务完成；本次不重复分类、不做软删除或去重、不部署服务器。
@@ -46,6 +47,8 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun simctl location b
 真实 VoiceOver 的逐项滑动、读音和手势体验仍需真机人工体验；自动化标签断言不等价于完整的 VoiceOver 验收。
 
 ## 本次结果
+
+2026-09-22 新标签补充验证：42 项场所元数据／贡献单元测试、3 项 iPhone UI 用例和 1 项 iPad UI 用例通过。覆盖两种新标签的中英文列表／详情、原生八项 Picker、编辑提交 `public_toilet`、新建与编辑请求及草稿恢复。iPhone 截图确认标签沿用现有图标文字间距；iPad 标签语义断言通过，横屏 XCTest 截图仍有已记录的裁切问题。报告：`/tmp/lycoris-extra-venue-final.xcresult`、`/tmp/lycoris-extra-venue-ipad.xcresult`。测试使用回环 fixture，未写入生产数据。
 
 - `checks-light-110108.log`：41 项单元测试（PlaceMetadataTests、ContributionTests）和 3 项界面测试通过，覆盖原生六类 Picker、新建选点、编辑预填、类别切换、实际 PATCH 请求和中英文最大动态字体。
 - `checks-dark-110248.log`：深色模式的中英文／最大动态字体界面测试通过；温晓检查了导出的实际截图，确认标签、时间背景及状态文字显示。

@@ -23,7 +23,7 @@ FIXTURE = "lycoris-place-metadata"
 USERNAME = "ios_metadata_fixture"
 PASSWORD = "Metadata-Fixture-1"
 
-# Two accessible toilets with recognized venues and one non-toilet without a
+# Accessible toilets with recognized venues and one non-toilet without a
 # tag. The opening hours let the test pin an instant inside the closing-soon
 # window (Asia/Shanghai 09:00-22:00, so 21:30-22:00 local).
 MARKERS = [
@@ -41,6 +41,16 @@ MARKERS = [
      "category": "baby_room", "title": "Nursing Room No Tag",
      "description": "Metadata fixture", "openTimeStart": "09:00", "openTimeEnd": "22:00",
      "hoursTimezone": "Asia/Shanghai",
+     "contentLanguage": "en", "isPublic": True, "reviewStatus": "APPROVED"},
+    {"id": 24, "version": 1, "lat": 31.2320, "lng": 121.4746,
+     "category": "accessible_toilet", "title": "Airport Accessible Toilet",
+     "description": "Metadata fixture", "openTimeStart": "09:00", "openTimeEnd": "22:00",
+     "hoursTimezone": "Asia/Shanghai", "venueType": "airport",
+     "contentLanguage": "en", "isPublic": True, "reviewStatus": "APPROVED"},
+    {"id": 25, "version": 1, "lat": 31.2324, "lng": 121.4749,
+     "category": "accessible_toilet", "title": "Public Accessible Toilet",
+     "description": "Metadata fixture", "openTimeStart": "09:00", "openTimeEnd": "22:00",
+     "hoursTimezone": "Asia/Shanghai", "venueType": "public_toilet",
      "contentLanguage": "en", "isPublic": True, "reviewStatus": "APPROVED"},
 ]
 
