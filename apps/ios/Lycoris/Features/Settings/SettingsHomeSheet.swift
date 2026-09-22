@@ -14,6 +14,7 @@ struct SettingsHomeSheet: View {
         row("Map Source", value: String(appLocalized: "Apple Maps"), destination: .source)
         row("About Lycoris Maps", value: "", destination: .about)
       }
+      .accessibilityIdentifier("settings.home.form")
       .environment(\.defaultMinListRowHeight, 44)
       .navigationTitle("Settings").navigationBarTitleDisplayMode(.inline)
       .navigationDestination(for: SettingsDestination.self) { destination in
