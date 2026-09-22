@@ -329,13 +329,21 @@ class AppConfigurationTest {
             assertEquals("The device must honor this Activity's orientation request", orientation, it.resources.configuration.orientation)
             if (requiresRebuild) assertNotSame("A real configuration change must rebuild MainActivity", before, it)
         }
+        val mainClockBefore = runCatching { compose.mainClock.currentTime }.getOrNull()
+        val uptimeBefore = android.os.SystemClock.uptimeMillis()
+        val recomposerBefore = recomposerDiagnostics()
         try {
             compose.waitForIdle()
         } catch (failure: Throwable) {
             // Attach fixed-key window/inset facts without calling Compose test APIs from the UI
             // thread, and without masking the original idle timeout.
+            val uptimeAfter = android.os.SystemClock.uptimeMillis()
+            val mainClockAfter = runCatching { compose.mainClock.currentTime }.getOrNull()
             throw AssertionError(
-                "Post-rotation waitForIdle failed. ${orientationWindowDiagnostics()}",
+                "Post-rotation waitForIdle failed. ${orientationWindowDiagnostics()} " +
+                    "mainClockBefore=$mainClockBefore mainClockAfter=$mainClockAfter " +
+                    "uptimeDeltaMs=${uptimeAfter - uptimeBefore} " +
+                    "recomposerBefore=$recomposerBefore recomposerAfter=${recomposerDiagnostics()}",
                 failure,
             )
         }
@@ -354,8 +362,46 @@ class AppConfigurationTest {
                     "orientation=${activity.resources.configuration.orientation}, " +
                     "statusTop=${top(WindowInsetsCompat.Type.statusBars())}, statusVisible=${insets?.isVisible(WindowInsetsCompat.Type.statusBars())}, " +
                     "navBottom=${bottom(WindowInsetsCompat.Type.navigationBars())}, navVisible=${insets?.isVisible(WindowInsetsCompat.Type.navigationBars())}, " +
-                    "imeBottom=${bottom(WindowInsetsCompat.Type.ime())}, imeVisible=${insets?.isVisible(WindowInsetsCompat.Type.ime())}"
+                    "imeBottom=${bottom(WindowInsetsCompat.Type.ime())}, imeVisible=${insets?.isVisible(WindowInsetsCompat.Type.ime())} " +
+                    viewRootDiagnostics(decor)
             }
+        }
+        return report
+    }
+
+    /** Best-effort view-tree facts; no forced measure/layout and no Compose semantic APIs. */
+    private fun viewRootDiagnostics(decor: View): String {
+        val roots = mutableListOf<String>()
+        var views = 0
+        var attached = 0
+        var layoutRequested = 0
+        val pending = java.util.ArrayDeque<View>()
+        pending.add(decor)
+        while (pending.isNotEmpty()) {
+            val view = pending.removeFirst()
+            views++
+            if (view.isAttachedToWindow) attached++
+            if (view.isLayoutRequested) layoutRequested++
+            if (view is androidx.compose.ui.platform.ViewRootForTest) {
+                roots += "root(hasPendingMeasureOrLayout=${view.hasPendingMeasureOrLayout}," +
+                    "layoutRequested=${view.view.isLayoutRequested},attached=${view.view.isAttachedToWindow}," +
+                    "visibility=${view.view.visibility},size=${view.view.width}x${view.view.height}," +
+                    "lifecycleResumed=${view.isLifecycleInResumedState})"
+            }
+            if (view is ViewGroup) for (index in 0 until view.childCount) pending.add(view.getChildAt(index))
+        }
+        val rootsReport = "viewRoots=${roots.size}" + if (roots.isEmpty()) "" else " " + roots.joinToString("|")
+        return "views=$views attachedViews=$attached layoutRequestedViews=$layoutRequested $rootsReport"
+    }
+
+    /** Public Recomposer facts only; state is a Flow and is not collected here. */
+    @OptIn(androidx.compose.runtime.InternalComposeApi::class)
+    private fun recomposerDiagnostics(): String {
+        var report = "recomposer diagnostics unavailable"
+        runCatching {
+            report = androidx.compose.runtime.Recomposer.runningRecomposers.value.joinToString("|") { recomposer ->
+                "recomposer(hasPendingWork=${recomposer.hasPendingWork},changeCount=${recomposer.changeCount})"
+            }.ifEmpty { "recomposerCount=0" }
         }
         return report
     }
