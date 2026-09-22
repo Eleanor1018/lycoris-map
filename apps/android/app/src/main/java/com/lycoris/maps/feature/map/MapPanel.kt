@@ -2,6 +2,7 @@ package com.lycoris.maps.feature.map
 
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.gestures.AnchoredDraggableState
 import androidx.compose.foundation.gestures.AnchoredDraggableDefaults
 import androidx.compose.foundation.gestures.DraggableAnchors
@@ -71,7 +72,16 @@ fun MapPanel(
     // external stop request.
     var dragControl by remember { mutableStateOf<Pair<String, PanelStop>?>(null) }
     LaunchedEffect(isUserDragging) {
-        dragControl = if (isUserDragging) currentPageKey to currentRequestedStop else null
+        if (isUserDragging) {
+            // Take the state's mutate lock at user-input priority to cancel any fling/animateTo
+            // still running from the previous gesture. The empty drag only acquires the lock; the
+            // actual finger deltas continue to arrive through the plain draggable, so the outer
+            // gesture event loop is not placed back inside anchoredDrag.
+            state.anchoredDrag(MutatePriority.UserInput) {}
+            dragControl = currentPageKey to currentRequestedStop
+        } else {
+            dragControl = null
+        }
     }
 
     // Programmatic control follows explicit stop/page changes only. Re-measurement updates
@@ -203,7 +213,11 @@ fun MapPanel(
                 state = sheetDragState,
                 orientation = Orientation.Vertical,
                 interactionSource = handleInteractions,
-                onDragStopped = { velocity -> with(userFling) { sheetScrollScope.performFling(velocity) } },
+                onDragStopped = { velocity ->
+                    // Run the retained fling while holding the state's mutate lock so the next
+                    // finger drag can cancel it through the UserInput-priority empty drag.
+                    state.anchoredDrag { with(userFling) { sheetScrollScope.performFling(velocity) } }
+                },
             )
             .semantics {
                 paneTitle = pageKey

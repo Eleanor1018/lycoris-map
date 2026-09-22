@@ -95,7 +95,16 @@ class HomePanelStabilityTest {
             }
             compose.onNodeWithText("Nearby").performScrollTo()
             compose.onNodeWithContentDescription("Close").performClick()
-            compose.onNodeWithText("Find Nearby").assertIsDisplayed()
+            compose.waitForIdle()
+            // Verify the close actually took effect before checking the returned main menu. Under the
+            // forced large-font density a title can sit outside the scroll viewport, so the returned
+            // heading is scrolled to rather than treated as an immediate on-screen presence failure.
+            assertFalse(
+                "Close did not leave Nearby; cycle=$cycle selected=$selected closeCalls=${closeCalls.get()}",
+                nearby.value,
+            )
+            assertEquals(cycle + 1, closeCalls.get())
+            compose.onNodeWithText("Find Nearby").performScrollTo().assertIsDisplayed()
         }
         assertEquals(listOf("baby_room", "baby_room"), selected)
     }
