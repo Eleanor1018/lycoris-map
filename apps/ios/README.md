@@ -70,6 +70,18 @@ Normal Xcode Run (Debug) and Release use `https://api.lycoris-map.com`. The shar
 
 Xcode Test uses the separate **Test** build configuration with the fixed synthetic backend `http://127.0.0.1:8080`. It does not include `Local.xcconfig`. This keeps the installed test app, including cold deep-link launches, on the same backend as fixture preflights. UI suites skip outside Test, so overriding a test run with `-configuration Debug` cannot send fixture registrations/contributions to the live service. Use `-configuration Test` for CLI fixture tests.
 
+After testing, restore the normal **Debug** app before handing the simulator back
+for live-service use. Test and Debug share the same bundle identifier, so tests
+replace the installed app; stopping the local fixture does not switch that app
+back to the production API. In Xcode, select the Lycoris scheme and the intended
+simulator, then choose **Product → Run** (not Test). For CLI runs, build with
+`-configuration Debug`, install the resulting `Debug-iphonesimulator/Lycoris.app`
+using `xcrun simctl install <device-id> <app-path>`, and launch it without fixture
+arguments. Verify the installed app's `LycorisAPIBaseURL` is
+`https://api.lycoris-map.com`. Do not uninstall the app or erase simulator data
+to change environments. If automated tests fail, restore Debug after retaining
+the failure evidence as well.
+
 To deliberately run a Debug app against a local development backend, create ignored `Config/Local.xcconfig`. For the simulator:
 
 ```xcconfig

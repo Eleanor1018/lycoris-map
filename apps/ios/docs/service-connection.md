@@ -54,3 +54,40 @@ Release builds passed. The panel now uses SwiftUI's native
 [`glassEffect`](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views)
 with the same regular material as the map tools, retaining a solid Reduce
 Transparency fallback.
+
+## 2026-09-22 — restore live use after the iPad test matrix
+
+The production service remained reachable from the Mac: TLS verification passed,
+both health endpoints returned 200, and readiness reported PostgreSQL and Redis
+healthy. Anonymous `/api/me` returned 401 as expected. Empty login input returned
+401/code 4001; empty email input to `/api/auth/email-code` and
+`/api/auth/reset-password` returned 400/code 40022. These deliberately invalid
+probes verify routing and validation without sending mail or changing an account;
+they do not establish successful email delivery or real-account authentication.
+
+The four simulators used by the preceding matrix still had the **Test** app
+installed with `http://127.0.0.1:8080`, while its local fixture was no longer
+running. Debug/Release source configuration was already correct. The current
+branch also predated the email-verification/password-recovery feature, so it was
+merged with `origin/main` at `150babe`, retaining the iPad test fixes and the
+existing native authentication implementation.
+
+The 34 selected account, HTTP, configuration and connectivity tests passed under
+the isolated Test configuration. A fresh Debug build succeeded and was installed
+on the matrix's iPhone 17, iPad Pro 11-inch, iPad Pro 13-inch and iPad mini, without
+uninstalling or erasing their data. Their installed Info.plist service URLs were
+checked against `https://api.lycoris-map.com`. The iPhone app successfully searched
+live Shanghai places and displayed real markers and details. The public search
+endpoint returned 32 records at inspection time. Computer Use also confirmed the
+registration code controls and the native password-recovery form; neither form
+was submitted with a real account.
+
+A separate public image probe returned HTTP 200 and all 4,027,145 bytes, taking
+30 seconds. An earlier 20-second probe timed out mid-transfer. This is evidence
+of a slow image transfer on the observed connection, not proof that all media
+loads quickly or that the backend is unreachable.
+
+Future runs must [restore Debug after testing](../README.md#service-address),
+including failed runs. This check did not install a physical-device build, upload
+TestFlight, deploy the server, or modify Cloudflare. Logs and xcresult are in the
+local `outputs/server-auth-check-20260922` evidence directory.

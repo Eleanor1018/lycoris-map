@@ -37,6 +37,8 @@ mini 失败时，连续八份 AX 快照都保持 744×1133；系统日志确认�
 
 使用 `Test` 配置、`scripts/place-metadata-fixture.py` 的回环服务和合成账号，运行 `IPadLayoutTests`。两个 iPad Pro 尺寸都需覆盖；mini 运行 `IPadCompactWindowTests`，iPhone 运行 `MapInteractionTests` 及标签回归。
 
+完成测试（包括失败退出）后，给每台参与测试的模拟器重新安装普通 Debug 包，并核对已安装包里的线上 API 地址。Test 和 Debug 使用同一 Bundle ID，停止 fixture 不会自动切回线上；操作见 [README 的环境恢复说明](../README.md#service-address)。
+
 每次设置方向后都等待实际窗口尺寸，不用固定延时替代界面就绪条件。应用出现系统弹窗时，测试须确认弹窗关闭后再继续操作。
 
 本机完整日志、xcresult、源代码差异和汇总位于 `/Users/nora/Documents/Codex/2026-09-14/wen/outputs/ipad-interaction-fixes/`。上轮失败记录保留在同级 `ipad-pipeline-20260922-KBdJNa/`。
