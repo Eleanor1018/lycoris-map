@@ -67,3 +67,21 @@ Set `tiandituMapsApiKey=...` in ignored `local.secrets.properties`, or provide `
 The opt-in QA test `com.lycoris.maps.core.map.TiandituViewportIntegrationTest`, with `-e lycorisTiandituOnline true`, checks actual center-tile fetch/parse events for both layers, fully rendered frames, synthetic WGS84 marker/location overlays, marker selection, background return and Tianditu → OSM → Tianditu camera retention. It does not use account records, live GPS or backend writes. WMTS request success does not establish a separate Tianditu native SDK authentication flow; no Tianditu SDK was added.
 
 Provider reference: [Tianditu map service](https://lbs.tianditu.gov.cn/server/MapService.html). Runtime capability verification uses the same HTTPS WMTS endpoints with `SERVICE=WMTS&REQUEST=GetCapabilities` and the configured key; avoid logging the key-bearing request URL.
+
+## Email verification
+
+Registration now requires a six-digit emailed code. The login page also opens
+password recovery with email, code and matching new-password fields. The client
+uses `/api/auth/email-code` with `register` or `reset_password`, and
+`/api/auth/reset-password`; sending includes `X-App-Language`. Server
+`Retry-After` controls resend/cooldown feedback. Five wrong codes lock that email
+for an hour; closing the page cannot clear the server lock. Successful recovery
+clears the local session and private lists and returns to login.
+
+Publish this client with the Web/backend email-verification release. Older
+clients can log in but cannot register after mandatory verification is enabled.
+SMTP credentials remain exclusively on the server. Local acceptance:
+`:app:testQaUnitTest` (147 tests), `:app:assembleQa`, and
+`:app:compileQaAndroidTestKotlin`. Repository tests cover code/purpose/address
+payloads, cooldown responses, and session clearing after recovery; no real email
+is sent by those tests.

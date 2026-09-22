@@ -42,6 +42,45 @@ class AccountRepositoryTest {
         assertEquals("/api/login", server.takeRequest().path)
     }
 
+    @Test fun emailCodeAndRegistrationSendNormalizedEmailAndCode() = withRepository { server, repository, _ ->
+        server.enqueue(MockResponse().setBody("""{"code":0,"data":{"retryAfterSeconds":60,"expiresInSeconds":600}}"""))
+        repository.sendEmailCode(" Synthetic@Example.test ", false, "zh")
+        val send = server.takeRequest()
+        assertEquals("/api/auth/email-code", send.path)
+        assertEquals("zh", send.getHeader("X-App-Language"))
+        val fields = send.body.readUtf8()
+        assertTrue(fields.contains("synthetic@example.test"))
+        assertTrue(fields.contains("register"))
+        server.enqueue(MockResponse().setBody(userA))
+        repository.register("synthetic", "", " Synthetic@Example.test ", "new-password", "123456")
+        val registration = server.takeRequest()
+        assertEquals("/api/register", registration.path)
+        assertTrue(registration.body.readUtf8().contains("\"verificationCode\":\"123456\""))
+    }
+
+    @Test fun recoveryClearsOldSessionWithoutAutomaticLogin() = withRepository { server, repository, jar ->
+        login(server, repository)
+        server.enqueue(MockResponse().setBody("""{"code":0,"data":null}"""))
+        repository.resetPassword(" Synthetic@Example.test ", "123456", "new-password")
+        val reset = server.takeRequest()
+        assertEquals("/api/auth/reset-password", reset.path)
+        val body = reset.body.readUtf8()
+        assertTrue(body.contains("synthetic@example.test"))
+        assertTrue(body.contains("newPassword"))
+        assertNull(repository.state.value.user)
+        assertFalse(jar.hasCookies())
+    }
+
+    @Test fun verificationCooldownRetainsServerRetryDeadlineAndDoesNotClearLogin() = withRepository { server, repository, jar ->
+        login(server, repository)
+        server.enqueue(MockResponse().setResponseCode(429).setHeader("Retry-After", "3598")
+            .setBody("""{"code":42931,"message":"locked"}"""))
+        try { repository.sendEmailCode("synthetic@example.test", true, "en"); fail("Expected cooldown") }
+        catch (error: ApiFailure.Http) { assertEquals(42931, error.serviceCode); assertEquals(3598, error.retryAfterSeconds) }
+        assertEquals("user-a", repository.state.value.user?.publicId)
+        assertTrue(jar.hasCookies())
+    }
+
     @Test fun loginFailureDoesNotPreservePriorIdentityOrCookies() = withRepository { server, repository, jar ->
         login(server, repository)
         server.enqueue(MockResponse().setResponseCode(401).setBody("""{"code":4001,"message":"Invalid credentials"}"""))
