@@ -62,6 +62,8 @@ services:
     env_file:
       - path: /opt/lycoris/private/app.env
         format: raw
+      - path: /opt/lycoris/private/smtp.env
+        format: raw
     environment:
       SERVER_HOST: 127.0.0.1
       SERVER_PORT: '18081'

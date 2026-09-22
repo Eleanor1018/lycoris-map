@@ -99,6 +99,24 @@ beforeEach(() => {
     })
     vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id))
     vi.stubGlobal('matchMedia', () => ({ matches: false }))
+    // Controllable visualViewport so layout-change cancellation is testable.
+    const listeners = new Map<string, Set<() => void>>()
+    const visualViewport = {
+        scale: 1,
+        addEventListener(type: string, listener: () => void) {
+            const set = listeners.get(type) ?? new Set()
+            set.add(listener)
+            listeners.set(type, set)
+        },
+        removeEventListener(type: string, listener: () => void) {
+            listeners.get(type)?.delete(listener)
+        },
+        dispatchEvent(event: Event) {
+            for (const listener of listeners.get(event.type) ?? []) listener()
+            return true
+        },
+    }
+    vi.stubGlobal('visualViewport', visualViewport)
     vi.spyOn(performance, 'now').mockImplementation(() => now)
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
         this: HTMLElement,
@@ -178,6 +196,61 @@ it('drags the handle even when content is scrolled, without also clicking it', (
     touch(handle, 'end', 700)
     fireEvent.click(handle, { detail: 1 })
     expect(action).toHaveBeenCalledOnce()
+})
+it('lets a small 4px drag on an ordinary button still activate it without moving the sheet', () => {
+    const { sheet } = setup()
+    const button = screen.getByRole('button', { name: 'Nearby' })
+    // A real finger wobbles a few pixels; that must not become a sheet drag or
+    // swallow the click (the bookmark tap target is small).
+    touch(button, 'start', 700)
+    const move = touch(button, 'move', 704)
+    expect(move.defaultPrevented).toBe(false)
+    touch(button, 'end', 704)
+    expect(sheet.dataset.dragging).toBeUndefined()
+    expect(visualHeight()).toBe('')
+    fireEvent.click(button, { detail: 1 })
+    expect(action).toHaveBeenCalledOnce()
+    expect(sheet.dataset.snap).toBe('collapsed')
+})
+it('lets a button inside the sheet handle its own tap even with the sheet expanded', () => {
+    const { sheet } = setup('full', true)
+    const button = screen.getByRole('button', { name: 'Nearby' })
+    touch(button, 'start', 300)
+    expect(touch(button, 'move', 304).defaultPrevented).toBe(false)
+    touch(button, 'end', 304)
+    fireEvent.click(button, { detail: 1 })
+    expect(action).toHaveBeenCalledOnce()
+    expect(close).not.toHaveBeenCalled()
+    expect(sheet.dataset.snap).toBe('full')
+})
+it('cancels an in-progress drag when the visual viewport layout changes', () => {
+    const { sheet, title } = setup()
+    touch(title, 'start', 700)
+    expect(touch(title, 'move', 520).defaultPrevented).toBe(true)
+    expect(visualHeight()).toBe('338px')
+    act(() => {
+        window.visualViewport!.dispatchEvent(new Event('resize'))
+    })
+    expect(visualHeight()).toBe('')
+    expect(sheet.dataset.dragging).toBeUndefined()
+    expect(sheet.dataset.holding).toBeUndefined()
+    expect(sheet.dataset.snap).toBe('collapsed')
+})
+it('leaves a pinch-zoom visual viewport change untouched', () => {
+    const { sheet, title } = setup()
+    const scaled = window.visualViewport as unknown as { scale: number }
+    scaled.scale = 2
+    touch(title, 'start', 700)
+    touch(title, 'move', 520)
+    expect(visualHeight()).toBe('338px')
+    act(() => {
+        window.visualViewport!.dispatchEvent(new Event('resize'))
+    })
+    // The drag is not cancelled mid-pinch; the browser owns the zoom gesture.
+    expect(visualHeight()).toBe('338px')
+    expect(sheet.dataset.dragging).toBe('true')
+    scaled.scale = 1
+    touch(title, 'end', 520)
 })
 it('keeps inputs and horizontal swipes usable, and a card tap still clicks', () => {
     const { sheet, title } = setup()

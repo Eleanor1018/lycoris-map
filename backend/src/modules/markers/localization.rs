@@ -365,6 +365,7 @@ mod tests {
             last_edited_by_public_id: None,
             last_edited_by_owner: true,
             mark_image: None,
+            venue_type: Some("other".to_string()),
             created_at: Utc::now(),
             updated_at: Utc::now(),
         }

@@ -12,9 +12,10 @@ struct MapScreen: View {
   @State private var showsVoiceSearch = false
   @State private var voiceTask: Task<Void, Never>?
   @Environment(\.openURL) private var openURL
-  @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
   @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @State private var detent: MapPanelDetent
+  @State private var sidebarDestination = MapSidebarDestination.search
+  @State private var sidebarContentVisible = true
   @State private var store: PlaceStore
   @State private var location = LocationProvider()
   @State private var connectivity = ConnectivityMonitor()
@@ -22,6 +23,11 @@ struct MapScreen: View {
   @State private var showsCoordinateError = false
   @State private var account = AccountStore()
   @State private var contribution = ContributionStore()
+  // Contribution has its own one-shot location request, so it cannot replace
+  // the startup/locate provider's pending callback.
+  @State private var contributionLocation = LocationProvider()
+  @State private var contributionLocationRequest: ContributionLocationRequest?
+  @State private var measuredDetail: (id: String, height: CGFloat)?
   @State private var selectingLocation = false
   @State private var pickedLocation: GeoPoint?
   @State private var locationPickFeedback = 0
@@ -30,12 +36,14 @@ struct MapScreen: View {
   @State private var queuedContribution: ContributionIntent?
   @State private var chooseLocationAfterDismiss = false
   @State private var contributionError: String?
-  @State private var editLoadTask: Task<Void, Never>?
   @State private var modal: MapModal?
   @State private var pendingBookmark: Int64?
   @State private var bookmarkIntent = UUID()
   @State private var showsAccountError = false
   @Environment(\.scenePhase) private var scenePhase
+  /// One shared clock for every place's real-time opening status. All rows,
+  /// details and sheets read this instead of each starting their own timer.
+  @State private var metadataNow = Date()
   @State private var showsLocationError = false
   @State private var showsNavigationError = false
   private var selectedPlace: PlacePresentation? {
@@ -71,15 +79,22 @@ struct MapScreen: View {
     #if LYCORIS_LOCAL_TESTS
       // Hermetic fixture runs have an explicit datum. Live provider calibration is
       // verified separately, not allowed to make fixture tests depend on Apple search.
-      _mapCoordinates = State(initialValue: MapCoordinateResolver(space: .wgs84))
+      let calibrationUnavailable = ProcessInfo.processInfo.arguments.contains(
+        "-lycoris-test-map-calibration-unavailable")
+      _mapCoordinates = State(
+        initialValue: calibrationUnavailable
+          ? MapCoordinateResolver(lookup: { nil }) : MapCoordinateResolver(space: .wgs84))
     #else
       _mapCoordinates = State(
-        initialValue: MapCoordinateResolver(space: isPreview ? .wgs84 : .unresolved))
+        initialValue: MapCoordinateResolver(space: isPreview ? .wgs84 : nil))
     #endif
     self.bookmarks = bookmarks
   }
 
-  var body: some View {
+  /// The map/panel/tools surface. Kept as a separate opaque view so the very
+  /// large modifier chain does not have to be type-checked as one expression
+  /// together with the lifecycle, sheet and alert modifiers in `body`.
+  private var mapSurface: some View {
     GeometryReader { geometry in
       let layout = PanelLayout(
         viewport: CGSize(
@@ -91,31 +106,40 @@ struct MapScreen: View {
         headerHeight: max(44, searchHeight) + 58,
         nearbyContentHeight: titleHeight + 8 + cardHeight
           * (dynamicTypeSize.isAccessibilitySize ? 3 : 2) + 24,
-        detailHeight: selectedPlace == nil
-          ? nil
-          : 208 + (selectedPlace?.hasPhoto == true ? (geometry.size.width - 30) * 198 / 353 : 0)
-            + (selectedPlace?.distanceReference != nil ? 30 : 0)
-            + max(geometry.safeAreaInsets.bottom, 29),
+        detailHeight: detailHeight(geometry: geometry),
         collapsedHeaderHeight: max(44, searchHeight) + 28
       )
+      let adaptive = AdaptiveMapLayout(size: layout.viewport)
+      let sidebarTop = max(layout.topInset, 12) + 8
+      let sidebarHeight = max(120, layout.viewport.height - sidebarTop
+        - max(layout.bottomInset + 12, keyboardHeight + 12))
       let panelTop = layout.clampedTop(layout.top(for: detent) + dragTranslation)
       let panelHeight = layout.height(at: panelTop)
       let panelShape = UnevenRoundedRectangle(
         topLeadingRadius: 26, bottomLeadingRadius: layout.bottomCornerRadius(at: panelTop),
         bottomTrailingRadius: layout.bottomCornerRadius(at: panelTop), topTrailingRadius: 26)
-      let toolsVisible = panelTop > layout.topInset + 270 && !isSearchFocused && !selectingLocation
+      let toolsVisible = !selectingLocation
+        && (adaptive.usesSidebar || (panelTop > layout.topInset + 270 && !isSearchFocused))
       // Keep attribution fixed above the panel's lowest resting position.
-      let mapBottomInset = layout.viewport.height - layout.collapsedTop + 10
+      let mapBottomInset = adaptive.usesSidebar
+        ? max(layout.bottomInset + 12, keyboardHeight + 12)
+        : layout.viewport.height - layout.collapsedTop + 10
+      let showsUserLocation =
+        !store.isPreview && location.hasRequestedLocation && location.isAuthorized
+      let isActive = scenePhase == .active
 
       ZStack(alignment: .topLeading) {
         NativeMapView(
           topInset: layout.topInset, bottomInset: mapBottomInset,
+          leftInset: selectingLocation ? 10
+            : adaptive.leadingOcclusion(contentVisible: sidebarContentVisible),
+          rightInset: adaptive.usesSidebar ? 80 : 10,
           appearance: preferences.mapAppearance,
           coordinateSpace: mapCoordinates.space,
-          places: mapPlaces, focus: store.focus,
-          showsUserLocation: !store.isPreview && location.hasRequestedLocation
-            && location.isAuthorized, isActive: scenePhase == .active, animated: !reduceMotion,
+          places: mapPlaces, language: preferences.language, focus: store.focus,
+          showsUserLocation: showsUserLocation, isActive: isActive, animated: !reduceMotion,
           isSelectingLocation: selectingLocation, selectedLocation: pickedLocation,
+          metadataNow: metadataNow,
           onPickLocation: pickLocation,
           onUnresolvedCoordinate: coordinateUnavailable,
           onViewport: { store.viewportChanged($0) },
@@ -123,7 +147,7 @@ struct MapScreen: View {
           onScreenCenter: { screenCenter = $0 }
         )
         .accessibilityIdentifier("map.canvas")
-        .accessibilityHidden(detent == .expanded && !selectingLocation)
+        .accessibilityHidden(!adaptive.usesSidebar && detent == .expanded && !selectingLocation)
 
         MapTools(
           spacing: selectedPlace == nil ? 23 : 10,
@@ -133,38 +157,70 @@ struct MapScreen: View {
           showMapAppearance: { modal = .mapAppearance(screenCenter) },
           appearanceTransition: appearanceTransition
         )
-        .position(x: layout.viewport.width - 40, y: panelTop - (selectedPlace == nil ? 131.5 : 116))
+        .position(x: layout.viewport.width - 40,
+                  y: adaptive.usesSidebar ? layout.topInset + 120
+                    : panelTop - (selectedPlace == nil ? 131.5 : 116))
         .opacity(toolsVisible ? 1 : 0)
         .allowsHitTesting(toolsVisible)
         .accessibilityHidden(!toolsVisible)
 
-        panel(layout: layout, height: panelHeight)
-          .frame(
-            width: layout.viewport.width - layout.horizontalInset(at: panelTop) * 2,
-            height: panelHeight
+        if adaptive.usesSidebar {
+          MapSidebar(
+            showsLabels: adaptive.showsNavigationLabels,
+            selection: sidebarDestination, contentVisible: sidebarContentVisible,
+            user: account.user, avatar: account.avatar,
+            onSearch: {
+              openSidebar(.search)
+              Task { @MainActor in
+                await Task.yield()
+                guard !selectingLocation, modal == nil else { return }
+                isSearchFocused = true
+              }
+            },
+            onBookmarks: { openSidebar(.bookmarks) },
+            onContribute: { beginContribution(.create) },
+            onSettings: { isSearchFocused = false; modal = .settingsHome },
+            onAccount: { isSearchFocused = false; modal = .account(.profile) }
           )
-          .background {
-            if reduceTransparency {
-              panelShape.fill(Color(.secondarySystemBackground))
-            } else {
-              panelShape.fill(.ultraThinMaterial)
-            }
-          }
-          .background {
-            panelShape
-              .fill(Color("PanelTint").opacity(0.4 * layout.collapsedProgress(at: panelTop)))
-          }
-          .overlay {
-            panelShape
-              .strokeBorder(.white.opacity(0.28), lineWidth: 0.5)
-              .allowsHitTesting(false)
-          }
-          .clipShape(panelShape)
-          .shadow(color: .black.opacity(0.12), radius: 16, y: 4)
-          .position(x: layout.viewport.width / 2, y: panelTop + panelHeight / 2)
+          .frame(width: adaptive.navigationWidth, height: sidebarHeight)
+          .position(x: adaptive.spacing + adaptive.navigationWidth / 2,
+                    y: sidebarTop + sidebarHeight / 2)
           .opacity(selectingLocation ? 0 : 1)
+          .disabled(selectingLocation)
           .allowsHitTesting(!selectingLocation)
           .accessibilityHidden(selectingLocation)
+
+          if sidebarContentVisible {
+            sidebarContent
+              .frame(width: adaptive.contentWidth, height: sidebarHeight)
+              .clipShape(RoundedRectangle(cornerRadius: 26))
+              .modifier(MapPanelSurface(shape: UnevenRoundedRectangle(cornerRadii: .init(topLeading: 26, bottomLeading: 26, bottomTrailing: 26, topTrailing: 26))))
+              .position(x: adaptive.spacing * 2 + adaptive.navigationWidth + adaptive.contentWidth / 2,
+                        y: sidebarTop + sidebarHeight / 2)
+              .opacity(selectingLocation ? 0 : 1)
+              .disabled(selectingLocation)
+              .allowsHitTesting(!selectingLocation)
+              .accessibilityHidden(selectingLocation)
+          }
+        } else {
+          panel(layout: layout, height: panelHeight)
+            .frame(
+              width: layout.viewport.width - layout.horizontalInset(at: panelTop) * 2,
+              height: panelHeight
+            )
+            .clipShape(panelShape)
+            .modifier(MapPanelSurface(shape: panelShape))
+            .position(x: layout.viewport.width / 2, y: panelTop + panelHeight / 2)
+            .opacity(selectingLocation ? 0 : 1)
+            .allowsHitTesting(!selectingLocation)
+            .accessibilityHidden(selectingLocation)
+
+          grabberButton(layout: layout, panelTop: panelTop)
+            .position(x: layout.viewport.width / 2, y: layout.grabberCenterY(at: panelTop))
+            .opacity(selectingLocation ? 0 : 1)
+            .allowsHitTesting(!selectingLocation)
+            .accessibilityHidden(selectingLocation)
+        }
 
         if selectingLocation {
           VStack {
@@ -172,7 +228,7 @@ struct MapScreen: View {
               Button("Cancel") {
                 selectingLocation = false
                 pickedLocation = nil
-                if contribution.draft?.editable == true { modal = .contribution }
+                if contribution.draft?.editable == true { modal = .contribution() }
               }
               .buttonStyle(.glass).controlSize(.large)
               .accessibilityIdentifier("contribution.cancel-location")
@@ -212,7 +268,26 @@ struct MapScreen: View {
       }
       .frame(width: layout.viewport.width, height: layout.viewport.height)
       .offset(y: -geometry.safeAreaInsets.top)
+      .onChange(of: geometry.size.width) { _, _ in measuredDetail = nil }
+      .onChange(of: adaptive.usesSidebar) { _, wide in
+        guard !wide else { return }
+        if !sidebarContentVisible {
+          sidebarDestination = .search
+          detent = .collapsed
+        } else if isSearchFocused || showsVoiceSearch || sidebarDestination == .bookmarks {
+          detent = .expanded
+        } else if selectedPlace != nil {
+          detent = .nearby
+        }
+      }
     }
+  }
+
+  /// The map surface plus its presentation modifiers (sheets, alerts, links).
+  /// Kept separate from the lifecycle/observation modifiers so no single SwiftUI
+  /// expression grows beyond what the type-checker can handle.
+  private var mapPresentations: some View {
+    mapSurface
     .ignoresSafeArea(.keyboard)
     .sensoryFeedback(.selection, trigger: locationPickFeedback)
     .alert(Text("Map unavailable", tableName: "Coordinates"), isPresented: $showsCoordinateError) {
@@ -251,6 +326,7 @@ struct MapScreen: View {
     .sheet(
       item: $modal,
       onDismiss: {
+        contributionLocationRequest = nil
         pendingBookmark = nil
         bookmarkIntent = UUID()
         contributionIntent = nil
@@ -265,6 +341,7 @@ struct MapScreen: View {
     ) { item in
       switch item {
       case .share(let place): PlaceShareSheet(place: place)
+      case .settingsHome: SettingsHomeSheet(preferences: preferences)
       case .settings(let destination):
         SettingsSheet(preferences: preferences, destination: destination)
       case .mapAppearance(let center):
@@ -286,8 +363,14 @@ struct MapScreen: View {
         AccountSheet(
           store: account, destination: destination, onAuthenticated: resumeAuthenticatedAction,
           onSelect: selectAccountPlace)
-      case .contribution:
-        ContributionSheet(store: contribution) {
+      case .contribution(let editID):
+        ContributionSheet(
+          store: contribution, editID: editID,
+          isFindingLocation: contributionLocationRequest != nil,
+          onFindLocation: findContributionLocation,
+          onCancelLocationRequest: { contributionLocationRequest = nil }
+        ) {
+          contributionLocationRequest = nil
           chooseLocationAfterDismiss = true
           modal = nil
         }
@@ -320,6 +403,10 @@ struct MapScreen: View {
     } message: {
       Text("Check the link and close any open sheet before trying again.")
     }
+  }
+
+  private var mapLifecycle: some View {
+    mapPresentations
     .onChange(of: preferences.language) { _, _ in
       cancelVoiceSearch()
       applyPreferences()
@@ -344,6 +431,12 @@ struct MapScreen: View {
         await account.restore()
         contribution.synchronize()
       }
+    }
+    // A single minute-boundary clock for opening status. It restarts when the
+    // scene becomes active and refreshes immediately on return to foreground;
+    // it never triggers a network request or moves the map.
+    .task(id: scenePhase) {
+      await runMetadataClock()
     }
     .onChange(of: scenePhase) { _, phase in
       if phase == .background
@@ -375,9 +468,13 @@ struct MapScreen: View {
       }
     }
     .onChange(of: account.epoch) { _, _ in
+      if contributionLocationRequest != nil {
+        contributionLocationRequest = nil
+        if case .contribution(editID: nil) = modal { modal = nil }
+      }
       contribution.synchronize()
       if account.user == nil {
-        editLoadTask?.cancel()
+        if sidebarDestination == .bookmarks { sidebarDestination = .search }
         selectingLocation = false
         pickedLocation = nil
         chooseLocationAfterDismiss = false
@@ -386,7 +483,7 @@ struct MapScreen: View {
     }
     .onChange(of: account.user?.publicId) { old, new in
       if old != nil, old != new {
-        editLoadTask?.cancel()
+        contributionLocationRequest = nil
         selectingLocation = false
         pickedLocation = nil
         chooseLocationAfterDismiss = false
@@ -400,6 +497,10 @@ struct MapScreen: View {
         store.removeUnavailable(id)
       }
     }
+  }
+
+  var body: some View {
+    mapLifecycle
     .onChange(of: query) { _, text in
       if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
         account.closeDetail()
@@ -409,6 +510,7 @@ struct MapScreen: View {
       }
     }
     .onDisappear {
+      contributionLocationRequest = nil
       cancelVoiceSearch()
       store.stop()
       connectivity.stop()
@@ -416,11 +518,14 @@ struct MapScreen: View {
     }
     .onChange(of: isSearchFocused) { _, focused in
       if focused {
+        sidebarContentVisible = true
+        sidebarDestination = .search
         cancelVoiceSearch()
         movePanel(to: .expanded)
       }
     }
     .onChange(of: modal?.id) { _, modalID in
+      if modalID != "contribution-new" { contributionLocationRequest = nil }
       if modalID != nil { cancelVoiceSearch() }
     }
     .onChange(of: voice.transcript) { _, text in
@@ -442,21 +547,71 @@ struct MapScreen: View {
         cancelVoiceSearch()
       }
     }
-    .onReceive(
-      NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
-    ) { notification in
-      guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
-      else { return }
-      let screenHeight =
-        UIApplication.shared.connectedScenes
-        .compactMap { $0 as? UIWindowScene }.first?.screen.bounds.height ?? 0
-      keyboardHeight = max(0, screenHeight - frame.minY)
-    }
-    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification))
-    { _ in
-      keyboardHeight = 0
+    .background {
+      MapKeyboardObserver { height in
+        if keyboardHeight != height { keyboardHeight = height }
+      }
     }
     .environment(\.locale, preferences.language.locale)
+    .environment(\.lycorisAppLanguage, preferences.language)
+    .environment(\.lycorisMetadataNow, metadataNow)
+  }
+
+  /// Refreshes the shared opening-status clock on every minute boundary while
+  /// the scene is active, and immediately on foreground return. Cancellation
+  /// (scene change, view teardown) exits the loop without leaving a timer. It
+  /// performs no network work and does not touch the map.
+  private func runMetadataClock() async {
+    guard scenePhase == .active else { return }
+    let fixed = Self.fixedMetadataNow()
+    if let fixed {
+      metadataNow = fixed
+      return
+    }
+    while !Task.isCancelled {
+      let now = Date()
+      metadataNow = now
+      let interval = 60 - (now.timeIntervalSince1970.truncatingRemainder(dividingBy: 60))
+      do {
+        try await Task.sleep(for: .seconds(interval))
+      } catch {
+        return
+      }
+    }
+  }
+
+  /// A fixed test clock for reproducible closing-soon tests. Only a Debug build
+  /// with local test support honors the launch argument; Release always uses
+  /// the real current time.
+  private static func fixedMetadataNow() -> Date? {
+    #if DEBUG && LYCORIS_LOCAL_TESTS
+      let arguments = ProcessInfo.processInfo.arguments
+      guard let index = arguments.firstIndex(of: "-lycoris-test-metadata-now"),
+        arguments.indices.contains(index + 1),
+        let seconds = TimeInterval(arguments[index + 1]),
+        seconds.isFinite
+      else { return nil }
+      return Date(timeIntervalSince1970: seconds)
+    #else
+      return nil
+    #endif
+  }
+
+  /// Fit the actual wrapped text, 11pt gaps and bottom safe area. The estimate
+  /// is used only until the ScrollView has measured its content once.
+  private func detailHeight(geometry: GeometryProxy) -> CGFloat? {
+    guard let selectedPlace else { return nil }
+    if let measuredDetail, measuredDetail.id == selectedPlace.id {
+      return PanelLayout.grabberRealHeight + measuredDetail.height
+    }
+    var height: CGFloat = 208
+    if selectedPlace.hasPhoto {
+      height += (geometry.size.width - 22) * 198 / 353
+    }
+    if selectedPlace.distanceReference != nil { height += 30 }
+    if selectedPlace.venue != nil { height += 30 }
+    height += max(geometry.safeAreaInsets.bottom, 29)
+    return height
   }
 
   private func applyPreferences() {
@@ -466,12 +621,103 @@ struct MapScreen: View {
     account.updateLanguage(preferences.language.rawValue)
   }
 
-  private func panel(layout: PanelLayout, height: CGFloat) -> some View {
-    VStack(spacing: 0) {
-      grabber(layout: layout)
-      if let selectedPlace {
+  private func openSidebar(_ destination: MapSidebarDestination) {
+    cancelVoiceSearch()
+    isSearchFocused = false
+    store.closeDetail()
+    account.closeDetail()
+    sidebarDestination = destination
+    sidebarContentVisible = true
+  }
+
+  private func closeSidebar() {
+    cancelVoiceSearch()
+    isSearchFocused = false
+    sidebarContentVisible = false
+    store.closeDetail()
+    account.closeDetail()
+  }
+
+  private var sidebarTitle: Text {
+    if selectedPlace != nil { Text("Place details") }
+    else if sidebarDestination == .bookmarks { Text("Bookmarks") }
+    else { Text("Search", tableName: "AdaptiveMap") }
+  }
+
+  private var sidebarContent: some View {
+    NavigationStack {
+      Group {
+        if selectedPlace != nil {
+          placeDetails(bottomInset: 12, reportsContentHeight: false)
+        } else if sidebarDestination == .bookmarks && account.user != nil {
+          AccountPlacesView(store: account, created: false, onSelect: selectAccountPlace)
+            .scrollContentBackground(.hidden)
+        } else {
+          sidebarSearch
+        }
+      }
+      .navigationTitle(sidebarTitle)
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .topBarTrailing) {
+          Button(action: closeSidebar) { Image(systemName: "xmark") }
+            .accessibilityLabel(Text("Close panel", tableName: "AdaptiveMap"))
+            .accessibilityIdentifier("map.sidebar.close")
+            .keyboardShortcut(.escape, modifiers: [])
+        }
+      }
+      .toolbarBackground(.hidden, for: .navigationBar)
+      .containerBackground(.clear, for: .navigation)
+    }
+    .accessibilityIdentifier("map.sidebar.content")
+  }
+
+  private var sidebarSearch: some View {
+    VStack(spacing: 11) {
+      MapSearchBar(
+        query: $query, focused: $isSearchFocused, height: max(44, searchHeight),
+        onSubmit: { store.search(query, debounce: false) },
+        user: account.user, avatar: account.avatar,
+        onAccount: { isSearchFocused = false; modal = .account(.profile) },
+        onVoiceSearch: {
+          switch VoiceSearchButtonState(isVoicePanelOpen: showsVoiceSearch, state: voice.state) {
+          case .start: startVoiceSearch()
+          case .stop: finishVoiceSearch()
+          case .recognizing: break
+          case .close: cancelVoiceSearch()
+          }
+        }, voiceActive: showsVoiceSearch, voiceState: voice.state, language: preferences.language,
+        showsAccount: false
+      ).padding(.horizontal, 11)
+      if showsVoiceSearch {
+        VoiceSearchControls(voice: voice, onFinish: finishVoiceSearch, onRetry: startVoiceSearch,
+          onKeyboard: { cancelVoiceSearch(); isSearchFocused = true }, onCancel: cancelVoiceSearch)
+          .padding(.horizontal, 11)
+      }
+      if store.browse != nil || store.pendingNearby != nil {
+        ScrollView {
+          PlaceResultsView(store: store, onSelect: selectPlace) {
+            cancelVoiceSearch()
+            query = ""
+            store.closeResults()
+          }.padding(.horizontal, 11).padding(.bottom, 12)
+        }
+      } else {
+        MapPanelContent(
+          preferences: preferences, onSettings: { modal = .settings($0) },
+          cardHeight: cardHeight, showsSettings: false, bottomInset: 12,
+          viewportState: store.viewportState, onRetry: store.retryResults,
+          bookmarks: [], onCategory: showNearby, onSelect: selectPlace,
+          onUnavailableAction: { showsUnavailableAction = true }, singleColumnCategories: true)
+      }
+    }
+    .scrollDismissesKeyboard(.interactively)
+  }
+
+  @ViewBuilder private func placeDetails(bottomInset: CGFloat, reportsContentHeight: Bool) -> some View {
+    if let selectedPlace {
         PlaceDetailView(
-          place: selectedPlace, bottomInset: layout.bottomInset,
+          place: selectedPlace, bottomInset: bottomInset,
           state: account.selectedMarker == nil ? store.detailState : account.detailState,
           onRetry: {
             if let marker = account.selectedMarker {
@@ -490,11 +736,37 @@ struct MapScreen: View {
           onNavigate: { navigate(selectedPlace) },
           onEdit: { if let id = Int64(selectedPlace.id) { beginContribution(.edit(id)) } },
           isBookmarked: Int64(selectedPlace.id).map(account.isBookmarked) ?? false,
-          bookmarkBusy: account.isBusy || account.libraryLoading || account.isChecking,
+          bookmarkBusy: account.isBusy || account.bookmarkStatusLoading,
           onBookmark: { bookmark(selectedPlace) },
           authenticatedPhoto: account.selectedMarker != nil,
           photo: account.selectedPhoto, photoFailed: account.photoFailed,
+          reportsContentHeight: reportsContentHeight,
+          onContentHeight: { height in
+            // The panel narrows during a drag. Measure its resting full width,
+            // without feeding transient wrapping back into the drag geometry.
+            guard height > 0 else { return }
+            measuredDetail = (selectedPlace.id, height)
+          },
           onUnavailableAction: { showsUnavailableAction = true })
+    }
+  }
+
+  private func panel(layout: PanelLayout, height: CGFloat) -> some View {
+    VStack(spacing: 0) {
+      grabberPlaceholder(layout: layout)
+      if selectedPlace != nil {
+        placeDetails(bottomInset: layout.bottomInset,
+                     reportsContentHeight: dragTranslation == 0 && detent != .collapsed)
+      } else if sidebarDestination == .bookmarks && account.user != nil {
+        NavigationStack {
+          AccountPlacesView(store: account, created: false, onSelect: selectAccountPlace)
+            .toolbar {
+              ToolbarItem(placement: .topBarTrailing) {
+                Button("Close") { sidebarDestination = .search }
+                  .accessibilityIdentifier("map.bookmarks.close")
+              }
+            }
+        }
       } else {
         MapSearchBar(
           query: $query, focused: $isSearchFocused, height: max(44, searchHeight),
@@ -505,11 +777,28 @@ struct MapScreen: View {
             if store.isPreview { showsUnavailableAction = true } else { modal = .account(.profile) }
           },
           onVoiceSearch: {
-            if showsVoiceSearch { finishVoiceSearch() } else { startVoiceSearch() }
-          }, voiceActive: showsVoiceSearch
+            switch VoiceSearchButtonState(
+              isVoicePanelOpen: showsVoiceSearch, state: voice.state)
+            {
+            case .start:
+              startVoiceSearch()
+            case .stop:
+              finishVoiceSearch()
+            case .recognizing:
+              break
+            case .close:
+              cancelVoiceSearch()
+            }
+          }, voiceActive: showsVoiceSearch, voiceState: voice.state,
+          language: preferences.language
         )
         .padding(.horizontal, 14)
         .padding(.bottom, detent == .collapsed ? 14 : detent == .nearby ? 7 : 11)
+        .contentShape(Rectangle())
+        // The floating search row is the collapsed panel's drag surface. Once
+        // open, leave text editing and content scrolling to their native controls.
+        .highPriorityGesture(
+          panelDrag(layout: layout), including: detent == .collapsed ? .all : .subviews)
 
         if showsVoiceSearch {
           VoiceSearchControls(
@@ -569,25 +858,45 @@ struct MapScreen: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
   }
 
-  private func grabber(layout: PanelLayout) -> some View {
+  /// In-panel transparent placeholder that reserves the original 44→14pt layout
+  /// space and draws nothing. It is not an accessibility element; the real handle
+  /// is a sibling and draws the visible capsule.
+  private func grabberPlaceholder(layout: PanelLayout) -> some View {
     let progress = layout.collapsedProgress(
       at: layout.clampedTop(layout.top(for: detent) + dragTranslation))
+    return Color.clear
+      .frame(maxWidth: .infinity)
+      .frame(height: 44 - 30 * progress)
+      .accessibilityHidden(true)
+      .allowsHitTesting(false)
+  }
+
+  /// The real 44pt handle Button. It lives outside the panel's clipShape as a
+  /// root-ZStack sibling so it stays fully tappable while collapsed; its bottom
+  /// edge aligns with the in-panel placeholder and it overhangs 30pt upward.
+  private func grabberButton(layout: PanelLayout, panelTop: CGFloat) -> some View {
+    let progress = layout.collapsedProgress(at: panelTop)
     return Button {
       movePanel(to: detent == .collapsed ? .nearby : detent == .nearby ? .expanded : .collapsed)
     } label: {
       Capsule().fill(.secondary.opacity(0.4))
         .frame(width: 48, height: 4)
-        // At rest the search row has 14pt above and below. Restore the full
-        // handle area continuously as the floating search panel is pulled up.
-        .frame(maxWidth: .infinity).frame(height: 44 - 30 * progress)
+        // The visible capsule keeps its exact old position within the 44pt
+        // button: 15*progress below centre puts it at the placeholder midline.
+        .offset(y: 15 * progress)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
+    .frame(width: layout.grabberWidth(at: panelTop), height: PanelLayout.grabberRealHeight)
+    // Make the whole 44pt frame tappable, not only the 4pt capsule glyph.
+    .contentShape(Rectangle())
     .accessibilityLabel("Map panel")
     .accessibilityValue(
       selectedPlace != nil && detent == .nearby ? Text("Place details") : detent.accessibilityName
     )
     .accessibilityIdentifier("map.panel.handle")
+    .accessibilitySortPriority(2)
     .accessibilityAdjustableAction { direction in
       let states = MapPanelDetent.allCases
       guard let index = states.firstIndex(of: detent) else { return }
@@ -597,28 +906,30 @@ struct MapScreen: View {
       @unknown default: break
       }
     }
-    .highPriorityGesture(
-      DragGesture(minimumDistance: 10, coordinateSpace: .global)
-        .updating($dragTranslation) { value, translation, _ in
-          if abs(value.translation.height) > abs(value.translation.width) {
-            translation = value.translation.height
-          }
-        }
-        .onChanged { value in
-          guard abs(value.translation.height) > abs(value.translation.width) else { return }
-          isSearchFocused = false
-        }
-        .onEnded { value in
-          guard abs(value.translation.height) > abs(value.translation.width) else { return }
-          let target = layout.nearest(
-            to: layout.top(for: detent) + value.predictedEndTranslation.height)
-          movePanel(to: target)
-        }
-    )
+    .highPriorityGesture(panelDrag(layout: layout))
+  }
 
+  private func panelDrag(layout: PanelLayout) -> some Gesture {
+    DragGesture(minimumDistance: 10, coordinateSpace: .global)
+      .updating($dragTranslation) { value, translation, _ in
+        if abs(value.translation.height) > abs(value.translation.width) {
+          translation = value.translation.height
+        }
+      }
+      .onChanged { value in
+        guard abs(value.translation.height) > abs(value.translation.width) else { return }
+        isSearchFocused = false
+      }
+      .onEnded { value in
+        guard abs(value.translation.height) > abs(value.translation.width) else { return }
+        let target = layout.nearest(
+          to: layout.top(for: detent) + value.predictedEndTranslation.height)
+        movePanel(to: target)
+      }
   }
 
   private func selectPlace(_ place: PlacePresentation) {
+    sidebarContentVisible = true
     cancelVoiceSearch()
     if let marker = (account.bookmarks + account.created).first(where: { String($0.id) == place.id }
     ) {
@@ -634,6 +945,8 @@ struct MapScreen: View {
   }
 
   private func showNearby(_ category: PlaceCategory) {
+    sidebarDestination = .search
+    sidebarContentVisible = true
     guard store.isPreview || screenCenter != nil else {
       coordinateUnavailable()
       return
@@ -650,6 +963,7 @@ struct MapScreen: View {
   }
 
   private func locate() {
+    mapCoordinates.resolveIfNeeded(retryPending: true)
     requestLocation(showFailure: true)
   }
 
@@ -667,12 +981,18 @@ struct MapScreen: View {
       return
     }
     let token = store.beginLocationRequest()
+    location.refreshAuthorization()
+    let followsImmediately = showFailure && location.isAuthorized
+    if followsImmediately { store.followUserLocation(token: token) }
     location.request { result in
       if case .failure(.denied) = result { awaitsLocationAuthorization = true }
       guard store.acceptsLocation(token) else { return }
       if !showFailure && (modal != nil || selectingLocation || isSearchFocused) { return }
       switch result {
-      case .success(let point): store.locate(point, token: token)
+      case .success(let point):
+        // A manual tap has already started native following. A later Core Location
+        // fix updates canonical data without pulling back a map the user has panned.
+        store.locate(point, token: token, focusMap: !followsImmediately)
       case .failure(let failure):
         guard showFailure else { return }
         locationDenied = failure == .denied
@@ -709,6 +1029,7 @@ struct MapScreen: View {
     }
     withAnimation(reduceMotion ? nil : .spring(response: 0.36, dampingFraction: 0.86)) {
       if newDetent == .collapsed {
+        sidebarDestination = .search
         store.closeDetail()
         account.closeDetail()
       }
@@ -717,6 +1038,7 @@ struct MapScreen: View {
   }
 
   private func selectAccountPlace(_ marker: Marker) {
+    sidebarContentVisible = true
     cancelVoiceSearch()
     isSearchFocused = false
     account.select(marker)
@@ -737,7 +1059,7 @@ struct MapScreen: View {
       return
     }
     Task {
-      await account.toggleBookmark(id)
+      await account.toggleBookmark(id, marker: account.selectedMarker ?? store.selectedMarker)
       showsAccountError = account.message != nil
     }
   }
@@ -773,7 +1095,6 @@ struct MapScreen: View {
 
   private func beginContribution(_ intent: ContributionIntent) {
     cancelVoiceSearch()
-    editLoadTask?.cancel()
     guard !store.isPreview else {
       showsUnavailableAction = true
       return
@@ -786,29 +1107,64 @@ struct MapScreen: View {
     contribution.synchronize()
     isSearchFocused = false
     if let draft = contribution.draft, draft.phase != .complete {
-      modal = .contribution
+      modal = .contribution()
       return
     }
     switch intent {
     case .create:
-      enterLocationSelection()
+      beginContributionAtCurrentLocation()
     case .edit(let id):
-      editLoadTask = Task {
+      modal = .contribution(editID: id)
+    }
+  }
+
+  private func beginContributionAtCurrentLocation() {
+    guard let owner = account.user?.publicId else { return }
+    do {
+      if contribution.draft?.phase == .complete { try contribution.discard() }
+    } catch {
+      contributionError = String(appLocalized: "Could not save the contribution on this device.")
+      return
+    }
+    contributionLocationRequest = ContributionLocationRequest(owner: owner, epoch: account.epoch)
+    modal = .contribution()
+  }
+
+  /// Start only after the sheet appears: a previously denied permission can
+  /// fail synchronously, and its fallback still needs a real sheet dismissal.
+  private func findContributionLocation() {
+    guard let request = contributionLocationRequest,
+      account.epoch == request.epoch, account.user?.publicId == request.owner,
+      case .contribution(editID: nil) = modal, contribution.draft == nil
+    else { return }
+    contributionLocation.request { result in
+      guard contributionLocationRequest?.id == request.id,
+        account.epoch == request.epoch, account.user?.publicId == request.owner,
+        case .contribution(editID: nil) = modal,
+        contribution.draft == nil
+      else { return }
+      contributionLocationRequest = nil
+      switch result {
+      case .success(let point):
         do {
-          try await contribution.edit(id)
-          modal = .contribution
+          try contribution.begin(at: point)
         } catch {
-          guard !Task.isCancelled, !(error is CancellationError) else { return }
-          contributionError =
-            (error as? AccountFailure)?.message
-            ?? String(appLocalized: "Could not load places. Please try again.")
+          modal = nil
+          contributionError = String(
+            appLocalized: "Could not save the contribution on this device.")
         }
+      case .failure:
+        // A missing GPS fix must never silently turn the map center into the
+        // contribution's location. Fall back to explicit map selection.
+        chooseLocationAfterDismiss = true
+        modal = nil
       }
     }
   }
 
   private func enterLocationSelection(at point: GeoPoint? = nil) {
     guard account.user != nil else { return }
+    contributionLocationRequest = nil
     movePanel(to: .collapsed)
     pickedLocation = point
     if let point { store.focusMap(on: point) }
@@ -833,13 +1189,15 @@ struct MapScreen: View {
       try contribution.move(to: point)
       selectingLocation = false
       pickedLocation = nil
-      modal = .contribution
+      modal = .contribution()
     } catch {
       contributionError = String(appLocalized: "Could not save the contribution on this device.")
     }
   }
 
   private func startVoiceSearch() {
+    sidebarDestination = .search
+    sidebarContentVisible = true
     cancelVoiceSearch()
     voice = VoiceSearchController()
     account.closeDetail()
@@ -883,18 +1241,26 @@ private enum ContributionIntent {
   case edit(Int64)
 }
 
+private struct ContributionLocationRequest {
+  let id = UUID()
+  let owner: String
+  let epoch: UUID
+}
+
 private enum MapModal: Identifiable {
   case account(AccountDestination)
   case share(PlacePresentation)
-  case contribution
+  case contribution(editID: Int64? = nil)
   case settings(SettingsDestination)
+  case settingsHome
   case mapAppearance(GeoPoint?)
   case link(PlaceLink)
   var id: String {
     switch self {
     case .account: "account"
     case .share(let place): "share-\(place.id)"
-    case .contribution: "contribution"
+    case .contribution(let id): "contribution-\(id.map(String.init) ?? "new")"
+    case .settingsHome: "settings-home"
     case .settings(let destination): "settings-\(destination.rawValue)"
     case .mapAppearance: "map-appearance"
     case .link(let link): "link-\(link.id)"

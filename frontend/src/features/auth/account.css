@@ -12,10 +12,12 @@
 }
 .account-desktop {
     left: 50%;
-    top: 50%;
+    /* Centre inside the shared visual window (offsetTop + height) so the dialog
+       stays visible when the keyboard pans the viewport. */
+    top: calc(var(--map-viewport-offset-top, 0px) + var(--map-viewport-height, 100dvh) / 2);
     transform: translate(-50%, -50%);
     width: 375px;
-    height: min(758px, calc(100dvh - 32px));
+    height: min(758px, calc(var(--map-viewport-height, 100dvh) - 32px));
     border-radius: 25px;
     background: #e8def8;
     box-shadow: 0 4px 4px #fcddec;
@@ -38,7 +40,7 @@
     display: flex;
     flex-direction: column;
     height: auto;
-    max-height: calc(100dvh - 32px);
+    max-height: calc(var(--map-viewport-height, 100dvh) - 32px);
     border: 3px solid var(--ui-brand);
     box-shadow: 4px 4px 4px #e6cbff42;
 }
@@ -212,8 +214,12 @@
     overflow-wrap: anywhere;
 }
 .account-mobile {
-    top: 46px;
-    bottom: 0;
+    /* Anchored to the same visual-viewport snapshot as the map shell, so the
+       sheet stays inside the visible window when the iOS URL bar or keyboard
+       resizes the viewport. Falls back to 100dvh outside the map. */
+    top: calc(var(--map-viewport-offset-top, 0px) + 46px);
+    height: calc(var(--map-viewport-height, 100dvh) - 46px);
+    bottom: auto;
     left: 0;
     right: 0;
     border-radius: 10px 10px 0 0;
@@ -307,6 +313,12 @@ body:has(.account-mobile) .mobile-sheet {
     height: 100%;
     border-radius: 50%;
     object-fit: cover;
+}
+.account-guest-icon {
+    width: 60%;
+    height: 60%;
+    flex: none;
+    color: #626269;
 }
 .desktop-guest-account {
     position: absolute;
@@ -515,5 +527,41 @@ body:has(.account-mobile) .mobile-sheet {
 .account-desktop.account-profile,
 .account-desktop.account-password,
 .account-desktop.account-created {
-    height: min(758px, calc(100dvh - 32px));
+    height: min(758px, calc(var(--map-viewport-height, 100dvh) - 32px));
+}
+
+.verification-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 11px;
+}
+.design-button.verification-send {
+    min-height: 44px;
+    max-width: 155px;
+    white-space: normal;
+    padding: 8px 11px;
+    border: 1px solid var(--ui-brand);
+    border-radius: 22px;
+    background: var(--ui-brand-blush);
+    color: var(--ui-brand);
+    font: 500 14px/20px var(--ui-font-body);
+    text-align: center;
+}
+.verification-send:disabled {
+    opacity: 0.6;
+}
+.auth-switch .auth-forgot {
+    margin-left: auto;
+}
+.account-desktop.account-reset {
+    height: auto;
+    max-height: calc(var(--map-viewport-height, 100dvh) - 32px);
+    border: 3px solid var(--ui-brand);
+}
+.account-reset .account-dialog-inner {
+    min-height: 0;
+}
+.account-reset .account-dialog-scroll {
+    height: auto;
 }

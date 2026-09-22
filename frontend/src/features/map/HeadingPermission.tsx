@@ -1,12 +1,17 @@
 import { useState } from 'react'
 import { useUi } from '@/shared/i18n/ui'
 import { DesignButton, IconButton } from '@/shared/ui/design-primitives'
-import { enableDeviceHeading, useHeadingPermission } from './useDeviceHeading'
+import {
+    dismissHeadingGuide,
+    enableDeviceHeading,
+    hasRememberedHeadingChoice,
+    useHeadingPermission,
+} from './useDeviceHeading'
 
 /**
  * iOS Safari only exposes compass readings after a real user activation. This
- * notice appears as soon as the page knows a gesture is required (independent
- * of geolocation) and asks for that activation through an explicit button. The
+ * first-visit notice asks for activation through an explicit button. A saved
+ * choice suppresses repeat guides, but never pretends permission is granted. The
  * click handler calls `requestPermission(true)` synchronously; no other API is
  * awaited first. On desktop/Android, where no request is needed, it renders
  * nothing.
@@ -14,7 +19,7 @@ import { enableDeviceHeading, useHeadingPermission } from './useDeviceHeading'
 export function HeadingPermission() {
     const ui = useUi()
     const permission = useHeadingPermission()
-    const [dismissed, setDismissed] = useState(false)
+    const [dismissed, setDismissed] = useState(hasRememberedHeadingChoice)
     if (dismissed || permission === 'unsupported' || permission === 'granted') return null
     const denied = permission === 'denied'
     return (
@@ -41,7 +46,10 @@ export function HeadingPermission() {
                 icon="close"
                 size={16}
                 label="Dismiss notification"
-                onClick={() => setDismissed(true)}
+                onClick={() => {
+                    dismissHeadingGuide()
+                    setDismissed(true)
+                }}
             />
         </div>
     )

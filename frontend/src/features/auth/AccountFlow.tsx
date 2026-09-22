@@ -2,7 +2,7 @@ import { createContext, useContext, useRef, useState, type ReactNode } from 'rea
 import type { PrivateScope } from '@/shared/query/keys'
 import { useSession } from './SessionProvider'
 
-export type AccountView = 'login' | 'register' | 'profile' | 'password' | 'created'
+export type AccountView = 'login' | 'register' | 'reset' | 'profile' | 'password' | 'created'
 type Resume = (scope: PrivateScope) => void | Promise<void>
 type AccountFlow = {
     view: AccountView | null

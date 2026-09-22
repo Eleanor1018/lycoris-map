@@ -27,6 +27,7 @@ pub mod cli;
 pub mod config;
 pub mod db;
 pub mod dto;
+pub mod email_verification;
 pub mod error;
 pub mod healthcheck;
 pub mod media;

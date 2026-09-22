@@ -71,7 +71,7 @@ class AccountFormsTest {
         var returned = false
         compose.setContent {
             LycorisTheme { Surface { Column(Modifier.padding(30.dp)) {
-                RegisterForm(Language.ZH, false, { _, _, _, _ -> }, { returned = true })
+                RegisterForm(Language.ZH, false, { _, _, _, _, _ -> }, { returned = true }, onSendCode = {})
             } } }
         }
         compose.onNode(hasSetTextAction() and hasText("邮箱")).assertExists()

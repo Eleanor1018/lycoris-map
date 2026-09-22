@@ -74,6 +74,85 @@ browser Origin and authentication, streams bodies, does not follow upstream
 redirects, and marks browser-facing responses private and uncacheable. The fixed
 backend origin is server-side and is not embedded in the browser bundle.
 
+## OSM edge tiles
+
+Web maps use `/tiles/osm/{z}/{x}/{y}.png` on the current site origin. The Pages
+Worker fetches the fixed `tile.openstreetmap.org` HTTPS upstream directly,
+without going through the Rust backend or Tencent server. Only canonical tile
+coordinates at zooms 0–19 and GET/HEAD are accepted. Arbitrary upstream URLs,
+query strings, write methods and invalid coordinates are rejected.
+
+The upstream receives a stable `LycorisMaps` User-Agent and the real browser
+Referer, but no app cookies or authorization. Cloudflare's fetch cache follows
+OSM freshness headers and validators; browser reload directives cannot bypass
+the shared cache. Successful responses retain caching/conditional headers.
+Errors and blocked images return uncacheable failures. Diagnostic response
+headers `X-Lycoris-Tile-Source: osm-worker` and `X-Lycoris-Tile-Cache` identify
+the route and edge cache status. The visible OSM attribution remains on the map.
+No bulk loading or offline download is introduced.
+
+The official site was verified without a configured proxy on 2026-09-20 after
+PR #30 merged: HTTP 200, 256×256 PNG, 37,809 bytes, edge HIT. Local Vite
+development forwards this path to the official site. Default providers and
+recovery follow the language policy below.
+
+## Tencent Maps
+
+Set `VITE_TENCENT_MAP_KEY` to the JavaScript API GL **browser key** in both
+Production and Preview build variables. Local development uses ignored
+`.env.local`. This value is public in the browser bundle; actual keys must not
+be committed. An absent key disables the Tencent choice and invalid saved
+selections follow the available language defaults. Each variable change needs a new build.
+
+Selecting Tencent loads its official `map.qq.com/api/gljs` SDK asynchronously
+with the required callback parameter. The SDK renders the base map while
+Leaflet retains the existing controls, markers and picking behavior. A CRS
+adapter converts WGS84 at the map boundary to GCJ-02 and back; backend queries,
+stored markers, location and contributed coordinates remain WGS84. The same
+mainland coverage data and conversion approximation as the native apps are
+used, including unchanged overseas/Hong Kong/Taipei coordinates. See
+`src/features/map/tencent/LICENSE.txt`. This is not a surveying transformation.
+
+The SDK and projection dataset load in parallel on selection. After a visible
+OSM/Tianditu basemap has loaded, they can also warm silently during idle time.
+Warmup waits for document load, three seconds without resource completions or
+interaction, and `requestIdleCallback` where available. It skips hidden/offline
+pages, Save-Data and reported 2G/3G connections. SDK warmup uses low fetch priority;
+selection reuses the same promise and raises its priority. No map instance or
+provider tiles are prefetched. Network quiet is best-effort: browsers do not
+expose a universal pending-request/network-idle signal.
+
+Tencent supports zooms 3–19 in this integration. Pan and pinch remain continuous;
+discrete CSS zoom animation is disabled only while this WebGL provider is active
+to keep markers aligned. Leaving the layer destroys its GPU context and restores
+the OSM projection. SDK load failures, visible-page tile deadlines and GPU context
+loss enter the recovery chain below. Cached Tencent views may complete through
+its idle event without a new tilesloaded event. The picker uses an actual image
+from Tencent Static Map API v2, with linked provider credit.
+
+References: [OSM tile policy](https://operations.osmfoundation.org/policies/tiles/),
+[Tencent JavaScript API GL](https://lbs.qq.com/webApi/javascriptGL/glGuide/glBasic).
+
+## Language defaults and recovery
+
+Without a saved manual map choice, Chinese uses Tencent → Tianditu → OSM;
+English uses OSM → Tencent → Tianditu. Missing browser keys are skipped. Explicit
+map choices remain saved; automatic defaults and temporary fallback are never
+persisted by radius/category edits. Defaults follow the app language, including
+browser detection, saved language and the URL override.
+
+Each recovery round tries every available provider at most once. A manual map
+selection or Retry starts a new round. Raster providers are monitored through
+real Leaflet requests: isolated edge-tile errors are tolerated, largely failed
+batches or a 20-second zero-success load trigger recovery. Deadlines pause in
+hidden/offline pages; reconnection retries the active renderer. No arbitrary
+health-check tiles or polling are added. Exhaustion shows a dismissible retry
+message, while the current camera and point data stay intact.
+
+The source picker displays three compact previews in one row. The attribution
+control uses the Leaflet text link without its flag graphic; all provider
+attributions remain visible.
+
 ## Private R2 media and thumbnails
 
 The Rust image route supports `?variant=thumb` (fits within 640 × 640) and

@@ -20,9 +20,19 @@ struct AccountFailure: Error, Equatable, Sendable {
   let status: Int
   var code: Int? = nil
   var requestID: String? = nil
+  var retryAfterSeconds: Int? = nil
 
   var message: String {
-    switch status {
+    switch code {
+    case 40021: return String(appLocalized: "Verification code is invalid or expired.")
+    case 40022: return String(appLocalized: "Enter a valid email address.")
+    case 42931: return String(appLocalized: "Too many incorrect codes. Try again in one hour.")
+    case 42932: return String(appLocalized: "Please wait before requesting another code.")
+    case 50321:
+      return String(appLocalized: "Email verification is temporarily unavailable. Try again later.")
+    default: break
+    }
+    return switch status {
     case 0: String(appLocalized: "Could not reach the service. Please try again.")
     case 401: String(appLocalized: "Please log in again.")
     case 404: String(appLocalized: "This item is no longer available.")
@@ -96,6 +106,7 @@ struct AccountAPI: AccountServing {
     request.setValue(input.contentType, forHTTPHeaderField: "Content-Type")
     request.setValue("application/json", forHTTPHeaderField: "Accept")
     request.setValue("no-store", forHTTPHeaderField: "Cache-Control")
+    request.setValue(AppLanguage.current().rawValue, forHTTPHeaderField: "X-App-Language")
     let (data, response) = try await session.data(for: request)
     guard let response = response as? HTTPURLResponse else { throw AccountFailure(status: 0) }
     if response.value(forHTTPHeaderField: "Set-Cookie") != nil,
@@ -107,7 +118,8 @@ struct AccountAPI: AccountServing {
       throw AccountFailure(
         status: response.statusCode,
         code: (try? JSONDecoder().decode(ServiceCode.self, from: data))?.code,
-        requestID: response.value(forHTTPHeaderField: "X-Request-ID"))
+        requestID: response.value(forHTTPHeaderField: "X-Request-ID"),
+        retryAfterSeconds: response.value(forHTTPHeaderField: "Retry-After").flatMap(Int.init))
     }
     return data
   }

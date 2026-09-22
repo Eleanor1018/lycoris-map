@@ -36,6 +36,7 @@ struct PlaceResultsView: View {
         .padding(.horizontal, 3)
       }
     }
+    .accessibilityElement(children: .contain)
     .accessibilityIdentifier("places.results")
   }
 }
@@ -50,10 +51,12 @@ extension Optional where Wrapped == PlaceStore.Browse {
 struct PlaceLoadStatus: View {
   let state: PlaceStore.LoadState
   var empty = false
+  var spacing: CGFloat = 8
+  var horizontalInset: CGFloat = 6
   let retry: () -> Void
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: spacing) {
       switch state {
       case .loading:
         HStack(spacing: 8) {
@@ -68,7 +71,7 @@ struct PlaceLoadStatus: View {
       }
     }
     .font(.subheadline).foregroundStyle(.secondary)
-    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 6)
+    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, horizontalInset)
     .accessibilityIdentifier("places.status")
   }
 }

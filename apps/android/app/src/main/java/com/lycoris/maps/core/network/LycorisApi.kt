@@ -8,6 +8,7 @@ import okhttp3.RequestBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
+import retrofit2.http.Header
 import retrofit2.http.GET
 import retrofit2.http.Multipart
 import retrofit2.http.PATCH
@@ -29,8 +30,16 @@ class RegisterRequest(
     val nickname: String,
     val email: String,
     val password: String,
+    val verificationCode: String,
     val website: String = "",
 )
+
+@Serializable
+class EmailCodeRequest(val email: String, val purpose: String)
+@Serializable
+class ResetPasswordRequest(val email: String, val verificationCode: String, val newPassword: String)
+@Serializable
+data class EmailCodeReceipt(val retryAfterSeconds: Int, val expiresInSeconds: Int)
 
 @Serializable
 class ChangePasswordRequest(val oldPassword: String, val newPassword: String)
@@ -111,6 +120,12 @@ interface LycorisApi {
 
     @POST("api/register")
     suspend fun register(@Body request: RegisterRequest): Response<AuthEnvelope<User>>
+
+    @POST("api/auth/email-code")
+    suspend fun sendEmailCode(@Body request: EmailCodeRequest, @Header("X-App-Language") language: String): Response<AuthEnvelope<EmailCodeReceipt>>
+
+    @POST("api/auth/reset-password")
+    suspend fun resetPassword(@Body request: ResetPasswordRequest): Response<AuthEnvelope<Unit>>
 
     @GET("api/me")
     suspend fun me(): Response<AuthEnvelope<User>>

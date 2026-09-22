@@ -1,6 +1,8 @@
 import { isSettingsPanel, settingsTitles, SettingsContent } from '@/features/preferences/Settings'
 import { useUi } from '@/shared/i18n/ui'
+import { useCallback, useState } from 'react'
 import { FigmaIcon } from '@/shared/ui/figma-icon'
+import type { VoiceSearchState } from '@/shared/ui/design-primitives'
 import { CategoryBadge, DesignButton, IconButton, NearbyCards, SearchField } from './primitives'
 import type { DesignSample, Panel } from './types'
 import { ContributionForm, type ContributionFormProps } from './ContributionForm'
@@ -30,6 +32,10 @@ type Props = {
 export function DesktopPanel(props: Props) {
     const ui = useUi()
     const { panel, sample, close, open } = props
+    const [voice, setVoice] = useState(false)
+    const onVoiceChange = useCallback((next: VoiceSearchState) => {
+        setVoice(next.active || next.finishing)
+    }, [])
     if (panel === 'initial') return null
     if (panel === 'contribute-form' && props.contribution)
         return (
@@ -57,10 +63,14 @@ export function DesktopPanel(props: Props) {
             <IconButton className="panel-close" icon="close" label="Close panel" onClick={close} />
             {panel === 'search' && (
                 <>
-                    <SearchField value={props.search} onChange={props.setSearch} />
-                    {props.browse &&
-                    (props.browse.mode === 'search' || props.browse.mode === 'cluster') &&
-                    props.selectPlace ? (
+                    <SearchField
+                        value={props.search}
+                        onChange={props.setSearch}
+                        onVoiceChange={onVoiceChange}
+                    />
+                    {voice ? null : props.browse &&
+                      (props.browse.mode === 'search' || props.browse.mode === 'cluster') &&
+                      props.selectPlace ? (
                         <PlaceResults browse={props.browse} onSelect={props.selectPlace} />
                     ) : (
                         <>

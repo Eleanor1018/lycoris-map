@@ -130,15 +130,56 @@ struct MapCoordinateTests {
     resolver.resolveIfNeeded()
     try await waitFor { service.requests == 1 }
     resolver.stop()
-    service.finish(.gcj02)
+    service.finish(.wgs84)
     for _ in 0..<10 { await Task.yield() }
-    #expect(resolver.space == .unresolved)
+    #expect(resolver.space == .gcj02)
     resolver.resolveIfNeeded()
     try await waitFor { service.requests == 2 }
     service.finish(.wgs84)
     try await waitFor { resolver.space == .wgs84 }
     resolver.resolveIfNeeded()
     #expect(service.requests == 2)
+  }
+
+  @MainActor @Test func failedCalibrationDoesNotPreventViewportRequestsOrPinProjection()
+    async throws
+  {
+    let calibration = DeferredCalibration()
+    let resolver = MapCoordinateResolver(lookup: calibration.lookup)
+    resolver.resolveIfNeeded()
+    try await waitFor { calibration.requests == 1 }
+    let point = GeoPoint(latitude: 31.2304, longitude: 121.4737)!
+    let map = MKMapView(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
+    map.setCamera(
+      MKMapCamera(
+        lookingAtCenter: GCJ02.forward(point).coordinate,
+        fromDistance: 4000, pitch: 0, heading: 0), animated: false)
+    // Browsing must work while the lookup is pending and after it fails.
+    let viewport = try #require(
+      MapViewport(rect: map.visibleMapRect, center: map.centerCoordinate, space: resolver.space))
+    calibration.finish(nil)
+    for _ in 0..<10 { await Task.yield() }
+    #expect(
+      MapViewport(
+        rect: map.visibleMapRect, center: map.centerCoordinate,
+        space: resolver.space) == viewport)
+
+    let api = DeferredMarkers()
+    let store = PlaceStore(api: api)
+    defer { store.stop() }
+    store.viewportChanged(viewport, debounce: false)
+    for _ in 0..<100 {
+      if await api.count() > 0 { break }
+      try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(await api.requests == viewport.bounds.map { .list(.viewport($0)) })
+    await api.finish(0, .success([sampleMarker(1)]))
+    try await waitFor { store.viewportState == .loaded }
+    let place = try #require(store.mapPlaces.first)
+    let pin = try #require(place.point.flatMap(resolver.space.coordinate))
+    #expect(store.mapPlaces.count == 1)
+    #expect(abs(pin.latitude - 31.22845773757727) < 1e-9)
+    #expect(abs(pin.longitude - 121.47822305927693) < 1e-9)
   }
 
   @MainActor @Test func permissionRecoveryBeforeFailedLookupStillRetries() async throws {
@@ -149,8 +190,8 @@ struct MapCoordinateTests {
     resolver.resolveIfNeeded(retryPending: true)
     service.finish(nil)
     try await waitFor { service.requests == 2 }
-    service.finish(.gcj02)
-    try await waitFor { resolver.space == .gcj02 }
+    service.finish(.wgs84)
+    try await waitFor { resolver.space == .wgs84 }
     #expect(service.requests == 2)
   }
 

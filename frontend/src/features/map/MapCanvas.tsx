@@ -1,12 +1,19 @@
 import 'leaflet/dist/leaflet.css'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { CircleMarker, MapContainer, TileLayer, Tooltip, useMap } from 'react-leaflet'
+import {
+    AttributionControl,
+    CircleMarker,
+    MapContainer,
+    TileLayer,
+    Tooltip,
+    useMap,
+} from 'react-leaflet'
 import L, { type Map as LeafletMap } from 'leaflet'
 import type { Language } from '@/shared/i18n'
 import { resolveTitle, type SyntheticMarker } from './syntheticMarkers'
 import { toLeafletTuple } from './coords'
 
-const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+const TILE_URL = '/tiles/osm/{z}/{x}/{y}.png'
 const OSM_ATTRIBUTION =
     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 
@@ -71,8 +78,9 @@ export function MapCanvas({ markers, language }: MapCanvasProps) {
                 className="h-full w-full"
                 // No extra Leaflet controls; S2 designs the real UI chrome.
                 zoomControl={false}
-                attributionControl
+                attributionControl={false}
             >
+                <AttributionControl prefix='<a href="https://leafletjs.com/" title="A JavaScript library for interactive maps">Leaflet</a>' />
                 <TileLayer url={TILE_URL} attribution={OSM_ATTRIBUTION} />
                 <MapInstanceProbe onInstance={handleInstance} />
                 <ViewReporter onChange={handleViewChange} />

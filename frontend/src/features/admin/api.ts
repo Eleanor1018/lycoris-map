@@ -4,6 +4,7 @@ import {
     markerListSchema,
     markerSchema,
     markerCategorySchema,
+    venueTypeReadSchema,
     reviewStatusSchema,
 } from '@/shared/api/markers'
 import { markerTextSchema, type MarkerText } from '@/shared/api/markerWrites'
@@ -37,6 +38,7 @@ export const editSchema = z.object({
     lat: z.number(),
     lng: z.number(),
     category: markerCategorySchema,
+    venueType: venueTypeReadSchema,
     title: z.string(),
     description: z.string().nullable(),
     language: z.string(),

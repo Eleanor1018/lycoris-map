@@ -1,6 +1,12 @@
 # Lycoris for iOS
 
-Native SwiftUI application, Apple Maps / MapKit, iPhone, iOS 26+. Open `Lycoris.xcodeproj` in Xcode and select the shared **Lycoris** scheme.
+Native SwiftUI application, Apple Maps / MapKit, iPhone and iPad, iOS / iPadOS 26+. Open `Lycoris.xcodeproj` in Xcode and select the shared **Lycoris** scheme.
+
+## iPad adaptation
+
+The same application and Bundle ID now support iPad in all four orientations. Layout follows the current window size: at least 760pt wide and 440pt tall uses a native navigation sidebar, a dismissible content column and the map. At 1180pt the navigation also shows labels. Smaller windows retain the existing bottom panel. Search, Nearby, details and authenticated Bookmarks share the existing stores and components; account, settings and contribution use native sheets. Closing the content column keeps navigation and the map available. Command-F opens and focuses Search; Escape closes the content column.
+
+The root MapKit view and business stores remain mounted across layout changes. Map focus accounts for sidebar occlusion, and keyboard avoidance uses the actual window rather than the device screen. One resizable app window is supported; multiple scenes are disabled because the existing draft journal and photo directory are shared. See [the adaptation plan](docs/ipad-adaptation-plan.md) and [validation record](docs/ipad-acceptance.md).
 
 ## Current scope: I6
 
@@ -14,7 +20,9 @@ In Xcode's Run scheme arguments, add `-lycoris-preview` followed by one of `coll
 
 Fixture text, photo and coordinates are only visual reference data. The Figma toilet title, decorative photo and New Jersey map coordinate do not describe a verified real place. See `docs/i3-acceptance.md` and `docs/i4-acceptance.md` for API behavior and validation. Explicit visual previews disable networking and real sharing/navigation.
 
-The initial map camera uses the public New Jersey area shown in the design. It is not the user's current location. Startup requests When In Use location permission and centers on the first valid fix. Denial or an unavailable fix quietly leaves browsing usable; explicit location actions retain their retry/settings feedback. Foreground transitions do not repeat a completed startup request or recenter the map. Granting previously denied location access in Settings resumes the initial fix. Design previews never request location.
+The initial map camera uses the public New Jersey area shown in the design. It is not the user's current location. Startup requests When In Use location permission and uses MapKit native user following after the first valid fix. The location button starts native following immediately when authorized; it does not wait for landmark calibration. A later Core Location fix updates canonical data without replaying the camera after a user pan. Denial or an unavailable fix quietly leaves browsing usable; explicit location actions retain their retry/settings feedback. Foreground transitions do not repeat a completed startup request or recenter the map. Granting previously denied location access in Settings resumes the initial fix. Design previews never request location.
+
+Point loading also starts immediately using the measured mainland display convention, with background landmark verification; a failed verification never suppresses viewport requests or all mainland pins. See `docs/coordinate-alignment.md`. The bottom panel uses the same native Liquid Glass as the map tools (with a solid Reduce Transparency fallback). When collapsed, its search row and surrounding padding support upward dragging; taps still activate search, voice and account controls. Expanded content retains native text editing and scrolling.
 
 ## Toolchain and build
 
@@ -100,7 +108,7 @@ Future phases replace prototype content behind this container. Refer to `docs/de
 
 ## I3 local acceptance
 
-`LivePlaceTests` only runs when `http://127.0.0.1:8080/api/markers/1` identifies the existing **S1 Synthetic Shanghai Center** fixture. Otherwise those tests skip; isolated unit and design interaction tests remain usable without a backend. Live tests perform no backend writes. They exercise permission denial, a temporary simulated Shanghai location (restored afterward), all categories, search, empty results, native sharing dismissal and opening Apple Maps.
+`LivePlaceTests` only runs when `http://127.0.0.1:8080/api/markers/1` identifies the existing **S1 Synthetic Shanghai Center** fixture. Otherwise those tests skip; isolated unit and design interaction tests remain usable without a backend. `LocationFocusFlowTests` additionally forces failed landmark calibration and checks native startup following, panning and locating again without a fixture-backend dependency. Live tests perform no backend writes. They exercise permission denial, a temporary simulated Shanghai location (restored afterward), all categories, search, empty results, native sharing dismissal and opening Apple Maps.
 
 For a manual simulator review, use `-lycoris-test-center` followed by `31.2304,121.4737` in Debug. This only chooses the initial camera; all places still come from the API. The default New Jersey camera has no points in the current Shanghai-only fixture database. Both this argument and all visual preview arguments are ignored by Release.
 
@@ -149,3 +157,30 @@ VoiceOver headers, detail focus, refreshed annotation labels, 44pt touch targets
 ## Coordinate alignment
 
 MapKit coordinates are calibrated against a fixed public landmark before interpreting mainland map picks. API/storage values stay WGS84; display, picking and viewport boundaries are handled explicitly. See [the measured control-point comparison and failure behavior](docs/coordinate-alignment.md). Map pins use the Web category palette: toilet blue, nursing orange, medical green, and other yellow; their visible tips anchor to the actual coordinates.
+
+## Email verification
+
+Registration requires an emailed six-digit code with `.oneTimeCode` autofill.
+The login page now opens password recovery; matching new passwords and a code
+are sent to `/api/auth/reset-password`. `/api/auth/email-code` uses `register`
+or `reset_password`, and `X-App-Language` selects the email language. Server
+`Retry-After` drives resend/cooldown feedback. Five wrong codes lock that email
+for one hour without locking ordinary password login; returning to a page cannot
+bypass the backend lock. Recovery clears private state after acknowledgement and
+returns to login without automatic authentication.
+
+Publish this client with the Web/backend verification release. Existing clients
+can still log in, but registration requires the updated code field. No SMTP
+credentials are bundled. The 21 `AccountTests` cover normalized addresses/code
+payloads, recovery/private-data invalidation even if subsequent reads fail,
+cooldown feedback, and the existing session/bookmark regressions. These use
+in-process fixtures and send no real email.
+
+The optional Rust-backed UI suites require preseeded synthetic accounts now;
+their old auto-registration fallback cannot omit a verification code. Supply
+`LYCORIS_I4_FIXTURE_JSON` and a distinct `LYCORIS_I4_SECOND_FIXTURE_JSON` as JSON
+objects with `username`, `email`, `password`, and `LYCORIS_I5_FIXTURE_JSON` with
+`username`, `password`. These must be accounts in the loopback synthetic stack,
+never production accounts. The tests retain their synthetic-marker preflight.
+Registration/code security is covered by the dedicated Rust HTTP suite and native
+account contract tests; these existing UI suites cover logged-in workflows.

@@ -12,6 +12,12 @@ struct ContributionFields: Codable, Equatable {
   var openTimeStart = ""
   var openTimeEnd = ""
   var language = "en"
+  /// The selected venue for an accessible toilet. `nil` means "not specified".
+  /// Optional so pre-upgrade drafts without the key still decode.
+  var venueType: PlaceVenue? = nil
+  /// A raw server venue value this app does not recognize. Kept so editing other
+  /// fields never silently rewrites an unknown tag to `other`.
+  var unknownVenueType: String? = nil
 
   var valid: Bool {
     !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -21,10 +27,15 @@ struct ContributionFields: Codable, Equatable {
   }
 
   static func validTime(_ value: String) -> Bool {
-    value.range(of: #"^(?:[01]\d|2[0-3]):[0-5]\d$"#, options: .regularExpression) != nil
+    OpeningStatusEngine.isValidTime(value)
   }
 
-  init(language: String) { self.language = language }
+  /// A brand-new accessible toilet starts at the `other` default. Old drafts
+  /// that decode without the key stay `nil` until the user chooses.
+  init(language: String) {
+    self.language = language
+    self.venueType = .other
+  }
   init(marker: Marker) {
     title = marker.title
     category = marker.category
@@ -32,6 +43,31 @@ struct ContributionFields: Codable, Equatable {
     openTimeStart = marker.openTimeStart ?? ""
     openTimeEnd = marker.openTimeEnd ?? ""
     language = marker.contentLanguage
+    venueType = marker.venue
+    // Only an accessible toilet may carry a venue; ignore a stale server value
+    // on any other category so it can never be resent.
+    unknownVenueType =
+      marker.category == .toilet && marker.venue == nil ? marker.venueType : nil
+  }
+
+  // Explicit Codable so a pre-upgrade draft JSON (without the new keys) decodes
+  // with defaults instead of failing the whole journal.
+  private enum CodingKeys: String, CodingKey {
+    case title, category, description, openTimeStart, openTimeEnd, language
+    case venueType, unknownVenueType
+  }
+
+  init(from decoder: any Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+    category =
+      try container.decodeIfPresent(PlaceCategory.self, forKey: .category) ?? .toilet
+    description = try container.decodeIfPresent(String.self, forKey: .description) ?? ""
+    openTimeStart = try container.decodeIfPresent(String.self, forKey: .openTimeStart) ?? ""
+    openTimeEnd = try container.decodeIfPresent(String.self, forKey: .openTimeEnd) ?? ""
+    language = try container.decodeIfPresent(String.self, forKey: .language) ?? "en"
+    venueType = try? container.decodeIfPresent(PlaceVenue.self, forKey: .venueType)
+    unknownVenueType = try container.decodeIfPresent(String.self, forKey: .unknownVenueType)
   }
 }
 
@@ -93,6 +129,22 @@ struct ContributionDraft: Codable, Equatable, Identifiable {
       "category": fields.category.rawValue, "language": fields.language,
       "openTimeStart": fields.openTimeStart, "openTimeEnd": fields.openTimeEnd,
     ]
+    // Only accessible toilets may carry a venue, and the tag must never be sent
+    // for another category (the server clears it then). A new toilet that keeps
+    // the default `other` omits the field, which the server defaults to `other`.
+    // Only accessible toilets may carry a venue; never send a stale toilet tag
+    // for another category (the server clears it then).
+    if fields.category == .toilet, let venue = fields.venueType {
+      // A new toilet keeping the default `other` omits the field, which the
+      // server defaults to `other`; an edit always sends the current value so a
+      // deliberate change (including back to `other`) is not lost.
+      // An unrecognized server value (venueType == nil) is omitted so PATCH
+      // preserves the server's original instead of resending an unknown raw to
+      // the server's venue validator.
+      if original != nil || venue != .other {
+        json["venueType"] = venue.rawValue
+      }
+    }
     if original == nil {
       json["lat"] = point.latitude
       json["lng"] = point.longitude

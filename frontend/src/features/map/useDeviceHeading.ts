@@ -8,7 +8,29 @@ type PermissionOrientation = typeof DeviceOrientationEvent & {
     requestPermission?: (absolute?: boolean) => Promise<string>
 }
 export type HeadingPermission = 'unsupported' | 'granted' | 'denied' | 'prompt'
+type HeadingChoice = 'enabled' | 'denied' | 'dismissed'
+const headingChoiceKey = 'lycoris.map.heading-choice.v1'
 const normalize = (angle: number) => ((angle % 360) + 360) % 360
+
+/** A UI preference, never proof that the browser still permits the sensor. */
+export function hasRememberedHeadingChoice(): boolean {
+    try {
+        const choice = localStorage.getItem(headingChoiceKey)
+        return choice === 'enabled' || choice === 'denied' || choice === 'dismissed'
+    } catch {
+        return false
+    }
+}
+function rememberHeadingChoice(choice: HeadingChoice) {
+    try {
+        localStorage.setItem(headingChoiceKey, choice)
+    } catch {
+        // Blocked storage must not prevent using or dismissing the compass.
+    }
+}
+export function dismissHeadingGuide(): void {
+    rememberHeadingChoice('dismissed')
+}
 
 /** North-referenced readings only: relative alpha is not a compass bearing. */
 export function compassHeading(event: CompassEvent, screenAngle = 0): number | null {
@@ -68,22 +90,17 @@ class HeadingPermissionStore {
         this.permission = permission
         this.listeners.forEach((listener) => listener())
     }
-    /**
-     * Restores a previously granted permission without user activation. This is
-     * best-effort: a previous grant succeeds; a rejection returns 'prompt' so
-     * the explicit Enable button stays available, and a denial from this silent
-     * path is downgraded to 'prompt' for the same reason.
-     */
-    restore = async (): Promise<HeadingPermission> => {
-        if (this.permission !== 'prompt' || this.pending) return this.permission
-        return this.enable(false)
+    /** Actual compass events confirm access; a saved preference cannot do so. */
+    acceptReading = () => {
+        if (!headingPermissionRequired() || this.permission === 'granted') return
+        rememberHeadingChoice('enabled')
+        this.emit('granted')
     }
     /**
      * Must be invoked synchronously inside a user activation handler.
-     * `explicit` distinguishes a real tap from the best-effort page-load probe,
-     * so only an answered prompt can surface a denial/settings message.
+     * Page loads never invoke this API: WebKit may request fresh consent.
      */
-    enable = (explicit = true): Promise<HeadingPermission> => {
+    enable = (): Promise<HeadingPermission> => {
         const sensor = permissionSensor()
         if (!headingPermissionRequired() || !sensor?.requestPermission) {
             this.emit('unsupported')
@@ -104,22 +121,17 @@ class HeadingPermissionStore {
             (result) => {
                 this.pending = null
                 if (result === 'granted') {
+                    rememberHeadingChoice('enabled')
                     this.emit('granted')
                     return 'granted' as const
                 }
-                // A silent restore that returns denied never answered a real
-                // prompt, so it must not surface the settings message. Keep the
-                // Enable button available for one real tap.
-                if (!explicit) {
-                    this.emit('prompt')
-                    return 'prompt' as const
-                }
+                rememberHeadingChoice('denied')
                 this.emit('denied')
                 return 'denied' as const
             },
             () => {
                 this.pending = null
-                // A rejected activation (or a silent restore) is not a denial.
+                // A rejected activation is not a denial.
                 // Keep prompting so the user can retry from the visible button.
                 this.emit('prompt')
                 return 'prompt' as const
@@ -137,13 +149,9 @@ export function resetHeadingPermissionForTests(): void {
     store = null
 }
 
-/** Best-effort silent restore; never claims a denial without a real prompt. */
-export function requestDeviceHeading(): Promise<HeadingPermission> {
-    return headingStore().restore()
-}
 /** Synchronous, gesture-safe enable used by the explicit button and Locate. */
 export function enableDeviceHeading(): Promise<HeadingPermission> {
-    return headingStore().enable(true)
+    return headingStore().enable()
 }
 export function useHeadingPermission(): HeadingPermission {
     const current = headingStore()
@@ -152,11 +160,6 @@ export function useHeadingPermission(): HeadingPermission {
         current.getSnapshot,
         current.getSnapshot,
     )
-    useEffect(() => {
-        // A fresh page visit cannot prompt without a gesture. Restore silently;
-        // a previous grant succeeds, an ungranted session stays in `prompt`.
-        if (headingPermissionRequired()) void current.restore()
-    }, [current])
     return permission
 }
 
@@ -193,6 +196,7 @@ export function useDeviceHeading(enabled: boolean) {
             )
                 return
             latest = event
+            if (compassHeading(event) !== null) headingStore().acceptReading()
             // Some devices emit only when their orientation changes. A still
             // phone's valid compass reading must not disappear after 10 seconds.
             update()

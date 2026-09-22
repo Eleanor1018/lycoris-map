@@ -1,6 +1,8 @@
 import { useUi } from '@/shared/i18n/ui'
 import { useEffect, useRef } from 'react'
 import { IconButton } from '@/shared/ui/design-primitives'
+import { useOpeningStatus, hoursStatusLabel } from './openingStatus'
+import { VenueTag } from './VenueTag'
 import { distanceLabel, openingHours, publicImageUrl } from './model'
 import type { PlaceBrowse } from './usePlaceBrowse'
 import { ReadMessage } from './PlaceResults'
@@ -19,6 +21,7 @@ export function PlaceDetails({
 }) {
     const ui = useUi()
     const { detail: place, detailState } = browse
+    const hours = useOpeningStatus(place)
     const heading = useRef<HTMLHeadingElement>(null)
     useEffect(() => {
         heading.current?.focus({ preventScroll: true })
@@ -59,13 +62,26 @@ export function PlaceDetails({
                             onClick={onEdit}
                         />
                     )}
+                    <div className="place-tags">
+                        <VenueTag place={place} />
+                        {hours === 'closing-soon' && (
+                            <span className="place-tag closing-soon-tag">
+                                {ui.text('Closing soon')}
+                            </span>
+                        )}
+                    </div>
                     <span className="place-meta">
                         {distance && (
                             <span title={ui.text('Straight-line distance from your location')}>
                                 {distance}
                             </span>
                         )}
-                        <span>{openingHours(place, browse.language)}</span>
+                        <span className={`place-hours place-hours-${hours}`}>
+                            {hoursStatusLabel(hours) && (
+                                <>{ui.message(hoursStatusLabel(hours))} · </>
+                            )}
+                            {openingHours(place, browse.language)}
+                        </span>
                     </span>
                     {mobile && place.description && (
                         <p className="mobile-description" lang={place.contentLanguage}>

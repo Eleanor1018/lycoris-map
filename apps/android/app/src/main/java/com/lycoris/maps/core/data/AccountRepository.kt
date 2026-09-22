@@ -10,6 +10,8 @@ import com.lycoris.maps.core.network.ChangePasswordRequest
 import com.lycoris.maps.core.network.LoginRequest
 import com.lycoris.maps.core.network.LycorisApi
 import com.lycoris.maps.core.network.RegisterRequest
+import com.lycoris.maps.core.network.EmailCodeRequest
+import com.lycoris.maps.core.network.ResetPasswordRequest
 import com.lycoris.maps.core.network.SessionCookieJar
 import com.lycoris.maps.core.network.UpdateProfileRequest
 import com.lycoris.maps.core.network.apiCall
@@ -116,10 +118,28 @@ class AccountRepository(
         return authenticate { login(LoginRequest(username.trim(), password)).requireUserData() }
     }
 
-    suspend fun register(username: String, nickname: String, email: String, password: String): User {
+    suspend fun register(username: String, nickname: String, email: String, password: String, verificationCode: String): User {
         validateRegistration(username, nickname, email, password)
+        if (!verificationCode.matches(Regex("[0-9]{6}"))) throw ApiFailure.InvalidInput("verificationCode")
         return authenticate {
-            register(RegisterRequest(username.trim(), nickname.trim(), email.trim().lowercase(), password)).requireUserData()
+            register(RegisterRequest(username.trim(), nickname.trim(), email.trim().lowercase(), password, verificationCode)).requireUserData()
+        }
+    }
+
+    suspend fun sendEmailCode(email: String, reset: Boolean, language: String) = withContext(io) {
+        gate.withLock {
+            apiCall { apiForEpoch(state.value.epoch).sendEmailCode(
+                EmailCodeRequest(email.trim().lowercase(), if (reset) "reset_password" else "register"), language,
+            ).requireEnvelope() }
+        }
+    }
+
+    suspend fun resetPassword(email: String, code: String, password: String) = withContext(io) {
+        if (!code.matches(Regex("[0-9]{6}"))) throw ApiFailure.InvalidInput("verificationCode")
+        if (password.length < 4 || password.toByteArray(Charsets.UTF_8).size > 72) throw ApiFailure.InvalidInput("password")
+        gate.withLock {
+            apiCall { apiForEpoch(state.value.epoch).resetPassword(ResetPasswordRequest(email.trim().lowercase(), code, password)).requireEnvelope() }
+            transition(clearCookies = true)
         }
     }
 

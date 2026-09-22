@@ -17,6 +17,8 @@ pub struct LoginRequest {
 
 #[derive(Deserialize)]
 pub struct RegisterRequest {
+    #[serde(rename = "verificationCode")]
+    pub verification_code: Option<String>,
     pub username: Option<String>,
     pub nickname: Option<String>,
     pub email: Option<String>,

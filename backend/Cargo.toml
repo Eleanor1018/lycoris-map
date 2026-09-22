@@ -64,6 +64,9 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 # 均为温晓锁定的候选版本，仅加入不降级已有依赖。
 cookie = "0.18.2"
 bcrypt = "0.19.3"
+lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "tokio1-rustls-tls", "pool"] }
+hmac = "0.13"
+getrandom = "0.4"
 
 [dev-dependencies]
 # 仅测试：解码 Java 生成的合成 BCrypt 向量（password 列 base64）。

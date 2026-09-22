@@ -40,6 +40,7 @@ struct TestEnv {
     pool: PgPool,
     upload: TempDir,
     config: Config,
+    state: AppState,
     router: Router,
 }
 
@@ -54,20 +55,21 @@ impl TestEnv {
         config.marker_cache_namespace = format!("lycoris:test:{unique}:marker");
         // 测试统一 cost 4。
         config.bcrypt_cost = 4;
+        config.email_verification_secret = Some("synthetic-email-secret-at-least-32-bytes".into());
         config.write_allowed_origins = vec![HeaderValue::from_static(ALLOWED_ORIGIN)];
         config.cors_allowed_origins = vec![HeaderValue::from_static(ALLOWED_ORIGIN)];
         // 阶段 3 管理接口要求二次验证：提供固定二级密码哈希，供测试调用 /api/admin/verify。
         config.admin_second_password_hash = Some(test_second_hash().await);
         let upload = TempDir::new().expect("创建临时上传目录失败");
         config.upload_dir = upload.path().to_path_buf();
-        let router = build_router(
-            AppState::new(pool.clone(), redis, config.clone()).expect("构造 AppState 失败"),
-        );
+        let state = AppState::new(pool.clone(), redis, config.clone()).expect("构造 AppState 失败");
+        let router = build_router(state.clone());
         Self {
             _temp: temp,
             pool,
             upload,
             config,
+            state,
             router,
         }
     }
@@ -301,6 +303,25 @@ fn multipart_body(boundary: &str, parts: &[Part<'_>]) -> Vec<u8> {
 }
 
 async fn register(env: &TestEnv, username: &str) -> (String, String) {
+    use lycoris_backend::email_verification::Purpose;
+    let email = format!("{username}@example.com");
+    let nonce = env
+        .state
+        .email_codes
+        .reserve(
+            &email,
+            Purpose::Register,
+            "register",
+            "127.0.0.1".parse().unwrap(),
+            "123456",
+        )
+        .await
+        .unwrap();
+    env.state
+        .email_codes
+        .finish(&email, Purpose::Register, &nonce, true)
+        .await
+        .unwrap();
     let response = send(
         &env.router,
         Call::json(
@@ -308,7 +329,8 @@ async fn register(env: &TestEnv, username: &str) -> (String, String) {
             serde_json::json!({
                 "username": username,
                 "nickname": username,
-                "email": format!("{username}@example.com"),
+                "email": email,
+                "verificationCode": "123456",
                 "password": "test-password",
                 "website": "",
             }),

@@ -81,7 +81,7 @@ fun LycorisRoot(model: HomeViewModel) {
     fun close() {
         devices.cancelVoice()
         if (page == SecondaryPage.ACCOUNT && accountPage in setOf(AccountPage.EDIT_PROFILE, AccountPage.PASSWORD)) accountPage = AccountPage.PROFILE
-        else if (page == SecondaryPage.ACCOUNT && accountPage == AccountPage.REGISTER) accountPage = AccountPage.LOGIN
+        else if (page == SecondaryPage.ACCOUNT && accountPage in setOf(AccountPage.REGISTER, AccountPage.RESET)) accountPage = AccountPage.LOGIN
         else model.closeSecondary()
     }
     BackHandler(picking) { model.cancelPicking() }

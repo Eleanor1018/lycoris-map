@@ -1,3 +1,4 @@
+import { VenueTag } from '@/features/places/VenueTag'
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { Marker } from '@/shared/api/markers'
@@ -188,6 +189,7 @@ function ReviewCard({
             </p>
             {entry.kind !== 'images' && (
                 <>
+                    <VenueTag place={entry.item} />
                     <p className="admin-category">
                         {categoryBadges[entry.item.category] && (
                             <CategoryBadge category={categoryBadges[entry.item.category]!} />
@@ -210,6 +212,7 @@ function ReviewCard({
                                         {current.data.description || '—'}
                                     </p>
                                     <p>
+                                        <VenueTag place={current.data} />{' '}
                                         {ui.message(categoryLabels[current.data.category])} ·{' '}
                                         {ui.message(current.data.isPublic ? 'Public' : 'Private')} ·{' '}
                                         {openingHours(current.data, ui.language)}

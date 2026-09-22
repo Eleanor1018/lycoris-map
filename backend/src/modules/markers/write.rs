@@ -22,9 +22,10 @@ use crate::modules::markers::localization::{
 };
 use crate::modules::markers::model::{MarkerRow, TranslationRow, can_view};
 use crate::modules::markers::write_model::{
-    Actor, EditProposalRow, MSG_MARK_IMAGE_UPLOAD_ONLY, MSG_MARKER_NOT_FOUND,
+    Actor, DEFAULT_VENUE_TYPE, EditProposalRow, MSG_MARK_IMAGE_UPLOAD_ONLY, MSG_MARKER_NOT_FOUND,
     MSG_PROPOSAL_ALREADY_HANDLED, MSG_PROPOSAL_NOT_FOUND, MSG_RELATED_MARKER_NOT_FOUND,
-    MSG_STALE_VERSION, MarkerCreateRequest, MarkerUpdateRequest, WriteError, db_len, utf16_len,
+    MSG_STALE_VERSION, MSG_VENUE_TYPE_INVALID, MarkerCreateRequest, MarkerUpdateRequest,
+    VENUE_TYPES, WriteError, db_len, utf16_len,
 };
 
 /// 数据库 `varchar` 列的字符上限（PostgreSQL `char_length` 语义）。
@@ -44,6 +45,7 @@ struct MarkerValues {
     is_active: bool,
     open_time_start: Option<String>,
     open_time_end: Option<String>,
+    venue_type: Option<String>,
     review_status: String,
     last_edited_by: Option<String>,
     last_edited_by_public_id: Option<String>,
@@ -118,6 +120,7 @@ impl MarkerWriteService {
         let language = resolve_language(req.language.as_deref(), request_language);
         let is_public = req.is_public.unwrap_or(true);
         let is_active = req.is_active.unwrap_or(true);
+        let venue_type = resolve_venue_type_create(&category, req.venue_type.as_deref())?;
 
         let mut tx = self
             .pool
@@ -141,6 +144,7 @@ impl MarkerWriteService {
             actor.username.as_str(),
             actor.public_id.as_str(),
             client_request_id.as_deref(),
+            venue_type.as_deref(),
             actor.username.as_str(),
             actor.public_id.as_str(),
         )
@@ -283,6 +287,11 @@ impl MarkerWriteService {
             };
         let is_public = req.is_public.unwrap_or(marker.is_public);
         let is_active = req.is_active.unwrap_or(marker.is_active);
+        let venue_type = resolve_venue_type_update(
+            &category,
+            req.venue_type.as_deref(),
+            marker.venue_type.as_deref(),
+        )?;
         let is_owner = marker.user_public_id.as_deref() == Some(actor.public_id.as_str());
         if db_len(&text.language) > 2 {
             return Err(WriteError::BadRequest("language 不合法".to_string()));
@@ -305,6 +314,7 @@ impl MarkerWriteService {
             is_active,
             open_time_start.as_deref(),
             open_time_end.as_deref(),
+            venue_type.as_deref(),
             marker.version,
         )
         .execute(&mut *tx)
@@ -431,6 +441,7 @@ impl MarkerWriteService {
         values.is_active = proposal.is_active;
         values.open_time_start = proposal.open_time_start.clone();
         values.open_time_end = proposal.open_time_end.clone();
+        values.venue_type = proposal.venue_type.clone();
         values.review_status = "APPROVED".to_string();
         values.last_edited_by = Some(proposal.proposer_username.clone());
         values.last_edited_by_public_id = proposal.proposer_public_id.clone();
@@ -523,12 +534,18 @@ impl MarkerWriteService {
                 (marker.open_time_start.clone(), marker.open_time_end.clone())
             };
 
+        let venue_type = resolve_venue_type_update(
+            &category,
+            req.venue_type.as_deref(),
+            marker.venue_type.as_deref(),
+        )?;
         let mut values = base_values(&marker);
         values.category = category;
         values.is_public = req.is_public.unwrap_or(marker.is_public);
         values.is_active = req.is_active.unwrap_or(marker.is_active);
         values.open_time_start = open_time_start;
         values.open_time_end = open_time_end;
+        values.venue_type = venue_type;
         values.review_status = "APPROVED".to_string();
         if source_edit {
             values.title = text.title.clone();
@@ -727,6 +744,58 @@ fn normalize_category(raw: Option<&str>) -> Result<String, WriteError> {
     }
 }
 
+/// 归一显式传入的场所标签：`None`/空白视为未提供，返回 `Ok(None)`；非空白必须落在白名单，
+/// 否则 400。
+fn normalize_venue_type(raw: Option<&str>) -> Result<Option<&str>, WriteError> {
+    let Some(value) = raw else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if VENUE_TYPES.contains(&trimmed) {
+        Ok(Some(trimmed))
+    } else {
+        Err(WriteError::BadRequest(MSG_VENUE_TYPE_INVALID.to_string()))
+    }
+}
+
+/// 新建：`accessible_toilet` 未传值默认 `other`；其它类别只允许 NULL，传非空值 400。
+fn resolve_venue_type_create(
+    category: &str,
+    raw: Option<&str>,
+) -> Result<Option<String>, WriteError> {
+    let explicit = normalize_venue_type(raw)?;
+    if category != "accessible_toilet" {
+        if explicit.is_some() {
+            return Err(WriteError::BadRequest(MSG_VENUE_TYPE_INVALID.to_string()));
+        }
+        return Ok(None);
+    }
+    Ok(Some(explicit.unwrap_or(DEFAULT_VENUE_TYPE).to_string()))
+}
+
+/// 更新：未传值保留原值（转入 `accessible_toilet` 且原值为空时默认 `other`），
+/// 转出 `accessible_toilet` 时清除；传非空值必须是 `accessible_toilet` 且在白名单内。
+fn resolve_venue_type_update(
+    category: &str,
+    raw: Option<&str>,
+    existing: Option<&str>,
+) -> Result<Option<String>, WriteError> {
+    let explicit = normalize_venue_type(raw)?;
+    if category != "accessible_toilet" {
+        if explicit.is_some() {
+            return Err(WriteError::BadRequest(MSG_VENUE_TYPE_INVALID.to_string()));
+        }
+        return Ok(None);
+    }
+    if let Some(value) = explicit {
+        return Ok(Some(value.to_string()));
+    }
+    Ok(Some(existing.unwrap_or(DEFAULT_VENUE_TYPE).to_string()))
+}
+
 /// 新建点位 `markImage` 归一：`None` 与空白串为 `None`，任何非空值一律 400。
 fn normalize_mark_image(raw: Option<&str>) -> Result<Option<String>, WriteError> {
     match raw {
@@ -903,6 +972,7 @@ fn base_values(marker: &MarkerRow) -> MarkerValues {
         is_active: marker.is_active,
         open_time_start: marker.open_time_start.clone(),
         open_time_end: marker.open_time_end.clone(),
+        venue_type: marker.venue_type.clone(),
         review_status: marker.review_status.clone(),
         last_edited_by: marker.last_edited_by.clone(),
         last_edited_by_public_id: marker.last_edited_by_public_id.clone(),
@@ -980,6 +1050,7 @@ async fn write_marker_fields(
         is_active,
         open_time_start,
         open_time_end,
+        venue_type,
         review_status,
         last_edited_by,
         last_edited_by_public_id,
@@ -1001,6 +1072,7 @@ async fn write_marker_fields(
         last_edited_by,
         last_edited_by_public_id,
         last_edited_by_owner,
+        venue_type,
     )
     .fetch_one(&mut **tx)
     .await

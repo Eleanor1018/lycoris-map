@@ -5,15 +5,21 @@ import SwiftUI
 struct NativeMapView: UIViewRepresentable {
   let topInset: CGFloat
   let bottomInset: CGFloat
+  var leftInset: CGFloat = 10
+  var rightInset: CGFloat = 10
   var appearance: MapAppearance = .explore
   var coordinateSpace: MapCoordinateSpace = .wgs84
   var places: [PlacePresentation] = []
+  var language: AppLanguage = .current()
   var focus: MapFocus? = nil
   var showsUserLocation = false
   var isActive = true
   var animated = true
   var isSelectingLocation = false
   var selectedLocation: GeoPoint?
+  /// The shared opening-status clock, used only to refresh existing AX pin
+  /// labels when the minute or the app language changes.
+  var metadataNow: Date = .now
   var onPickLocation: (GeoPoint) -> Void = { _ in }
   var onUnresolvedCoordinate: () -> Void = {}
   var onViewport: (MapViewport) -> Void = { _ in }
@@ -50,7 +56,8 @@ struct NativeMapView: UIViewRepresentable {
     context.coordinator.placementDoubleTap = doubleTap
     map.addGestureRecognizer(doubleTap)
     map.addGestureRecognizer(tap)
-    map.layoutMargins = UIEdgeInsets(top: topInset, left: 10, bottom: bottomInset, right: 10)
+    map.layoutMargins = UIEdgeInsets(
+      top: topInset, left: leftInset, bottom: bottomInset, right: rightInset)
     var center = CLLocationCoordinate2D(latitude: 40.766, longitude: -74.077)
     #if DEBUG
       // Explicit simulator verification override; a startup fix can replace this fallback.
@@ -80,13 +87,29 @@ struct NativeMapView: UIViewRepresentable {
     coordinator.placementTap?.isEnabled = isSelectingLocation
     coordinator.placementDoubleTap?.isEnabled = isSelectingLocation
     coordinator.updateSelectedLocation(on: map)
+    let minuteChanged = coordinator.metadataMinute != Self.minute(of: metadataNow)
+    if coordinator.language != language || minuteChanged {
+      coordinator.language = language
+      coordinator.metadataMinute = Self.minute(of: metadataNow)
+      // Refresh existing pins so the localized category label and the real-time
+      // opening status follow the app language and the shared minute clock.
+      for annotation in map.annotations {
+        guard let pin = annotation as? PlaceAnnotation,
+          let view = map.view(for: pin)
+        else { continue }
+        coordinator.configure(view, for: pin)
+      }
+    }
     if coordinator.appearance != appearance {
       map.preferredConfiguration = appearance.configuration()
       coordinator.appearance = appearance
     }
     Self.updateMargins(
-      UIEdgeInsets(top: topInset, left: 10, bottom: bottomInset, right: 10), on: map)
+      UIEdgeInsets(top: topInset, left: leftInset, bottom: bottomInset, right: rightInset), on: map)
     map.showsUserLocation = showsUserLocation
+    if !showsUserLocation && map.userTrackingMode != .none {
+      map.setUserTrackingMode(.none, animated: false)
+    }
     coordinator.updateHeading(on: map)
     let existing = Dictionary(
       uniqueKeysWithValues: map.annotations.compactMap { annotation -> (String, PlaceAnnotation)? in
@@ -155,6 +178,8 @@ struct NativeMapView: UIViewRepresentable {
     var focusID: UUID?
     private var lastFocusCamera: MKMapCamera?
     var appearance: MapAppearance?
+    var language: AppLanguage
+    var metadataMinute: Int
     var lastViewport: MapViewport?
     var placementTap: UITapGestureRecognizer?
     var placementDoubleTap: UITapGestureRecognizer?
@@ -163,6 +188,8 @@ struct NativeMapView: UIViewRepresentable {
     private weak var map: MKMapView?
     init(parent: NativeMapView) {
       self.parent = parent
+      self.language = parent.language
+      self.metadataMinute = NativeMapView.minute(of: parent.metadataNow)
       super.init()
       headingProvider.onChange = { [weak self] in
         guard let self, let map = self.map else { return }
@@ -172,6 +199,8 @@ struct NativeMapView: UIViewRepresentable {
 
     func prepareForCoordinateSpaceChange(on map: MKMapView) {
       lastViewport = nil
+      // MapKit owns the blue-dot coordinate; calibration must never replay its focus.
+      guard parent.focus?.target != .userLocation else { return }
       // Also record deferred focuses: a late calibration must not undo a pan/zoom
       // made while the first mainland location was waiting for its projection.
       guard let last = lastFocusCamera else { return }
@@ -187,15 +216,38 @@ struct NativeMapView: UIViewRepresentable {
 
     func applyFocus(on map: MKMapView) {
       guard let focus = parent.focus, focusID != focus.id else { return }
-      focusID = focus.id
-      if let coordinate = parent.coordinateSpace.coordinate(for: focus.point) {
-        map.setCamera(
-          MKMapCamera(
-            lookingAtCenter: coordinate,
-            fromDistance: focus.distance, pitch: 0, heading: map.camera.heading),
-          animated: parent.animated)
+      switch focus.target {
+      case .userLocation:
+        guard parent.showsUserLocation else { return }
+        focusID = focus.id
+        lastFocusCamera = nil
+        // Native follow waits for MapKit's own fix and uses the blue dot's display
+        // coordinate. It must work even when landmark search is offline/unresolved.
+        map.setUserTrackingMode(.follow, animated: parent.animated)
+      case .point(let point):
+        focusID = focus.id
+        map.setUserTrackingMode(.none, animated: false)
+        if let coordinate = parent.coordinateSpace.coordinate(for: point) {
+          map.setCamera(
+            MKMapCamera(
+              lookingAtCenter: coordinate,
+              fromDistance: focus.distance, pitch: 0, heading: map.camera.heading),
+            animated: parent.animated)
+        }
+        lastFocusCamera = map.camera.copy() as? MKMapCamera
       }
-      lastFocusCamera = map.camera.copy() as? MKMapCamera
+      updateLocationTestState(on: map)
+    }
+
+    private func updateLocationTestState(on map: MKMapView) {
+      #if LYCORIS_LOCAL_TESTS
+        guard
+          ProcessInfo.processInfo.arguments.contains("-lycoris-test-map-calibration-unavailable")
+        else { return }
+        // No coordinates or test diagnostics are exposed by Debug/Release builds.
+        map.accessibilityValue =
+          "tracking=\(map.userTrackingMode.rawValue); calibration=\(parent.coordinateSpace)"
+      #endif
     }
 
     func updateHeading(on map: MKMapView) {
@@ -219,10 +271,16 @@ struct NativeMapView: UIViewRepresentable {
 
     func mapViewDidChangeVisibleRegion(_ mapView: MKMapView) {
       updateHeadingView(on: mapView, animated: false)
+      updateLocationTestState(on: mapView)
     }
 
     func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
       updateHeadingView(on: mapView, animated: false)
+      updateLocationTestState(on: mapView)
+    }
+
+    func mapView(_ mapView: MKMapView, didChange mode: MKUserTrackingMode, animated: Bool) {
+      updateLocationTestState(on: mapView)
     }
 
     func mapView(_ mapView: MKMapView, didAdd views: [MKAnnotationView]) {
@@ -354,7 +412,8 @@ struct NativeMapView: UIViewRepresentable {
       // The 43pt asset includes a shadow below its tip at y=39. Anchor the tip,
       // not the image bottom, to the geographic point.
       view.centerOffset = CGPoint(x: 0, y: -17.5)
-      view.accessibilityLabel = pin.place.title
+      view.accessibilityLabel = PlaceAccessibility.placeLabel(
+        pin.place, language: language, now: parent.metadataNow)
       view.accessibilityIdentifier = "map.pin.\(pin.place.id)"
       view.isEnabled = !parent.isSelectingLocation
       view.isAccessibilityElement = !parent.isSelectingLocation
@@ -367,8 +426,20 @@ struct NativeMapView: UIViewRepresentable {
     }
   }
 
+  /// Minute-resolution bucket for the shared clock, so pins only rebuild their
+  /// label when the status could actually have changed.
+  static func minute(of date: Date) -> Int {
+    Int(date.timeIntervalSince1970 / 60)
+  }
+
   static func updateMargins(_ insets: UIEdgeInsets, on map: MKMapView) {
     guard map.layoutMargins != insets else { return }
+    if map.userTrackingMode != .none {
+      // Let MapKit keep the blue dot in the unobscured region. An explicit
+      // camera correction here would compete with native user following.
+      map.layoutMargins = insets
+      return
+    }
     guard map.bounds.width > 0, map.bounds.height > 0 else {
       map.layoutMargins = insets
       return

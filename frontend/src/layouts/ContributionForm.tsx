@@ -1,3 +1,5 @@
+import { venueLabels } from '@/features/places/venue'
+import type { VenueType } from '@/shared/api/markers'
 import { useUi } from '@/shared/i18n/ui'
 import { useEffect, useId, useRef } from 'react'
 import { CategoryBadge, DesignButton, IconButton } from './primitives'
@@ -70,7 +72,7 @@ export function ContributionForm({
     ] as const
     return (
         <form
-            className={`contribution-form ${mobile ? 'contribution-form-mobile' : ''} ${state ? 'contribution-form-live' : ''}`}
+            className={`contribution-form ${mobile ? 'contribution-form-mobile' : ''} ${state ? 'contribution-form-live' : ''} ${draft.category === 'toilet' ? 'has-venue' : ''}`}
             aria-label={ui.text(state?.base ? 'Edit proposal' : 'Contribution draft')}
             aria-busy={busy || undefined}
             data-lat={import.meta.env.DEV ? point?.lat : undefined}
@@ -151,6 +153,29 @@ export function ContributionForm({
                     <span className="contribution-custom-category">{ui.text('Custom')}</span>
                 )}
             </div>
+            {draft.category === 'toilet' && (
+                <div className="contribution-venue">
+                    <label className="contribution-label" htmlFor={`${id}-venue`}>
+                        {ui.text('Venue type')}
+                    </label>
+                    <select
+                        id={`${id}-venue`}
+                        className="contribution-input"
+                        value={draft.venueType ?? ''}
+                        disabled={locked}
+                        onChange={(event) => update('venueType', event.target.value as VenueType)}
+                    >
+                        <option value="" disabled>
+                            {ui.text('Choose a venue type')}
+                        </option>
+                        {Object.entries(venueLabels).map(([value, label]) => (
+                            <option value={value} key={value}>
+                                {ui.message(label)}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            )}
             <label className="contribution-label description-label" htmlFor={`${id}-description`}>
                 {ui.text('Description')}
             </label>

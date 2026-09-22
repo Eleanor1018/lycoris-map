@@ -20,6 +20,24 @@ Java JAR 真实 HTTP 读写与回退、Web/Android 查询复查也已通过。�
 
 Python 开发/演练脚本与根 `docs/` 文档仅保留本地，不随 Git 分发。下文的历史 Python 验收命令仅适用于仍有这些本地文件的工作区；仓库基础构建、启动与 Rust 测试不依赖它们。
 
+## 场所标签与营业时间
+
+迁移 `0005_marker_venue_type.sql` 为点位和编辑提案增加 `venue_type`。API 使用
+`venueType`：`metro`、`hospital`、`mall`、`railway_station`、`school`、`public_toilet`、`airport`、`other`。
+迁移 `0006_add_public_toilet_airport_venues.sql` 扩展两张表的约束，加入公共卫生间与飞机场；
+仅调整允许值，不改现有标签或停用状态。历史分类待客户端支持新值后独立执行。
+仅 `accessible_toilet` 可带标签，数据库和写接口均校验；新建省略时为 `other`，
+编辑省略或传空值时保留原标签，改为其它类别时清空。旧客户端可继续省略此字段。
+贡献、编辑提案、审核、管理员编辑及图片审核返回值均保留标签。
+
+点位响应另含只读 `hoursTimezone`（IANA 名称），与服务端营业状态使用同一时区。
+Web 在关门前 30 分钟显示“即将结束营业”，支持跨午夜和相同起止时间表示全天开放；
+未提供营业时间时不推断营业状态。当前时间规则仍是服务端统一配置时区，并非逐点时区。
+
+历史数据分类和去重独立于结构迁移：先备份，再逐项审核，事务内校验快照、版本与关联
+记录，只改类别、标签、`deactivated`、版本和更新时间。保留原图、收藏、译文和提案，
+恢复也检查版本。具体清单和演练脚本按仓库约定仅留本地，不随应用启动自动执行。
+
 ## 点位停用与恢复
 
 迁移 `0004_marker_deactivation.sql` 添加 `map_markers.deactivated`，默认 `false`。
@@ -688,3 +706,10 @@ python scripts/test_verify_release_linux.py
   仅临时测试库名等真正动态 SQL 使用运行期 `AssertSqlSafe`。`.sqlx` 已在本工作树生成并校验。
 - 不包含应用容器，不接入生产，不保存真实数据；不操作 `lycoris-restore-review` 容器。
 - 认证最终形态（CSRF、多因素等）另案重设计，本轮不引入 JWT/OAuth。
+
+## Email verification
+
+Registration requires a six-digit `verificationCode`. Password recovery uses the
+same email service with a separate `reset_password` purpose. Configure SMTP and
+`EMAIL_VERIFICATION_SECRET` on the server; there is no verification bypass when
+mail is unconfigured. See [the email verification contract and rollout](deploy/production/EMAIL_VERIFICATION.md).

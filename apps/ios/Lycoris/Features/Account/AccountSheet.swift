@@ -237,7 +237,7 @@ private struct PasswordView: View {
   }
 }
 
-private struct AccountPlacesView: View {
+struct AccountPlacesView: View {
   @Bindable var store: AccountStore
   let created: Bool
   let onSelect: (Marker) -> Void

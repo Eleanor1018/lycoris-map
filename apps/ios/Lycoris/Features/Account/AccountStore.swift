@@ -5,8 +5,8 @@ import Observation
 final class AccountStore {
   private let api: any AccountServing
   private(set) var user: AccountUser?
-  private(set) var isChecking = false
-  private(set) var isBusy = false
+  private(set) var isChecking = false { didSet { resumeAccountWaiters() } }
+  private(set) var isBusy = false { didSet { resumeAccountWaiters() } }
   private(set) var hasChecked = false
   private(set) var hasVerifiedIdentity = false
   private(set) var epoch = UUID()
@@ -14,6 +14,7 @@ final class AccountStore {
   private(set) var bookmarks: [Marker] = []
   private(set) var created: [Marker] = []
   private(set) var libraryLoading = false
+  private(set) var bookmarkStatusLoading = false
   private(set) var libraryMessage: String?
   private(set) var avatar: Data?
   private(set) var selectedMarker: Marker?
@@ -24,6 +25,12 @@ final class AccountStore {
   private var detailGeneration = UUID()
   private var identityGeneration = UUID()
   private var networkGeneration = 0
+  private var bookmarkOverrides: [Int64: Bool] = [:]
+  private var bookmarkRevision = UUID()
+  private var bookmarkWritePending = false
+  private var hasLoadedBookmarks = false
+  private var bookmarkTask: Task<Void, Never>?
+  @ObservationIgnored private var accountWaiters: [UUID: CheckedContinuation<Void, any Error>] = [:]
   private var libraryTask: Task<Void, Never>?
   private var detailTask: Task<Void, Never>?
   @ObservationIgnored var onPrivateDataInvalidated: (() -> Void)?
@@ -78,8 +85,9 @@ final class AccountStore {
   }
 
   /// Auth and account writes are serialized. A dismissed sheet cannot cancel a cookie-changing request.
-  func authenticate(username: String, email: String, password: String, register: Bool) async -> Bool
-  {
+  func authenticate(
+    username: String, email: String, password: String, register: Bool, verificationCode: String = ""
+  ) async -> Bool {
     guard !isBusy else { return false }
     isBusy = true
     invalidatePrivateData()
@@ -93,7 +101,10 @@ final class AccountStore {
       var fields = [
         "username": username.trimmingCharacters(in: .whitespacesAndNewlines), "password": password,
       ]
-      if register { fields["email"] = email.trimmingCharacters(in: .whitespacesAndNewlines) }
+      if register {
+        fields["email"] = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        fields["verificationCode"] = verificationCode
+      }
       _ = try await api.user(.json(register ? "api/register" : "api/login", fields: fields))
       // Verify the cookie, rather than trusting only the login response body.
       let current = try await api.user()
@@ -103,8 +114,17 @@ final class AccountStore {
     } catch {
       await reconcile()
       let failure = error as? AccountFailure
-      if !register && failure?.status == 401 {
-        message = String(appLocalized: "The username or password is incorrect.")
+      if [40021, 40022, 42931, 42932, 50321].contains(failure?.code ?? 0) {
+        message = failureMessage(error)
+        if failure?.code == 42931 {
+          verificationLockedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+          verificationLockedUntil = Date().addingTimeInterval(
+            Double(failure?.retryAfterSeconds ?? 3600))
+        }
+      } else if !register && failure?.status == 401 {
+        message = String(
+          appLocalized: "The email, username, or password is incorrect.", table: "AccountFeedback")
       } else if register && failure?.status == 503 {
         message = String(
           appLocalized:
@@ -116,6 +136,54 @@ final class AccountStore {
       } else {
         message = failureMessage(error)
       }
+      return false
+    }
+  }
+
+  private(set) var verificationLockedUntil = Date.distantPast
+  private(set) var verificationLockedEmail = ""
+
+  func sendEmailCode(email: String, reset: Bool) async throws {
+    guard !isBusy else { throw AccountFailure(status: 429) }
+    isBusy = true
+    message = nil
+    defer { isBusy = false }
+    _ = try await api.send(
+      .json(
+        "api/auth/email-code",
+        fields: [
+          "email": email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+          "purpose": reset ? "reset_password" : "register",
+        ]))
+  }
+
+  func resetPassword(email: String, code: String, password: String) async -> Bool {
+    guard !isBusy else { return false }
+    isBusy = true
+    message = nil
+    defer { isBusy = false }
+    do {
+      _ = try await api.send(
+        .json(
+          "api/auth/reset-password",
+          fields: [
+            "email": email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+            "verificationCode": code, "newPassword": password,
+          ]))
+      // The acknowledged reset revoked the session server-side; do not retain
+      // private state if a subsequent network read is unavailable.
+      expire()
+      hasChecked = true
+      message = String(appLocalized: "Password reset. Please log in with your new password.")
+      return true
+    } catch {
+      let failure = error as? AccountFailure
+      if failure?.code == 42931 {
+        verificationLockedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        verificationLockedUntil = Date().addingTimeInterval(
+          Double(failure?.retryAfterSeconds ?? 3600))
+      }
+      message = failureMessage(error)
       return false
     }
   }
@@ -206,24 +274,70 @@ final class AccountStore {
     }
   }
 
-  func isBookmarked(_ id: Int64) -> Bool { bookmarks.contains { $0.id == id } }
+  func isBookmarked(_ id: Int64) -> Bool {
+    bookmarkOverrides[id] ?? bookmarks.contains { $0.id == id }
+  }
 
-  func toggleBookmark(_ id: Int64) async {
+  func toggleBookmark(_ id: Int64, marker: Marker? = nil) async {
     guard id > 0, !isBusy, let owner = user?.publicId else { return }
     let token = epoch
     let saved = isBookmarked(id)
+    let previousOverride = bookmarkOverrides[id]
+    let previousBookmarks = bookmarks
+    bookmarkTask?.cancel()
+    bookmarkRevision = UUID()
+    bookmarkWritePending = true
+    bookmarkOverrides[id] = !saved
+    if saved {
+      bookmarks.removeAll { $0.id == id }
+    } else if let marker, marker.id == id, !bookmarks.contains(where: { $0.id == id }) {
+      bookmarks.append(marker)
+    }
     isBusy = true
     identityGeneration = UUID()
     message = nil
-    defer { isBusy = false }
+    defer {
+      isBusy = false
+      bookmarkWritePending = false
+    }
     do {
       try await verifyOwner(owner, token: token)
       _ = try await api.send(
         AccountRequest(path: "api/markers/\(id)/favorite", method: saved ? "DELETE" : "POST"))
       guard owner == user?.publicId, token == epoch else { return }
-      // Re-read the authoritative list; never claim a failed write succeeded.
-      await loadLibrary()
-    } catch { if matches(owner, token) { handle(error, owner: owner) } }
+      // Keep the acknowledged state while refreshing only favorites. Unrelated
+      // created-place and avatar requests must not hold the bookmark button busy.
+      let revision = UUID()
+      bookmarkRevision = revision
+      bookmarkTask = Task { await refreshBookmarks(owner: owner, token: token, revision: revision) }
+    } catch {
+      guard matches(owner, token) else { return }
+      bookmarkRevision = UUID()
+      bookmarkOverrides[id] = previousOverride
+      bookmarks = previousBookmarks
+      handle(error, owner: owner)
+    }
+  }
+
+  private func refreshBookmarks(owner: String, token: UUID, revision: UUID) async {
+    do {
+      let values = try await api.places("api/markers/me/favorites/details", language: language)
+      guard matches(owner, token), !Task.isCancelled else { return }
+      acceptBookmarks(values, revision: revision)
+    } catch {
+      guard matches(owner, token), revision == bookmarkRevision, !Task.isCancelled else { return }
+      // A failed refresh does not undo a successful write.
+      if (error as? AccountFailure)?.status == 401 { handle(error, owner: owner) }
+      libraryMessage = failureMessage(error)
+    }
+  }
+
+  private func acceptBookmarks(_ values: [Marker], revision: UUID) {
+    guard revision == bookmarkRevision, !bookmarkWritePending else { return }
+    bookmarks = values
+    bookmarkOverrides.removeAll()
+    hasLoadedBookmarks = true
+    libraryMessage = nil
   }
 
   func reloadLibrary() {
@@ -243,13 +357,21 @@ final class AccountStore {
   private func readLibrary(generation: UUID) async {
     guard let owner = user?.publicId, generation == libraryGeneration else { return }
     let token = epoch
+    let revision = bookmarkRevision
     libraryLoading = true
+    bookmarkStatusLoading = !hasLoadedBookmarks
     libraryMessage = nil
-    defer { if generation == libraryGeneration { libraryLoading = false } }
+    defer {
+      if generation == libraryGeneration {
+        libraryLoading = false
+        bookmarkStatusLoading = false
+      }
+    }
     do {
       let values = try await api.places("api/markers/me/favorites/details", language: language)
       guard matches(owner, token), generation == libraryGeneration else { return }
-      bookmarks = values
+      acceptBookmarks(values, revision: revision)
+      bookmarkStatusLoading = false
       let own = try await api.places("api/markers/me/created", language: language)
       guard matches(owner, token), generation == libraryGeneration else { return }
       created = own
@@ -334,8 +456,17 @@ final class AccountStore {
   /// the owner check and a private contribution request. Release between chunks.
   func contributionRequest(
     _ request: AccountRequest, owner: String, token: UUID,
+    waitForAccount: Bool = false,
     beforeSend: () throws -> Void = {}
   ) async throws -> Data {
+    if waitForAccount {
+      while isBusy || isChecking {
+        guard matches(owner, token) else { throw CancellationError() }
+        try await waitForAccountAccess()
+        try Task.checkCancellation()
+      }
+      try Task.checkCancellation()
+    }
     guard matches(owner, token) else { throw CancellationError() }
     guard !isBusy, !isChecking else { throw ContributionFailure.accountBusy }
     isBusy = true
@@ -353,6 +484,35 @@ final class AccountStore {
       if matches(owner, token), (error as? AccountFailure)?.status == 401 { expire() }
       throw error
     }
+  }
+
+  /// A user-initiated edit read may wait for startup/foreground identity checks.
+  /// Writes still use the existing fail-fast gate and are never queued for replay.
+  private func waitForAccountAccess() async throws {
+    let id = UUID()
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation {
+        (continuation: CheckedContinuation<Void, any Error>) in
+        if Task.isCancelled {
+          continuation.resume(throwing: CancellationError())
+        } else if !isBusy && !isChecking {
+          continuation.resume()
+        } else {
+          accountWaiters[id] = continuation
+        }
+      }
+    } onCancel: {
+      Task { @MainActor [weak self] in
+        self?.accountWaiters.removeValue(forKey: id)?.resume(throwing: CancellationError())
+      }
+    }
+  }
+
+  private func resumeAccountWaiters() {
+    guard !isBusy, !isChecking else { return }
+    let waiters = Array(accountWaiters.values)
+    accountWaiters.removeAll()
+    for waiter in waiters { waiter.resume() }
   }
 
   private func writeUser(_ operation: () async throws -> AccountUser) async -> Bool {
@@ -427,6 +587,11 @@ final class AccountStore {
     epoch = UUID()
     identityGeneration = UUID()
     libraryTask?.cancel()
+    bookmarkTask?.cancel()
+    bookmarkRevision = UUID()
+    bookmarkOverrides.removeAll()
+    hasLoadedBookmarks = false
+    bookmarkStatusLoading = false
     libraryGeneration = UUID()
     libraryLoading = false
     libraryMessage = nil

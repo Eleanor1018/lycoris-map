@@ -271,6 +271,12 @@ class AppSmokeTest {
         compose.onNode(hasSetTextAction() and text("Email", "邮箱")).assertExists()
         back()
         compose.onNode(heading("Log In", "登录")).assertIsDisplayed()
+        expandPanel()
+        compose.onNode(text("Forgot password?", "忘记密码？") and hasClickAction()).performScrollTo().assertIsDisplayed().performClick()
+        compose.onNode(heading("Reset Password", "重置密码")).assertIsDisplayed()
+        back()
+        compose.onNode(heading("Log In", "登录")).assertIsDisplayed()
+        withModel { assertEquals(SecondaryPage.ACCOUNT, it.page.value) }
         back()
         compose.onNode(heading("Find Nearby", "查找附近")).assertIsDisplayed()
         withModel { assertNull(it.page.value) }
@@ -278,6 +284,9 @@ class AppSmokeTest {
         compose.onNode(tab("Bookmarks", "收藏")).performClick()
         compose.onNode(text("Log in", "登录") and hasClickAction()).performScrollTo().performClick()
         compose.onNode(heading("Log In", "登录")).assertIsDisplayed()
+        expandPanel()
+        compose.onNode(text("Forgot password?", "忘记密码？") and hasClickAction()).performScrollTo().assertIsDisplayed().performClick()
+        compose.onNode(heading("Reset Password", "重置密码")).assertIsDisplayed()
         closePanel()
         compose.onNode(tab("Bookmarks", "收藏")).assertIsSelected()
         compose.onNode(heading("Bookmarks", "收藏")).assertIsDisplayed()

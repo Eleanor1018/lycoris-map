@@ -118,4 +118,64 @@ struct MapViewportTests {
       #expect(abs(map.camera.heading - heading) < 0.1)
     }
   }
+
+  @MainActor @Test(arguments: [0.0, 35.0, 170.0])
+  func sidebarInsetsPreserveMapAnchorsAfterWindowResizing(heading: Double) {
+    let map = MKMapView(frame: CGRect(x: 0, y: 0, width: 1366, height: 1024))
+    map.layoutMargins = UIEdgeInsets(top: 24, left: 10, bottom: 24, right: 10)
+    let center = CLLocationCoordinate2D(latitude: 40.766, longitude: -74.077)
+    map.setCamera(
+      MKMapCamera(
+        lookingAtCenter: center, fromDistance: 14_000, pitch: 0, heading: heading),
+      animated: false)
+    let pin = MKPointAnnotation()
+    pin.coordinate = center
+    map.addAnnotation(pin)
+
+    for size in [
+      CGSize(width: 1366, height: 1024), CGSize(width: 1024, height: 1366),
+      CGSize(width: 810, height: 1080), CGSize(width: 600, height: 900),
+    ] {
+      // Let MapKit finish its native resize before testing a sidebar transition.
+      map.frame.size = size
+      map.layoutIfNeeded()
+      let screenPoint = CGPoint(x: size.width * 0.75, y: size.height * 0.4)
+      let coordinate = map.convert(screenPoint, toCoordinateFrom: map)
+      let distance = map.camera.centerCoordinateDistance
+
+      for insets in [
+        UIEdgeInsets(top: 24, left: 420, bottom: 24, right: 60),
+        UIEdgeInsets(top: 24, left: 76, bottom: 24, right: 20),
+        UIEdgeInsets(top: 62, left: 10, bottom: 282, right: 10),
+      ] {
+        NativeMapView.updateMargins(insets, on: map)
+        let actual = map.convert(coordinate, toPointTo: map)
+        #expect(map.layoutMargins == insets)
+        #expect(abs(actual.x - screenPoint.x) < 1)
+        #expect(abs(actual.y - screenPoint.y) < 1)
+        #expect(abs(map.camera.centerCoordinateDistance - distance) < 1)
+        #expect(abs(map.camera.heading - heading) < 0.1)
+        #expect(map.annotations.contains { $0 === pin })
+      }
+    }
+  }
+
+  @MainActor @Test func selectedPlaceFocusUsesTheAreaBesideTheSidebar() {
+    let map = MKMapView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
+    let insets = UIEdgeInsets(top: 24, left: 590, bottom: 24, right: 60)
+    NativeMapView.updateMargins(insets, on: map)
+    let point = GeoPoint(latitude: 40.766, longitude: -74.077)!
+    let coordinator = NativeMapView(
+      topInset: insets.top, bottomInset: insets.bottom,
+      leftInset: insets.left, rightInset: insets.right,
+      focus: MapFocus(point: point), animated: false
+    ).makeCoordinator()
+
+    coordinator.applyFocus(on: map)
+
+    let focusedPoint = map.convert(point.coordinate, toPointTo: map)
+    #expect(map.bounds.inset(by: insets).contains(focusedPoint))
+    #expect(abs(map.centerCoordinate.latitude - point.latitude) < 0.000001)
+    #expect(abs(map.centerCoordinate.longitude - point.longitude) < 0.000001)
+  }
 }

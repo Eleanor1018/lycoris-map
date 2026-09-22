@@ -9,6 +9,16 @@ body,
     height: 100%;
 }
 
+/* The map shell is pinned at the layout origin and sized to the visual window,
+   so the outer document must not scroll behind it (iOS Chrome otherwise exposed
+   the body background as a purple strip after a refresh). Scoped to pages that
+   render the shell so the admin console keeps its own scrolling. */
+html:has(#map-shell),
+body:has(#map-shell) {
+    overflow: hidden;
+    overscroll-behavior: none;
+}
+
 body {
     margin: 0;
     font-family: var(--ui-font-body);

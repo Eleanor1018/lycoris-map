@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { FigmaIcon } from '@/shared/ui/figma-icon'
 import { PlaceMeta, PlaceSummary, ShareButton } from './DesktopPanel'
 import { CategoryBadge, DesignButton, IconButton, NearbyCards, SearchField } from './primitives'
+import type { VoiceSearchState } from '@/shared/ui/design-primitives'
 import type { DesignSample, Snap } from './types'
 import { ContributionForm, type ContributionFormProps } from './ContributionForm'
 import type { PlaceBrowse } from '@/features/places/usePlaceBrowse'
@@ -21,6 +22,9 @@ export function MobileSheet({
     sample,
     search,
     setSearch,
+    voice,
+    onMic,
+    onVoiceChange,
     openDetails,
     close,
     height,
@@ -45,6 +49,10 @@ export function MobileSheet({
     sample: DesignSample | undefined
     search: string
     setSearch: (value: string) => void
+    voice: boolean
+    /** Expands the menu to its maximum before any recognised word arrives. */
+    onMic: () => void
+    onVoiceChange: (voice: VoiceSearchState) => void
     openDetails: (focusId: string) => void
     close: () => void
     height: number
@@ -78,13 +86,24 @@ export function MobileSheet({
         const scroll = content?.parentElement
         if (!content || !scroll) return
         const nearby = mainMenu ? content.querySelector<HTMLElement>('.nearby-cards') : null
+        const voiceBody = mainMenu ? content.querySelector<HTMLElement>('.voice-search-body') : null
         const measure = () => {
             const bounds = content.getBoundingClientRect()
             const natural = bounds.height
             if (!natural) return
             const safeArea = parseFloat(getComputedStyle(scroll).paddingBottom) || 0
             const onHeight = liveDetail ? onDetailHeight : onMenuHeight
-            onHeight(Math.max(liveDetail ? 158 : 326, Math.ceil(natural + safeArea)))
+            // The voice body is absolutely placed inside the reserved body area,
+            // so a long transcript grows the menu to fit instead of being cut off.
+            const voiceBottom = voiceBody
+                ? voiceBody.getBoundingClientRect().bottom - bounds.top
+                : 0
+            onHeight(
+                Math.max(
+                    liveDetail ? 158 : 326,
+                    Math.ceil(Math.max(natural, voiceBottom + 22) + safeArea),
+                ),
+            )
             const cards = nearby?.getBoundingClientRect()
             if (cards?.height) {
                 // The middle stop shows every nearby card and the same bottom
@@ -98,21 +117,17 @@ export function MobileSheet({
         observer.observe(content)
         observer.observe(scroll)
         if (nearby) observer.observe(nearby)
+        if (voiceBody) observer.observe(voiceBody)
         return () => observer.disconnect()
-    }, [liveDetail, mainMenu, onDetailHeight, onMenuHeight, onNearbyHeight])
+    }, [liveDetail, mainMenu, voice, onDetailHeight, onMenuHeight, onNearbyHeight])
+    // Keep the focused field visible while the visual viewport moves for the
+    // keyboard. The shell owns the sizing: it grows by the keyboard pan, so the
+    // sheet does not recompute any height or subtract the pan here.
     useEffect(() => {
-        const element = sheet.current,
-            viewport = window.visualViewport
-        if (!composing || !element || !viewport) return
+        const element = sheet.current
+        if (!composing || !element) return
         let frame = 0
-        const resize = () => {
-            const normalScale = Math.abs(viewport.scale - 1) < 0.05
-            const height = normalScale ? viewport.height : window.innerHeight
-            const offset = normalScale
-                ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
-                : 0
-            element.style.setProperty('--contribution-viewport-height', `${height}px`)
-            element.style.setProperty('--contribution-keyboard-offset', `${offset}px`)
+        const reveal = () => {
             cancelAnimationFrame(frame)
             frame = requestAnimationFrame(() => {
                 const active = document.activeElement
@@ -124,15 +139,15 @@ export function MobileSheet({
                     active.scrollIntoView?.({ block: 'nearest' })
             })
         }
-        resize()
-        viewport.addEventListener('resize', resize)
-        viewport.addEventListener('scroll', resize)
+        element.addEventListener('focusin', reveal)
+        const viewport = window.visualViewport
+        viewport?.addEventListener('resize', reveal)
+        viewport?.addEventListener('scroll', reveal)
         return () => {
             cancelAnimationFrame(frame)
-            viewport.removeEventListener('resize', resize)
-            viewport.removeEventListener('scroll', resize)
-            element.style.removeProperty('--contribution-viewport-height')
-            element.style.removeProperty('--contribution-keyboard-offset')
+            element.removeEventListener('focusin', reveal)
+            viewport?.removeEventListener('resize', reveal)
+            viewport?.removeEventListener('scroll', reveal)
         }
     }, [composing])
     const cycle = () =>
@@ -279,7 +294,13 @@ export function MobileSheet({
                         className={`mobile-search-content ${hasPlaceResults ? 'has-place-results' : ''}`}
                     >
                         <div className="mobile-logo">{ui.text('Lycoris Maps')}</div>
-                        <SearchField mobile value={search} onChange={setSearch} />
+                        <SearchField
+                            mobile
+                            value={search}
+                            onChange={setSearch}
+                            onVoiceStart={onMic}
+                            onVoiceChange={onVoiceChange}
+                        />
                         {!sample ? (
                             <AccountEntry mobile />
                         ) : (
@@ -291,7 +312,7 @@ export function MobileSheet({
                                 AA
                             </DesignButton>
                         )}
-                        {browse && hasPlaceResults && selectPlace ? (
+                        {voice ? null : browse && hasPlaceResults && selectPlace ? (
                             <div
                                 inert={snap === 'collapsed'}
                                 aria-hidden={snap === 'collapsed' || undefined}
@@ -304,14 +325,10 @@ export function MobileSheet({
                                 aria-hidden={snap === 'collapsed' || undefined}
                             >
                                 <h2 className="mobile-nearby-heading">{ui.text('Find Nearby')}</h2>
-                                <NearbyCards
-                                    mobile
-                                    half={snap === 'half'}
-                                    onSelect={chooseCategory}
-                                />
+                                <NearbyCards mobile onSelect={chooseCategory} />
                             </div>
                         )}
-                        {!hasPlaceResults && (
+                        {!hasPlaceResults && !voice && (
                             <div inert={snap !== 'full'} aria-hidden={snap !== 'full' || undefined}>
                                 {showBookmarks && (
                                     <>
