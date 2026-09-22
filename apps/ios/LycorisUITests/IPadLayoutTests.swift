@@ -19,12 +19,14 @@ import XCTest
       }
       let orientation = XCUIDevice.shared.orientation
       originalOrientation = orientation.isPortrait || orientation.isLandscape ? orientation : .portrait
+      XCUIApplication().terminate()
       XCUIDevice.shared.orientation = .portrait
     }
   }
 
   override func tearDown() async throws {
     await MainActor.run {
+      XCUIApplication().terminate()
       if let originalOrientation { XCUIDevice.shared.orientation = originalOrientation }
       originalOrientation = nil
     }
@@ -40,6 +42,7 @@ import XCTest
     ]
     app.launch()
     XCTAssertTrue(app.buttons["map.sidebar.search"].waitForExistence(timeout: 10))
+    try waitForOrientation(.portrait, in: app)
     try rotate(.landscapeLeft, in: app)
     assertNavigationAndMap(app)
     XCTAssertGreaterThanOrEqual(app.buttons["map.sidebar.settings"].frame.height, 44)
@@ -122,12 +125,12 @@ import XCTest
     let app = try launch()
     app.buttons["map.category.baby_room"].tap()
     let row = app.buttons["place.row.23"]
-    XCTAssertTrue(row.waitForExistence(timeout: 8))
+    try require(row.waitForExistence(timeout: 8), "Nearby category did not produce its result", in: app)
     XCTAssertEqual(app.staticTexts["places.results.title"].label, "Nearby")
     XCTAssertFalse(app.buttons["place.row.21"].exists)
     row.tap()
     let title = app.staticTexts["place.title"]
-    XCTAssertTrue(title.waitForExistence(timeout: 5))
+    try require(title.waitForExistence(timeout: 5), "Nearby detail did not open", in: app)
     XCTAssertEqual(title.label, "Nursing Room No Tag")
     XCTAssertTrue(app.buttons["place.share"].isHittable)
     assertNavigationAndMap(app)
@@ -138,23 +141,40 @@ import XCTest
     XCTAssertTrue(title.isHittable)
     XCTAssertTrue(app.buttons["place.navigate"].isHittable)
     assertNavigationAndMap(app)
-    // Verify the system sheet in portrait as well as the landscape detail.
-    app.buttons["place.share"].tap()
-    let copy = app.cells.matching(NSPredicate(format: "label IN %@", ["Copy", "拷贝", "复制"]))
-      .firstMatch
-    XCTAssertTrue(copy.waitForExistence(timeout: 8))
-    attach(app, "ipad-native-share-sheet")
-    app.buttons["header.closeButton"].tap()
-    XCTAssertTrue(title.waitForExistence(timeout: 5))
+    // Keep the first native share presentation after a portrait rotation.
+    try assertNativeShareOpensAndCloses(in: app, detail: title)
 
     try rotate(.landscapeRight, in: app)
     XCTAssertEqual(title.label, "Nursing Room No Tag")
     attach(app, "ipad-detail-rotation-preserved")
+    try assertNativeShareOpensAndCloses(in: app, detail: title)
+
+    try rotate(.landscapeLeft, in: app)
+    XCTAssertEqual(title.label, "Nursing Room No Tag")
+    try assertNativeShareOpensAndCloses(in: app, detail: title)
 
     app.buttons["map.sidebar.close"].tap()
     XCTAssertTrue(content(in: app).waitForNonExistence(timeout: 5))
     XCTAssertFalse(title.exists)
     assertNavigationAndMap(app)
+  }
+
+  private func assertNativeShareOpensAndCloses(in app: XCUIApplication, detail: XCUIElement) throws {
+    app.buttons["place.share"].tap()
+    let copy = app.cells.matching(NSPredicate(format: "label IN %@", ["Copy", "拷贝", "复制"]))
+      .firstMatch
+    try require(copy.waitForExistence(timeout: 8), "Native share sheet did not open", in: app)
+    attach(app, "ipad-native-share-sheet")
+    let closeShare = app.buttons["header.closeButton"]
+    // The detail remains in the AX tree behind the native share presentation.
+    // Wait for the system sheet itself to disappear before rotating or closing the sidebar.
+    for _ in 0..<3 {
+      closeShare.tap()
+      if closeShare.waitForNonExistence(timeout: 2) { break }
+    }
+    try require(!closeShare.exists, "Native share sheet did not dismiss", in: app)
+    try require(detail.waitForExistence(timeout: 5) && detail.isHittable,
+                "Detail did not become interactive after sharing", in: app)
   }
 
   func testNativeSettingsAndLoginExposeAuthenticatedBookmarks() async throws {
@@ -260,6 +280,7 @@ import XCTest
       // Observe the launch result without sending a second orientation event.
       try waitForOrientation(initialOrientation, in: app)
     } else {
+      try waitForOrientation(.portrait, in: app)
       try rotate(.landscapeLeft, in: app)
     }
     return app
