@@ -34,13 +34,11 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.lycoris.maps.core.designsystem.FigmaIcon
+import com.lycoris.maps.core.designsystem.LycorisTextStyles
 import com.lycoris.maps.core.designsystem.LycorisColors
 import com.lycoris.maps.core.map.MapViewHost
 import com.lycoris.maps.core.map.MapStyles
@@ -196,7 +194,7 @@ fun HomeScreen(
             Box(Modifier.align(Alignment.BottomStart).padding(start = 8.dp, bottom = bottom + visibleDp)
                 .widthIn(max = (maxWidth - 82.dp).coerceAtLeast(1.dp)).heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onAttribution), contentAlignment = Alignment.BottomStart) {
                 Text(if (mapSource == MapSource.TIANDITU) "© 天地图" else "© OpenStreetMap contributors", Modifier.background(Color.White.copy(alpha = 0.86f)).padding(horizontal = 4.dp, vertical = 2.dp),
-                    fontSize = 11.sp, lineHeight = 14.sp, color = Color(0xFF005EA8))
+                    style = LycorisTextStyles.Attribution, color = Color(0xFF005EA8))
             }
         }
         val showMapFailure = notice == null && mapLoad == MapLoad.FAILED && !dismissMapFailure
@@ -263,7 +261,7 @@ fun HomeScreen(
                             Box(Modifier.size(56.dp, 32.dp).background(if (section == item) LycorisColors.Card else Color.Transparent, RoundedCornerShape(16.dp)), contentAlignment = Alignment.Center) {
                                 FigmaIcon(icon, Modifier.size(28.dp))
                             }
-                            Text(label, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.5.sp, color = LycorisColors.SecondaryText)
+                            Text(label, style = MaterialTheme.typography.labelMedium, color = LycorisColors.SecondaryText)
                         }
                     }
                 }
@@ -283,9 +281,9 @@ internal fun SearchBar(query: String, onQuery: (String) -> Unit, onSearch: () ->
             FigmaIcon("search", Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
             BasicTextField(query, onQuery, Modifier.weight(1f).padding(vertical = 12.dp),
-                textStyle = TextStyle(fontSize = 16.sp, color = LycorisColors.Text), singleLine = true,
+                textStyle = LycorisTextStyles.Search.copy(color = LycorisColors.Text), singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { onSearch() }),
-                decorationBox = { field -> Box { if (query.isEmpty()) Text(if (chinese) "搜索点位" else "Search Positions", color = Color(0xFF88898B), fontSize = 16.sp); field() } })
+                decorationBox = { field -> Box { if (query.isEmpty()) Text(if (chinese) "搜索点位" else "Search Positions", color = Color(0xFF88898B), style = LycorisTextStyles.Search); field() } })
             IconButton(onVoice, Modifier.size(48.dp)) { Icon(Icons.Rounded.MicNone, if (chinese) "语音搜索" else "Voice search", Modifier.size(20.dp), tint = Color(0xFF88898B)) }
             Box(Modifier.size(48.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onAccount)
                 .semantics { contentDescription = if (chinese) "账号" else "Account" }, contentAlignment = Alignment.Center) {
@@ -309,7 +307,7 @@ private fun MapTool(icon: String, label: String, onClick: () -> Unit, modifier: 
 @Composable
 fun PanelTitle(title: String, onClose: (() -> Unit)? = null, chinese: Boolean = false, startPadding: androidx.compose.ui.unit.Dp = 41.dp, topPadding: androidx.compose.ui.unit.Dp = 0.dp, bottomPadding: androidx.compose.ui.unit.Dp = 0.dp, endPadding: androidx.compose.ui.unit.Dp = 24.dp) {
     Row(Modifier.fillMaxWidth().padding(start = startPadding, top = topPadding, end = endPadding, bottom = bottomPadding).heightIn(min = if (onClose != null) 40.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, Modifier.weight(1f).semantics { heading() }, fontSize = 22.sp, lineHeight = 28.sp, color = LycorisColors.Text)
+        Text(title, Modifier.weight(1f).semantics { heading() }, style = LycorisTextStyles.PanelTitle, color = LycorisColors.Text)
         if (onClose != null) IconButton(onClose) { Icon(Icons.Rounded.Close, if (chinese) "关闭" else "Close") }
     }
 }
@@ -324,7 +322,7 @@ fun NearbyCategories(chinese: Boolean, onClick: (String) -> Unit, horizontalPadd
                 Box(Modifier.size(30.dp).background(if (index == 0) Brush.verticalGradient(listOf(Color(0xFF38AEFF), category.color)) else Brush.verticalGradient(listOf(category.color, category.color)), CircleShape), contentAlignment = Alignment.Center) {
                     FigmaIcon(category.key, Modifier.size(24.dp))
                 }
-                Text(if (chinese) category.zh else category.en, fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
+                Text(if (chinese) category.zh else category.en, style = LycorisTextStyles.PlaceTitle, color = Color.Black)
             }
         }
     }
@@ -344,8 +342,8 @@ private fun SettingsRows(chinese: Boolean, radius: Int, mapSourceName: String, s
             Row(Modifier.fillMaxWidth().heightIn(min = 66.dp).clip(groupShape(index, rows.size)).background(LycorisColors.Card)
                 .clickable(role = Role.Button, onClick = { onSetting(key) }).padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Text(label, Modifier.weight(1f), fontSize = 17.sp)
-                if (value.isNotEmpty()) Text(value, Modifier.weight(1f).padding(start = 8.dp), fontSize = 17.sp, textAlign = TextAlign.End, color = LycorisColors.SecondaryText)
+                Text(label, Modifier.weight(1f), style = LycorisTextStyles.SettingsRow)
+                if (value.isNotEmpty()) Text(value, Modifier.weight(1f).padding(start = 8.dp), style = LycorisTextStyles.SettingsRow, textAlign = TextAlign.End, color = LycorisColors.SecondaryText)
                 Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.padding(start = 4.dp).size(20.dp), tint = LycorisColors.Plum)
             }
         }

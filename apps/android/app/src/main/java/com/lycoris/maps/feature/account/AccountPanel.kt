@@ -35,10 +35,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lycoris.maps.core.data.AccountRepository
 import com.lycoris.maps.core.data.SessionIdentity
+import com.lycoris.maps.core.designsystem.LycorisTextStyles
 import com.lycoris.maps.core.designsystem.LycorisColors
 import com.lycoris.maps.core.media.PhotoFailure
 import com.lycoris.maps.core.media.PhotoImporter
@@ -359,7 +359,7 @@ private fun ProfileContent(
                     .clickable(enabled = !busy, role = Role.Button, onClick = callback).padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(label, Modifier.weight(1f), fontSize = 17.sp)
+                Text(label, Modifier.weight(1f), style = LycorisTextStyles.SettingsRow)
                 Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, Modifier.padding(start = 4.dp).size(20.dp), tint = LycorisColors.Plum)
             }
         }

@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Typeface
 import android.os.SystemClock
 import android.util.Log
 import androidx.compose.runtime.Composable
@@ -23,6 +24,7 @@ import com.google.android.gms.maps.model.CircleOptions
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.MarkerOptions
 import com.lycoris.maps.core.device.DeviceLocation
+import com.lycoris.maps.core.designsystem.LycorisNativeFonts
 import com.lycoris.maps.core.device.HeadingState
 import com.lycoris.maps.core.device.LocationFixPolicy
 import com.lycoris.maps.core.model.Marker
@@ -46,6 +48,7 @@ fun GooglePlaceLayers(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current.density
+    val clusterTypeface = remember(context) { LycorisNativeFonts.medium(context) }
     val selected by rememberUpdatedState(onSelect)
     val pick by rememberUpdatedState(onPickCoordinate)
     val map = state.googleMap
@@ -61,8 +64,8 @@ fun GooglePlaceLayers(
             null
         }
     }
-    val renderer = remember(state, map, density) {
-        map?.let { GooglePlaceRenderer(state, it, density,
+    val renderer = remember(state, map, density, clusterTypeface) {
+        map?.let { GooglePlaceRenderer(state, it, density, clusterTypeface,
             onSelect = { selected(it) },
             onPick = { latitude, longitude ->
                 val callback = pick
@@ -111,6 +114,7 @@ private class GooglePlaceRenderer(
     private val state: NativeMapState,
     private val map: GoogleMap,
     private val density: Float,
+    private val clusterTypeface: Typeface,
     private val onSelect: (Long) -> Unit,
     private val onPick: (Double, Double) -> Boolean,
 ) {
@@ -187,7 +191,7 @@ private class GooglePlaceRenderer(
             requiredIcons.add(imageKey)
             val icon = descriptors.getOrPut(imageKey) {
                 BitmapDescriptorFactory.fromBitmap(when {
-                    symbol.clustered -> clusterBitmap(symbol.count, symbol.category, density)
+                    symbol.clustered -> clusterBitmap(symbol.count, symbol.category, density, clusterTypeface)
                     isPin -> artwork!!.pins.getValue(symbol.category!!)
                     else -> circleBitmap(categoryColor(symbol.category), radiusDp = 7f, strokeDp = 2f)
                 })
