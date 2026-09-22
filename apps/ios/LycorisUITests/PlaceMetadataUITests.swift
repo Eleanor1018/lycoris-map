@@ -47,6 +47,31 @@ private enum WriteWaitError: Error { case missingWrite }
     XCTAssertEqual(closing.label, "Closing soon")
   }
 
+  func testAirportAndPublicToiletTagsInListAndDetail() async throws {
+    try await resetFixture()
+    for (id, title, language, label) in [
+      (24, "Airport Accessible Toilet", "en", "Airport"),
+      (25, "Public Accessible Toilet", "zh", "公共卫生间"),
+    ] {
+      let app = launch(language: language, now: "2026-09-20T03:00:00Z")
+      let search = app.textFields["map.search"]
+      XCTAssertTrue(search.waitForExistence(timeout: 10))
+      search.tap()
+      search.typeText(title)
+      let row = app.buttons["place.row.\(id)"]
+      XCTAssertTrue(row.waitForExistence(timeout: 8))
+      XCTAssertTrue(row.label.contains(label), row.label)
+      attach(app, "metadata-new-venue-\(id)-list")
+      row.tap()
+      XCTAssertTrue(app.staticTexts["place.title"].waitForExistence(timeout: 8))
+      let venue = app.descendants(matching: .any)["place.venue"]
+      XCTAssertTrue(venue.waitForExistence(timeout: 5))
+      XCTAssertEqual(venue.label, label)
+      attach(app, "metadata-new-venue-\(id)-detail")
+      app.terminate()
+    }
+  }
+
   func testNonToiletRowHasNoInventedVenueTag() async throws {
     try await resetFixture()
     let app = launch(now: "2026-09-20T03:00:00Z")
@@ -157,20 +182,20 @@ private enum WriteWaitError: Error { case missingWrite }
     XCTAssertTrue(app.buttons["contribution.venue"].waitForExistence(timeout: 5))
     XCTAssertEqual(app.buttons["contribution.venue"].value as? String, "Other")
 
-    // Choose Mall again and submit the proposal, then confirm the serialized
+    // Choose a new venue and submit the proposal, then confirm the serialized
     // payload through the fixture's recorded writes.
     app.buttons["contribution.venue"].tap()
-    app.buttons["Mall"].tap()
+    app.buttons["Public toilet"].tap()
     attach(app, "metadata-editor-before-submit")
     app.buttons["contribution.submit"].tap()
     XCTAssertTrue(app.staticTexts["contribution.complete"].waitForExistence(timeout: 20))
     let write = try await waitForWrite(method: "PATCH", id: 21)
-    XCTAssertEqual(write["venueType"] as? String, "mall")
+    XCTAssertEqual(write["venueType"] as? String, "public_toilet")
     // The fixture's published point is unchanged while the edit waits review.
     XCTAssertEqual(write["title"] as? String, "Metro Accessible Toilet")
   }
 
-  func testNewToiletOffersAllSixVenues() async throws {
+  func testNewToiletOffersAllEightVenues() async throws {
     try await resetFixture()
     let app = launch(now: "2026-09-20T03:00:00Z")
     // Use the explicit map-selection entry above the new contribution form.
@@ -188,11 +213,16 @@ private enum WriteWaitError: Error { case missingWrite }
     // A brand-new accessible toilet starts at the other default.
     XCTAssertEqual(picker.value as? String, "Other")
     picker.tap()
-    for venue in ["Metro", "Hospital", "Mall", "Railway station", "School", "Other"] {
+    for venue in [
+      "Metro", "Hospital", "Mall", "Railway station", "School", "Airport", "Public toilet", "Other",
+    ] {
       XCTAssertTrue(app.buttons[venue].waitForExistence(timeout: 3), venue)
     }
-    app.buttons["School"].tap()
-    XCTAssertEqual(picker.value as? String, "School")
+    app.buttons["Airport"].tap()
+    XCTAssertEqual(picker.value as? String, "Airport")
+    picker.tap()
+    app.buttons["Public toilet"].tap()
+    XCTAssertEqual(picker.value as? String, "Public toilet")
     attach(app, "metadata-new-venue")
   }
 

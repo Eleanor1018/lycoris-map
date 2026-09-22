@@ -140,7 +140,7 @@ struct ContributionDraft: Codable, Equatable, Identifiable {
       // deliberate change (including back to `other`) is not lost.
       // An unrecognized server value (venueType == nil) is omitted so PATCH
       // preserves the server's original instead of resending an unknown raw to
-      // the six-value validator.
+      // the server's venue validator.
       if original != nil || venue != .other {
         json["venueType"] = venue.rawValue
       }

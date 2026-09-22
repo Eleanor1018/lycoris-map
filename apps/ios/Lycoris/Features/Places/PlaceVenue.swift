@@ -1,6 +1,6 @@
 import Foundation
 
-/// The six controlled venue types served for accessible toilets. Unknown or
+/// The controlled venue types served for accessible toilets. Unknown or
 /// missing server strings are deliberately not mapped here, so an unknown raw
 /// value never displays an invented "Other" tag.
 enum PlaceVenue: String, Codable, CaseIterable, Sendable, Identifiable {
@@ -9,6 +9,8 @@ enum PlaceVenue: String, Codable, CaseIterable, Sendable, Identifiable {
   case mall
   case railwayStation = "railway_station"
   case school
+  case airport
+  case publicToilet = "public_toilet"
   case other
 
   var id: String { rawValue }
@@ -21,6 +23,8 @@ enum PlaceVenue: String, Codable, CaseIterable, Sendable, Identifiable {
     case .mall: "bag.fill"
     case .railwayStation: "train.side.front.car"
     case .school: "graduationcap.fill"
+    case .airport: "airplane"
+    case .publicToilet: "toilet.fill"
     case .other: "mappin.and.ellipse"
     }
   }
@@ -36,6 +40,8 @@ enum PlaceVenue: String, Codable, CaseIterable, Sendable, Identifiable {
     case .mall: "Mall"
     case .railwayStation: "Railway station"
     case .school: "School"
+    case .airport: "Airport"
+    case .publicToilet: "Public toilet"
     case .other: "Other"
     }
   }

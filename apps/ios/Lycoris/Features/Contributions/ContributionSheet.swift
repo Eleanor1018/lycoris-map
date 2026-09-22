@@ -237,7 +237,7 @@ struct ContributionSheet: View {
                 table: "PlaceMetadata"))
           ) {
             // A missing/unknown tag is a non-actionable placeholder, not a
-            // false "Other" selection. Only the six real options can be chosen.
+            // false "Other" selection. Only recognized options can be chosen.
             Text(venuePlaceholder())
               .tag(PlaceVenue?.none)
               .disabled(true)
