@@ -94,13 +94,28 @@ class HomePanelStabilityTest {
                 }
             }
             compose.onNodeWithText("Nearby").performScrollTo()
-            compose.onNodeWithContentDescription("Close").performClick()
+            // Scroll the real close target into the viewport and prove it is visible before clicking,
+            // then record the target and root bounds so a failure shows whether the click landed.
+            val closeButton = compose.onNodeWithContentDescription("Close")
+            val closeBounds = try {
+                closeButton.performScrollTo().assertIsDisplayed()
+                closeButton.fetchSemanticsNode().boundsInRoot
+            } catch (failure: AssertionError) {
+                throw AssertionError(
+                    "Close button was not reachable in the viewport; cycle=$cycle selected=$selected " +
+                        "closeCalls=${closeCalls.get()}: ${failure.message}",
+                    failure,
+                )
+            }
+            val rootBounds = compose.onRoot().fetchSemanticsNode().boundsInRoot
+            closeButton.performClick()
             compose.waitForIdle()
             // Verify the close actually took effect before checking the returned main menu. Under the
             // forced large-font density a title can sit outside the scroll viewport, so the returned
             // heading is scrolled to rather than treated as an immediate on-screen presence failure.
             assertFalse(
-                "Close did not leave Nearby; cycle=$cycle selected=$selected closeCalls=${closeCalls.get()}",
+                "Close did not leave Nearby; cycle=$cycle selected=$selected closeCalls=${closeCalls.get()} " +
+                    "closeBounds=$closeBounds rootBounds=$rootBounds",
                 nearby.value,
             )
             assertEquals(cycle + 1, closeCalls.get())

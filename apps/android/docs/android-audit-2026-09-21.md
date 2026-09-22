@@ -12,7 +12,7 @@ changed. Reviewed fixes are committed on `feat/android-native`; no production de
 | JVM (`unit`) | 143 tests, 0 failures / 0 errors / 0 skipped |
 | Python guards (`guards`) | 29 tests, OK |
 | Full AOSP instrumentation (baseline) | 60 run: 53 pass, 2 fail, 5 skip (skip code -4) |
-| `panels-aosp` (final) | 16 run: 16 pass, 0 fail, 0 skip — `panels-aosp-20260922-104409.log` |
+| `panels-aosp` (final) | 16 run: 16 pass, 0 fail, 0 skip — `panels-aosp-20260922-111329.log` |
 | Pixel instrumentation | interrupted; no complete pass count |
 | `backend-aosp` | failed at instrumentation with `ApiFailure.Network`; open |
 | `loaded-aosp` | no complete result |
@@ -85,19 +85,23 @@ protection check / source assessment, not a third confirmed product bug.
 
 ## Nearby test hardening
 
-CI `35678649471` (commit `275d65b`): 143 JVM, lint, all APK builds and 16 KB alignment passed. API 36
-had exactly one failure — `HomePanelStabilityTest`'s final `Find Nearby` `assertIsDisplayed` (the node
-existed but was outside the on-screen area). The earlier `PaneTitle` lookup failure is resolved; the
-entry/update stability assertions and both held regressions passed; API 26 was skipped on an upstream
-dependency.
+CI `35680724883` / job `106596899228` (commit `555e268`): 143 JVM, lint, all APK builds and 16 KB
+alignment passed; full API 36 had exactly one failure —
+`HomePanelStabilityTest` line 102, `Close did not leave Nearby; cycle=0 selected=[baby_room]
+closeCalls=0`. All held regressions and `newHandleDragInterruptsPreviousFling` passed. The earlier
+`PaneTitle` lookup failure did not recur. API 26 was skipped because the API 36 job failed.
 
-The current test closes by waiting for idle after `Close.performClick`, asserting the state left Nearby
-and `closeCalls == cycle + 1`, then verifying the returned menu with
-`onNodeWithText("Find Nearby").performScrollTo().assertIsDisplayed()`. Each cycle also scrolls
-`Nursing Rooms` into view and asserts the entry took effect. These are state/reachability assertions in
-the large-font fixture; they do not assume a title is immediately on screen. No sleep and no relaxed
-numeric assertion. Local green: `panels-aosp-20260922-104409.log`, `OK (16 tests)`. The close
-state/reachability change awaits a new CI run.
+That failure means the click did not reach the close path: the test scrolled the Nearby title into
+view but clicked `Close` directly, which does not guarantee the close target itself was in the
+viewport. The close step is now a visibility precondition on the real target. Each cycle scrolls
+`Nursing Rooms` into view, asserts the entry took effect, keeps the nearby stability assertions, then
+scrolls and shows `Close` itself (`onNodeWithContentDescription("Close").performScrollTo().assertIsDisplayed()`),
+records the close and root bounds, clicks, waits for idle and asserts `nearby.value == false` and
+`closeCalls == cycle + 1` (failure message carries `closeBounds`/`rootBounds`), and finally verifies
+`Find Nearby` with `performScrollTo().assertIsDisplayed()`. No sleep and no relaxed numeric assertion.
+This is a test step to ensure the real target enters the viewport; it does not claim the close
+behaviour is broken or fixed. Local green: `panels-aosp-20260922-111329.log`, `OK (16 tests)`. The new
+step awaits CI re-verification.
 
 ## Not accepted
 
@@ -108,6 +112,14 @@ state/reachability change awaits a new CI run.
 - `loaded-aosp`: no complete result.
 - Pixel instrumentation: interrupted, no complete pass count.
 - Physical-device heading, speech and permission dialogs are **not accepted**. Manual visual
-  acceptance was blocked by the Mac lock during the automated run and remains pending at this snapshot.
+  acceptance was initially blocked by the Mac lock. After unlock, Studio displayed the AOSP home
+  screen, but Computer Use switched back to the editor during attempted emulator interaction and
+  its surface inventory timed out. App gesture/visual acceptance remains incomplete.
+
+## Font and icon packaging check
+
+The app theme uses Material 3 `Typography()` (system fonts), and `FigmaIcon` reads SVG files from
+`android_asset/figma`. All 13 source SVG assets are present in the tested QA APK. This rules out a
+missing asset in that APK; it does not establish the cause of a physical phone's rendering failure.
 
 No credentials, cookies or absolute private paths are recorded here.
