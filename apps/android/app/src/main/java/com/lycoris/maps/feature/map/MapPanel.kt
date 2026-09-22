@@ -8,8 +8,9 @@ import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.FlingBehavior
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.ScrollScope
-import androidx.compose.foundation.gestures.anchoredDraggable
 import androidx.compose.foundation.gestures.animateTo
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
@@ -61,7 +62,7 @@ fun MapPanel(
     val currentRequestedStop by rememberUpdatedState(requestedStop)
     val currentPageKey by rememberUpdatedState(pageKey)
     val flingThreshold = with(density) { 300.dp.toPx() }
-    // Real drag signals from Foundation: the outer anchoredDraggable handle and the list itself.
+    // Real drag signals from Foundation: the outer handle and the list itself.
     val handleInteractions = remember { MutableInteractionSource() }
     val handleDragging by handleInteractions.collectIsDraggedAsState()
     val listDragging by scroll.interactionSource.collectIsDraggedAsState()
@@ -98,8 +99,8 @@ fun MapPanel(
                 val requestAtStart = currentRequestedStop
                 val pageAtStart = currentPageKey
                 val remaining = with(defaultFling) { this@performFling.performFling(initialVelocity) }
-                // Foundation commits settledValue after this callback returns. The final anchor
-                // is already available from the actual offset; do not read stale settledValue here.
+                // The final anchor is already available from the actual offset; do not read stale
+                // settledValue after the fling.
                 val physicalStop = state.anchors.closestAnchor(state.requireOffset())
                 if (physicalStop != null && currentRequestedStop == requestAtStart && currentPageKey == pageAtStart) {
                     val logicalStop = geometry.userStop(physicalStop, currentRequestedStop)
@@ -109,6 +110,14 @@ fun MapPanel(
             }
         }
     }
+    // A plain draggable drives the sheet one delta at a time without restarting a gesture event
+    // loop when anchors change; a re-measure mid-drag therefore cannot replay the last delta.
+    val sheetScrollScope = remember(state) {
+        object : ScrollScope {
+            override fun scrollBy(pixels: Float): Float = state.dispatchRawDelta(pixels)
+        }
+    }
+    val sheetDragState = rememberDraggableState { delta -> state.dispatchRawDelta(delta) }
     LaunchedEffect(pageKey) { scroll.scrollToItem(0) }
 
     val connection = remember(state, scroll, flingThreshold) {
@@ -190,7 +199,12 @@ fun MapPanel(
         }
             .clip(RoundedCornerShape(topStart = 25.dp, topEnd = 25.dp))
             .background(LycorisColors.Surface).nestedScroll(connection)
-            .anchoredDraggable(state, Orientation.Vertical, interactionSource = handleInteractions, flingBehavior = userFling)
+            .draggable(
+                state = sheetDragState,
+                orientation = Orientation.Vertical,
+                interactionSource = handleInteractions,
+                onDragStopped = { velocity -> with(userFling) { sheetScrollScope.performFling(velocity) } },
+            )
             .semantics {
                 paneTitle = pageKey
                 expand { scope.launch { settleUserStop(PanelStop.EXPANDED) }; true }

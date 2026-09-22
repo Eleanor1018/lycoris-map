@@ -27,6 +27,7 @@ class HomePanelStabilityTest {
         val resultCount = mutableIntStateOf(-1)
         val mapTick = mutableIntStateOf(0)
         val selected = mutableListOf<String>()
+        val closeCalls = java.util.concurrent.atomic.AtomicInteger(0)
         val map = NativeMapState()
         compose.setContent {
             CompositionLocalProvider(LocalDensity provides Density(2.625f, fontScale = 1.3f)) {
@@ -37,7 +38,7 @@ class HomePanelStabilityTest {
                             onContribute = {}, onMapSource = {}, onSetting = {}, radius = 1000,
                             mapSourceName = "OSM", secondaryTitle = if (nearby.value) "Nearby" else null,
                             secondaryKey = if (nearby.value) "NEARBY" else null,
-                            onCloseSecondary = { nearby.value = false },
+                            onCloseSecondary = { closeCalls.incrementAndGet(); nearby.value = false },
                             mapLayers = { Text("Map update ${mapTick.intValue}") },
                             panelContent = {
                                 if (nearby.value) {
@@ -57,18 +58,37 @@ class HomePanelStabilityTest {
                 }
             }
         }
-        repeat(2) {
-            compose.onNodeWithText("Nursing Rooms").performClick()
+        repeat(2) { cycle ->
+            // The real click target must be scrolled into view and shown before clicking; the
+            // fixture density is forced, so a smaller CI pixel window can hide it otherwise.
+            compose.onNodeWithText("Nursing Rooms").performScrollTo().assertIsDisplayed().performClick()
+            compose.waitForIdle()
+            assertTrue(
+                "Nursing Rooms click did not enter Nearby; cycle=$cycle selected=$selected " +
+                    "closeCalls=${closeCalls.get()}",
+                selected.size == cycle + 1 && nearby.value,
+            )
             for (count in listOf(-1, 0, 8, 0)) {
                 compose.runOnIdle { resultCount.intValue = count }
                 compose.waitForIdle()
-                val expected = nearbyBounds()
+                // Distinguish an accidental close from a semantics-tree timing gap: the state must
+                // still be open after each content change, before any near-by lookup.
+                assertTrue(
+                    "Nearby was closed unexpectedly; cycle=$cycle count=$count selected=$selected " +
+                        "closeCalls=${closeCalls.get()}",
+                    nearby.value,
+                )
+                val expected = nearbyBounds(cycle, count, selected, closeCalls.get())
                 repeat(12) {
                     compose.runOnIdle { mapTick.intValue++ }
                     compose.mainClock.advanceTimeByFrame()
                     compose.waitForIdle()
-                    val actual = nearbyBounds()
-                    assertEquals("Nearby must stop moving after content has settled", expected.top, actual.top, 1f)
+                    val actual = nearbyBounds(cycle, count, selected, closeCalls.get())
+                    assertEquals(
+                        "Nearby must stop moving after content has settled; cycle=$cycle count=$count " +
+                            "selected=$selected closeCalls=${closeCalls.get()} stateOpen=${nearby.value}",
+                        expected.top, actual.top, 1f,
+                    )
                     assertEquals(expected.bottom, actual.bottom, 1f)
                     compose.onNodeWithText("Nearby").assertIsDisplayed()
                 }
@@ -80,7 +100,18 @@ class HomePanelStabilityTest {
         assertEquals(listOf("baby_room", "baby_room"), selected)
     }
 
-    private fun nearbyBounds(): Rect = compose.onNode(
-        SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "NEARBY"),
-    ).fetchSemanticsNode().boundsInRoot
+    private fun nearbyBounds(cycle: Int, count: Int, selected: List<String>, closeCalls: Int): Rect {
+        val interaction = compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.PaneTitle, "NEARBY"))
+        return try {
+            interaction.fetchSemanticsNode().boundsInRoot
+        } catch (failure: AssertionError) {
+            // Keep the original assertExists-style failure but explain the surrounding state, so CI
+            // can separate an accidental close from a semantics-tree timing gap. No sleep is added.
+            throw AssertionError(
+                "PaneTitle NEARBY was not found; cycle=$cycle count=$count selected=$selected " +
+                    "closeCalls=$closeCalls: ${failure.message}",
+                failure,
+            )
+        }
+    }
 }
