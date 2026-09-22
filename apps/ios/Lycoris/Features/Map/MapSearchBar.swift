@@ -12,6 +12,7 @@ struct MapSearchBar: View {
   var voiceActive = false
   var voiceState: VoiceSearchController.State = .idle
   var language: AppLanguage = .current()
+  var showsAccount = true
   @ScaledMetric(relativeTo: .headline) private var avatarFont: CGFloat = 18
 
   private var voiceButton: VoiceSearchButtonState {
@@ -48,13 +49,15 @@ struct MapSearchBar: View {
       .frame(height: max(44, height))
       .background(.quaternary, in: RoundedRectangle(cornerRadius: 22))
 
-      Button(action: onAccount) {
-        AccountAvatar(user: user, data: avatar)
-          .frame(width: 44, height: 44).contentShape(Rectangle())
+      if showsAccount {
+        Button(action: onAccount) {
+          AccountAvatar(user: user, data: avatar)
+            .frame(width: 44, height: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Account")
+        .accessibilityIdentifier("map.account")
       }
-      .buttonStyle(.plain)
-      .accessibilityLabel("Account")
-      .accessibilityIdentifier("map.account")
     }
   }
 }

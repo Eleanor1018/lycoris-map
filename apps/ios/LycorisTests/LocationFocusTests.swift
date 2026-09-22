@@ -80,15 +80,22 @@ struct LocationFocusTests {
     #expect(store.focus?.target == .userLocation)
   }
 
-  @MainActor @Test func layoutChangesDoNotOverrideNativeFollowingWithAnExplicitCamera() {
-    let map = TrackingMapView(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
-    map.setUserTrackingMode(.follow, animated: false)
+  @MainActor @Test(arguments: [MKUserTrackingMode.follow, .followWithHeading])
+  func layoutChangesDoNotOverrideNativeFollowingWithAnExplicitCamera(mode: MKUserTrackingMode) {
+    let map = TrackingMapView(frame: CGRect(x: 0, y: 0, width: 1024, height: 768))
+    map.setUserTrackingMode(mode, animated: false)
     let cameraRequests = map.explicitCameraRequests
-    let insets = UIEdgeInsets(top: 62, left: 10, bottom: 140, right: 10)
-    NativeMapView.updateMargins(insets, on: map)
-    #expect(map.layoutMargins == insets)
-    #expect(map.explicitCameraRequests == cameraRequests)
-    #expect(map.userTrackingMode == .follow)
+    for insets in [
+      UIEdgeInsets(top: 24, left: 430, bottom: 24, right: 60),
+      UIEdgeInsets(top: 24, left: 76, bottom: 24, right: 20),
+      UIEdgeInsets(top: 62, left: 10, bottom: 140, right: 10),
+    ] {
+      NativeMapView.updateMargins(insets, on: map)
+      #expect(map.layoutMargins == insets)
+      #expect(map.explicitCameraRequests == cameraRequests)
+      #expect(map.userTrackingMode == mode)
+      #expect(map.trackingRequests == [mode])
+    }
   }
 }
 

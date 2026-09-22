@@ -1,6 +1,12 @@
 # Lycoris for iOS
 
-Native SwiftUI application, Apple Maps / MapKit, iPhone, iOS 26+. Open `Lycoris.xcodeproj` in Xcode and select the shared **Lycoris** scheme.
+Native SwiftUI application, Apple Maps / MapKit, iPhone and iPad, iOS / iPadOS 26+. Open `Lycoris.xcodeproj` in Xcode and select the shared **Lycoris** scheme.
+
+## iPad adaptation
+
+The same application and Bundle ID now support iPad in all four orientations. Layout follows the current window size: at least 760pt wide and 440pt tall uses a native navigation sidebar, a dismissible content column and the map. At 1180pt the navigation also shows labels. Smaller windows retain the existing bottom panel. Search, Nearby, details and authenticated Bookmarks share the existing stores and components; account, settings and contribution use native sheets. Closing the content column keeps navigation and the map available. Command-F opens and focuses Search; Escape closes the content column.
+
+The root MapKit view and business stores remain mounted across layout changes. Map focus accounts for sidebar occlusion, and keyboard avoidance uses the actual window rather than the device screen. One resizable app window is supported; multiple scenes are disabled because the existing draft journal and photo directory are shared. See [the adaptation plan](docs/ipad-adaptation-plan.md) and [validation record](docs/ipad-acceptance.md).
 
 ## Current scope: I6
 

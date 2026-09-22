@@ -44,6 +44,10 @@ MARKERS = [
      "contentLanguage": "en", "isPublic": True, "reviewStatus": "APPROVED"},
 ]
 
+# One deterministic saved place exercises the authenticated sidebar list and
+# detail flow. These read fixtures do not imply support for favorite writes.
+FAVORITE_IDS = (22,)
+
 
 class State:
     def __init__(self):
@@ -121,7 +125,14 @@ class Handler(BaseHTTPRequestHandler):
                 {"code": 0, "data": {"publicId": STATE.public_id_for(user)}}
                 if user else {"code": 401},
                 200 if user else 401)
-        elif path in ("/api/markers/me/created", "/api/markers/me/favorites"):
+        elif path in ("/api/markers/me/favorites", "/api/markers/me/favorites/details"):
+            if not self.session_user():
+                self.reply({"code": 401}, 401)
+            elif path.endswith("/details"):
+                self.reply([m for m in MARKERS if m["id"] in FAVORITE_IDS])
+            else:
+                self.reply(list(FAVORITE_IDS))
+        elif path == "/api/markers/me/created":
             if not self.session_user():
                 self.reply({"code": 401}, 401)
             else:

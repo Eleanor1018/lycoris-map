@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum SettingsDestination: String, Identifiable {
+enum SettingsDestination: String, Identifiable, Hashable {
   case language, searchType, range, source, about
   var id: String { rawValue }
 }
@@ -8,12 +8,23 @@ enum SettingsDestination: String, Identifiable {
 struct SettingsSheet: View {
   @Bindable var preferences: AppPreferences
   let destination: SettingsDestination
+  var embedsNavigation = true
   @Environment(\.dismiss) private var dismiss
   @State private var radius = ""
   @FocusState private var editingRadius: Bool
 
   var body: some View {
-    NavigationStack {
+    Group {
+      if embedsNavigation {
+        NavigationStack { content }
+      } else {
+        content
+      }
+    }
+    .presentationDragIndicator(.visible)
+  }
+
+  private var content: some View {
       Form {
         switch destination {
         case .language:
@@ -85,8 +96,6 @@ struct SettingsSheet: View {
         if !editing { commitRadius() }
       }
       .onDisappear { commitRadius() }
-    }
-    .presentationDragIndicator(.visible)
   }
 
   private func commitRadius() {
