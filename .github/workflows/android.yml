@@ -167,7 +167,9 @@ jobs:
           avd-name: lycoris-ci-api26
           cores: 2
           ram-size: 2048M
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          # Use the supported software backend for this old system image. The deprecated
+          # swiftshader_indirect path logged native renderer allocation errors on API 26.
+          emulator-options: -no-window -gpu software -no-snapshot -noaudio -no-boot-anim
           disable-animations: true
           working-directory: apps/android
           script: |

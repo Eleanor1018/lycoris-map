@@ -11,6 +11,8 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -147,7 +149,45 @@ class AppSmokeTest {
         compose.onNode(text("Cancel", "取消") and hasClickAction()).performClick()
         compose.onNode(isDialog()).assertDoesNotExist()
         withModel { assertEquals(originalRadius, it.preferences.value.radiusMeters) }
-        compose.onNode(tab("Settings", "设置")).assertIsSelected()
+        // HomeScreen hides the bottom navigation while the IME inset exceeds the nav inset. Wait for
+        // the real window to report the keyboard hidden before checking the tab, so an in-flight
+        // close animation is not mistaken for the product keeping the keyboard up.
+        awaitWindowImeHidden(5_000)
+        compose.onNode(tab("Settings", "设置")).assertIsDisplayed().assertIsSelected()
+    }
+
+    /** Wait on the real window insets for the IME to become fully hidden; diagnostics are concise. */
+    private fun awaitWindowImeHidden(timeoutMillis: Long) {
+        try {
+            compose.waitUntil(timeoutMillis) {
+                var hidden = false
+                scenario!!.onActivity { activity ->
+                    val insets = ViewCompat.getRootWindowInsets(activity.window.decorView)
+                    hidden = insets != null &&
+                        !insets.isVisible(WindowInsetsCompat.Type.ime()) &&
+                        insets.getInsets(WindowInsetsCompat.Type.ime()).bottom == 0
+                }
+                hidden
+            }
+        } catch (timeout: ComposeTimeoutException) {
+            throw AssertionError("The window never reported the keyboard hidden. ${imeWindowDiagnostics()}", timeout)
+        }
+    }
+
+    /** Reads only window/inset state on the Activity; never calls Compose test APIs on the UI thread. */
+    private fun imeWindowDiagnostics(): String {
+        var report = "window diagnostics unavailable"
+        runCatching {
+            scenario!!.onActivity { activity ->
+                val decor = activity.window.decorView
+                val insets = ViewCompat.getRootWindowInsets(decor)
+                report = "windowFocus=${decor.hasWindowFocus()}, " +
+                    "imeVisible=${insets?.isVisible(WindowInsetsCompat.Type.ime())}, " +
+                    "imeBottom=${insets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom}, " +
+                    "rootSize=${decor.width}x${decor.height}"
+            }
+        }
+        return report
     }
 
     @Test fun searchTypePersistsAcrossRecreationAndAboutShowsInstalledVersion() {

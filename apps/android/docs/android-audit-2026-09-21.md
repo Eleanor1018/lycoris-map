@@ -8,7 +8,7 @@ this follow-up retain the earlier investigation history; they are not the latest
 | Check | Latest evidence |
 | --- | --- |
 | JVM, lint, QA and instrumentation build | 144 JVM tests passed; lint and builds passed |
-| Full API 36 CI | `35699537525`: 58 passed, 5 opt-in tests skipped, no failures |
+| Full API 36 CI | `35701516811`: 59 passed, 5 opt-in tests skipped, no failures |
 | Full API 26 CI before fixture correction | Same run: 56 passed, 2 failed, 5 skipped |
 | Isolated native backend | `backend-aosp-20260922-152104.log`: passed; login, encrypted session restore, favorites, idempotent creation and chunked upload |
 | Loaded detail rotation | `loaded-aosp-20260922-152623.log`: 1 passed; actual QA detail loaded, Activity recreated both ways, user camera retained |
@@ -48,12 +48,27 @@ keyboard; it does not use `stateAlwaysHidden`. A new real-Activity case observes
 after window focus and verifies the untouched startup keeps the IME hidden and all three navigation
 tabs visible. Existing touch-to-open-IME, first-Back, and rotation assertions remain unchanged.
 This follows Android's [input visibility guidance](https://developer.android.com/develop/ui/views/touch-and-input/keyboard-input/visibility).
-API 26/36 CI re-verification of this change is pending.
+CI `35701516811` verified the cold-start fix and original real-IME case on both API levels. API 26
+now reports 57 passed, 2 failed, 5 skipped. Remaining failures are the first landscape transition's
+Compose idle timeout and the range-dialog cancellation test's immediate Settings-tab assertion.
+The former attaches window/inset diagnostics on failure. The latter now explicitly waits for the
+real IME inset to become hidden before asserting the tab, without sending an extra Back or hiding
+the keyboard in the test; this distinguishes native close-animation timing from a persistent bug.
+
+A separate AOSP 36 emulator with 320x640 pixels at density 160 passed the unchanged rotation case
+(`rotation-compact-20260922-160748.log`). Therefore viewport dimensions alone do not reproduce the
+API 26 failure. The original emulator was resumed after this diagnostic; its configuration was not
+changed. API 26 still logged native renderer allocation failures. Its next CI run switches only the
+emulator to the supported `-gpu software` backend, keeping the app's SDK and rendering code unchanged.
+Android documents [`swiftshader_indirect` as deprecated](https://developer.android.com/studio/run/emulator-acceleration).
+This is a diagnostic environment comparison, not a claimed renderer fix.
 
 The backend integration test now emits bounded stage names with custom status code 2. The runner
 reports `backendStage` on failures without copying arbitrary text; it preserves an explicit primary
 failure over later cleanup, and attaches a secondary cleanup exception as suppressed. Existing
 environment guards, required test count, receipt validation and database oracle are unchanged.
+The host runner clears backend-stage attribution after native success, so later oracle/permission
+restoration failures are not mislabeled as failed backend cleanup (35 guard tests passed again).
 
 Still unaccepted: physical Xiaomi/realme reproduction, actual sensor heading, speech-service and
 permission-dialog behavior. The AOSP 36 device has a Galaxy S25-sized display; it is not Samsung

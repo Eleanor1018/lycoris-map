@@ -329,7 +329,35 @@ class AppConfigurationTest {
             assertEquals("The device must honor this Activity's orientation request", orientation, it.resources.configuration.orientation)
             if (requiresRebuild) assertNotSame("A real configuration change must rebuild MainActivity", before, it)
         }
-        compose.waitForIdle()
+        try {
+            compose.waitForIdle()
+        } catch (failure: Throwable) {
+            // Attach fixed-key window/inset facts without calling Compose test APIs from the UI
+            // thread, and without masking the original idle timeout.
+            throw AssertionError(
+                "Post-rotation waitForIdle failed. ${orientationWindowDiagnostics()}",
+                failure,
+            )
+        }
+    }
+
+    /** Reads only window/inset state on the Activity; never touches Compose semantics. */
+    private fun orientationWindowDiagnostics(): String {
+        var report = "window diagnostics unavailable"
+        runCatching {
+            scenario!!.onActivity { activity ->
+                val decor = activity.window.decorView
+                val insets = ViewCompat.getRootWindowInsets(decor)
+                fun bottom(type: Int) = insets?.getInsets(type)?.bottom ?: -1
+                fun top(type: Int) = insets?.getInsets(type)?.top ?: -1
+                report = "decor=${decor.width}x${decor.height}, windowFocus=${decor.hasWindowFocus()}, " +
+                    "orientation=${activity.resources.configuration.orientation}, " +
+                    "statusTop=${top(WindowInsetsCompat.Type.statusBars())}, statusVisible=${insets?.isVisible(WindowInsetsCompat.Type.statusBars())}, " +
+                    "navBottom=${bottom(WindowInsetsCompat.Type.navigationBars())}, navVisible=${insets?.isVisible(WindowInsetsCompat.Type.navigationBars())}, " +
+                    "imeBottom=${bottom(WindowInsetsCompat.Type.ime())}, imeVisible=${insets?.isVisible(WindowInsetsCompat.Type.ime())}"
+            }
+        }
+        return report
     }
 
     private data class NativeMap(val activity: MainActivity, val view: MapView, val map: MapLibreMap)
