@@ -9,6 +9,7 @@ import android.speech.SpeechRecognizer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.core.view.ViewCompat
@@ -91,9 +92,9 @@ class AppSmokeTest {
             Triple("Medical Institutions", "医疗机构", PlaceCategory.FRIENDLY_CLINIC),
         )
         // All three are visible at the initial middle detent, without expanding first.
-        categories.forEach { (english, chinese, _) -> compose.onNode(text(english, chinese)).assertIsDisplayed() }
+        categories.forEach { (english, chinese, _) -> compose.onNode(categoryCard(english, chinese)).assertIsDisplayed() }
         categories.forEach { (english, chinese, category) ->
-            compose.onNode(text(english, chinese) and hasClickAction()).performClick()
+            compose.onNode(categoryCard(english, chinese)).performClick()
             compose.onNode(heading("Nearby", "附近点位")).assertIsDisplayed()
             var radiusMeters = 0
             withModel {
@@ -103,7 +104,7 @@ class AppSmokeTest {
             }
             // Entering a category must show its result list, not the three category cards again.
             categories.forEach { (en, zh, _) ->
-                compose.onAllNodes(text(en, zh) and hasClickAction()).assertCountEquals(0)
+                compose.onAllNodes(categoryCard(en, zh)).assertCountEquals(0)
             }
             // The selected category and search radius appear as a short subtitle row.
             val range = if (radiusMeters % 1000 == 0) "${radiusMeters / 1000}km" else "${radiusMeters}m"
@@ -111,7 +112,7 @@ class AppSmokeTest {
             closePanel()
             // Closing returns to the original three-category entry point.
             compose.onNode(heading("Find Nearby", "查找附近")).assertIsDisplayed()
-            categories.forEach { (en, zh, _) -> compose.onNode(text(en, zh) and hasClickAction()).assertIsDisplayed() }
+            categories.forEach { (en, zh, _) -> compose.onNode(categoryCard(en, zh)).assertIsDisplayed() }
             compose.onNode(tab("Explore", "探索")).assertIsSelected()
         }
     }
@@ -373,6 +374,11 @@ class AppSmokeTest {
     }
     private fun withModel(block: (HomeViewModel) -> Unit) {
         scenario!!.onActivity { block(ViewModelProvider(it)[HomeViewModel::class.java]) }
+    }
+    // A place row can also contain the Chinese category label, but it is not a category card.
+    private fun categoryCard(english: String, chinese: String) = hasClickAction() and SemanticsMatcher("category card: $english") { node ->
+        val labels = node.config.getOrNull(SemanticsProperties.Text)?.map { it.text }
+        labels == listOf(english) || labels == listOf(chinese)
     }
     private fun text(english: String, chinese: String) = hasText(english) or hasText(chinese)
     private fun description(english: String, chinese: String) = hasContentDescription(english) or hasContentDescription(chinese)
