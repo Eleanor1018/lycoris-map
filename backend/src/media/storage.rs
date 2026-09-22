@@ -141,6 +141,7 @@ impl MediaError {
 pub struct ImageStore {
     root: PathBuf,
     permits: Arc<Semaphore>,
+    pub(super) renditions: super::renditions::RenditionCache,
 }
 
 impl ImageStore {
@@ -163,6 +164,7 @@ impl ImageStore {
         Ok(Self {
             root: canonical,
             permits: Arc::new(Semaphore::new(max_concurrent)),
+            renditions: Default::default(),
         })
     }
 
@@ -174,6 +176,18 @@ impl ImageStore {
     /// canonical 上传根目录。
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    pub(super) async fn image_permit(&self) -> Result<OwnedSemaphorePermit, MediaError> {
+        // Wait with no decoded pixels/large byte buffers allocated. Bound the wait so
+        // a cold nearby list does not turn every simultaneous thumbnail into a 503.
+        tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            self.permits.clone().acquire_owned(),
+        )
+        .await
+        .map_err(|_| MediaError::Busy)?
+        .map_err(|_| MediaError::Busy)
     }
 
     /// 保存一张合法图片。

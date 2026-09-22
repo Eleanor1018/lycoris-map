@@ -12,10 +12,12 @@
 }
 .account-desktop {
     left: 50%;
-    top: 50%;
+    /* Centre inside the shared visual window (offsetTop + height) so the dialog
+       stays visible when the keyboard pans the viewport. */
+    top: calc(var(--map-viewport-offset-top, 0px) + var(--map-viewport-height, 100dvh) / 2);
     transform: translate(-50%, -50%);
     width: 375px;
-    height: min(758px, calc(100dvh - 32px));
+    height: min(758px, calc(var(--map-viewport-height, 100dvh) - 32px));
     border-radius: 25px;
     background: #e8def8;
     box-shadow: 0 4px 4px #fcddec;
@@ -38,7 +40,7 @@
     display: flex;
     flex-direction: column;
     height: auto;
-    max-height: calc(100dvh - 32px);
+    max-height: calc(var(--map-viewport-height, 100dvh) - 32px);
     border: 3px solid var(--ui-brand);
     box-shadow: 4px 4px 4px #e6cbff42;
 }
@@ -212,8 +214,12 @@
     overflow-wrap: anywhere;
 }
 .account-mobile {
-    top: 46px;
-    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    /* Anchored to the same visual-viewport snapshot as the map shell, so the
+       sheet stays inside the visible window when the iOS URL bar or keyboard
+       resizes the viewport. Falls back to 100dvh outside the map. */
+    top: calc(var(--map-viewport-offset-top, 0px) + 46px);
+    height: calc(var(--map-viewport-height, 100dvh) - 46px);
+    bottom: auto;
     left: 0;
     right: 0;
     border-radius: 10px 10px 0 0;
@@ -230,9 +236,16 @@ body:has(.account-mobile) .mobile-sheet {
 .account-mobile .account-dialog-inner {
     align-items: stretch;
     min-height: 0;
-    padding: 5px 11px 27px;
+    padding: 5px 11px calc(27px + env(safe-area-inset-bottom, 0px));
+}
+.account-mobile .account-close {
+    top: 17px;
+    right: 1px;
+    width: 44px;
+    height: 44px;
 }
 .account-mobile h2 {
+    padding-right: 44px;
     font-size: 28px;
     line-height: 20px;
 }
@@ -255,6 +268,9 @@ body:has(.account-mobile) .mobile-sheet {
 }
 .account-mobile .auth-form {
     margin-top: 27px;
+}
+.account-mobile.account-login .account-submit {
+    width: 100%;
 }
 .account-mobile.account-register .auth-form {
     margin-top: 23px;
@@ -314,9 +330,12 @@ body:has(.account-mobile) .mobile-sheet {
     width: 208px;
     height: 66px;
     margin: 0;
-    font: 590 17px/normal var(--ui-font-body);
+    font: 590 17px/22px var(--ui-font-body);
     letter-spacing: -0.8px;
     color: var(--ui-brand-deep);
+    white-space: normal;
+    overflow-wrap: break-word;
+    text-align: left;
 }
 .desktop-guest-account .desktop-login-button {
     position: absolute;
@@ -367,13 +386,24 @@ body:has(.account-mobile) .mobile-sheet {
     width: 100%;
     margin-top: 33px;
 }
-.profile-avatar-control {
+.profile-header {
     display: flex;
     align-items: center;
     gap: 11px;
+}
+.profile-avatar-control {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin: 0 0 22px;
     font: 500 17px/22px var(--ui-font-nav);
     color: var(--ui-brand);
     cursor: pointer;
+}
+.profile-avatar-control:focus-within {
+    outline: 2px solid var(--ui-brand);
+    outline-offset: 2px;
+    border-radius: 8px;
 }
 .profile-avatar {
     display: flex;
@@ -381,27 +411,88 @@ body:has(.account-mobile) .mobile-sheet {
     justify-content: center;
     width: 44px;
     height: 44px;
+    flex: none;
     border-radius: 50%;
     background: #c7c7cb;
     color: #f7f7f6;
     overflow: hidden;
 }
 .profile-identity {
-    margin: 11px 0 22px;
-    font: 400 15px/20px var(--ui-font-body);
-    color: var(--ui-brand-deep);
+    min-width: 0;
+    display: grid;
+    gap: 3px;
     overflow-wrap: anywhere;
+}
+.profile-identity h3 {
+    margin: 0;
+    font: 500 17px/22px var(--ui-font-nav);
+    color: var(--ui-brand);
+}
+.profile-identity p {
+    margin: 0;
+    font: 400 15px/20px var(--ui-font-body);
+    color: #3c3c4399;
 }
 .profile-options {
     display: grid;
-    gap: 11px;
     margin-top: 22px;
+    border: 1px solid white;
+    border-radius: 24px;
+    background: white;
+}
+.profile-options .setting-card,
+.profile-logout.setting-card {
+    position: relative;
+    align-items: center;
+    min-height: 44px;
+    height: auto;
+    padding: 0 11px;
+    text-align: left;
 }
 .profile-options .setting-card {
-    height: 44px;
-    padding: 0 11px;
+    border-radius: 0;
+    background: transparent;
 }
-.profile-options .figma-icon {
+.profile-options .setting-card:first-child {
+    border-radius: 23px 23px 0 0;
+}
+.profile-options .setting-card:last-child {
+    border-radius: 0 0 23px 23px;
+}
+.profile-options .setting-card + .setting-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 11px;
+    right: 11px;
+    border-top: 0.5px solid #3c3c4329;
+}
+.profile-options .setting-card > span:first-child {
+    min-width: 0;
+    flex-shrink: 1;
+    white-space: normal;
+    padding-block: 11px;
+}
+.profile-options .chevron-slot {
+    margin-left: auto;
+}
+.account-mobile .profile-options .chevron-slot img {
+    width: 9px;
+    height: 32px;
+}
+.profile-options .setting-card:active {
+    background: #e9e9ed;
+}
+@media (hover: hover) {
+    .profile-options .setting-card:hover {
+        background: #f2f2f7;
+    }
+}
+.profile-logout.setting-card {
+    margin-top: 11px;
+    border: 1px solid white;
+}
+.profile-logout .figma-icon {
     margin-left: auto;
     width: 24px;
     height: 24px;
@@ -430,5 +521,5 @@ body:has(.account-mobile) .mobile-sheet {
 .account-desktop.account-profile,
 .account-desktop.account-password,
 .account-desktop.account-created {
-    height: min(758px, calc(100dvh - 32px));
+    height: min(758px, calc(var(--map-viewport-height, 100dvh) - 32px));
 }

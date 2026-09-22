@@ -1,6 +1,6 @@
 # Lycoris Web v2（`frontend/`）
 
-Web v2 新工程，当前已完成 **S4 账号与收藏**：登录/注册/退出、资料、头像、改密、收藏、本人点位已接通 Rust 接口。温晓亲自编码，结合 Figma MCP 与 Computer Use 核对。当前仅供本机开发与验收，贡献提交和完整设置留在 S5–S6。
+Lycoris 的正式 Web 工程，已部署至 [lycoris-map.com](https://lycoris-map.com)。地图、搜索、账号、收藏、贡献、设置和管理功能使用 Rust 接口。温晓亲自编码，结合 Figma MCP 与 Computer Use 核对。自动部署及域名配置见 [Cloudflare 说明](deploy/cloudflare/README.md)。
 
 ## 环境与命令
 
@@ -21,6 +21,11 @@ pnpm test:unit
 ```
 
 本工程不含 ESLint 或 lint 脚本；类型边界由 TypeScript 7 strict 负责。
+
+底图默认 OSM；天地图使用浏览器端 Key。复制 `.env.example` 为 `.env.local`，
+填写 `VITE_TIANDITU_API_KEY` 后重启开发服务或重新构建，即可在图层菜单和设置中切换。
+该值会出现在浏览器请求中，实际 Key 不提交 Git。Cloudflare 的 Production、Preview
+构建变量使用同名配置。未配置时保留 OSM，天地图选项禁用。
 
 ## 目录
 
@@ -44,9 +49,23 @@ src/
   styles/              tokens.css、fonts.css、global.css
 ```
 
+## 地图交互修复（2026-09-17）
+
+- 方向传感器从地图挂载时监听，避免早于首次定位的读数丢失；定位完成后恢复已有授权。
+  iPhone 首次授权受浏览器的用户手势限制，会在第一次触摸地图（或按地图上的 Enter/空格、点击定位）时申请。
+  手机静止时保留有效朝向，不再 10 秒后消失；切到后台或收到无效读数时隐藏方向扇形。
+  无传感器或被拒绝时仍显示定位圆点。参见 [WebKit 权限说明](https://bugs.webkit.org/show_bug.cgi?id=201676)。
+- 区域请求在交互结束后防抖 250ms，缩放每两级分档；按 Web Mercator 投影向四周预加载约半屏（0.55 倍视口尺寸，含像素取整余量）。
+  同档且可视范围仍被覆盖时复用结果；跨档或越界再请求。原有 60 秒定时刷新及操作后的失效更新仍保留。
+  加载下一范围时保留现有图钉，取消过时请求；语言切换不沿用旧语言的占位数据。聚合仍即时随缩放更新。
+- 普通图钉中，明确分类优先显示在重叠的“其他”图钉上；选中记录始终置顶，颜色仍取自身类别。
+  线上丹东 132/133 同名、同坐标、同描述，但类别分别为“其他”与“母婴室”；本次不修改或合并数据库记录。
+- 301 项前端测试、3 项代理测试与 strict 生产构建通过。Chrome 桌面及 375×812 视口检查了实际点位快照、缩放、拖动和请求日志；
+  朝向使用模拟 iOS 授权与传感器，不能代替 iPhone Chrome/微信真机验收。真实 Leaflet 的 15→14 级缩放复用范围，14→13 级触发新请求。
+
 ## 页面与设计验收
 
-正常入口 `/`（兼容 `/maps`）使用真实 OSM 瓦片，不放入 Figma 的样本账号、距离、地点、照片或模拟点。面板使用 `?panel=search|bookmarks|languages|settings|contribute|contribute-form|details`；手机吸附高度使用 `?snap=collapsed|half|full`。关闭面板和浏览器返回/前进保留已有 query、hash 和搜索草稿，切换屏宽不重新创建地图。
+正常入口 `/`（兼容 `/maps`）默认使用真实 OSM 瓦片，也可切换已配置的天地图，不放入 Figma 的样本账号、距离、地点、照片或模拟点。面板使用 `?panel=search|bookmarks|languages|settings|contribute|contribute-form|details`；手机吸附高度使用 `?snap=collapsed|half|full`。关闭面板和浏览器返回/前进保留已有 query、hash 和搜索草稿，切换屏宽不重新创建地图。
 
 | 仅开发环境的路径                    | 用途                                                                                                            |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------- |

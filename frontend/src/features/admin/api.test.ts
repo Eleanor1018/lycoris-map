@@ -70,13 +70,17 @@ it('uses the exact moderation and user action endpoints without inventing passwo
     await api.changeUser(9, 'reset-password', signal)
     await api.changeUser(9, 'disable', signal)
     await api.changeUser(9, 'restore', signal)
+    await api.deactivateMarker(10, signal)
+    await api.restoreMarker(10, signal)
     expect(fetcher.mock.calls.map((call) => [call[0], call[1].method, call[1].body])).toEqual([
         ['/api/admin/markers/edit-proposals/7/reject?lang=en', 'POST', undefined],
         ['/api/admin/markers/image-proposals/8/approve?lang=zh', 'POST', undefined],
         ['/api/admin/users/9/reset-password', 'POST', undefined],
         ['/api/admin/users/9', 'DELETE', undefined],
         ['/api/admin/users/9/restore', 'POST', undefined],
+        ['/api/admin/markers/10', 'DELETE', undefined],
+        ['/api/admin/markers/10/restore', 'POST', undefined],
     ])
     await expect(api.changeUser(Number.MAX_SAFE_INTEGER + 1, 'disable', signal)).rejects.toThrow()
-    expect(fetcher).toHaveBeenCalledTimes(5)
+    expect(fetcher).toHaveBeenCalledTimes(7)
 })

@@ -42,7 +42,7 @@ it('splits date-line requests without filtering historical categories and dedupl
     await waitFor(() => expect(result.current.results).toHaveLength(1))
     expect(reads.readViewport).toHaveBeenCalledTimes(2)
     expect(reads.readViewport).toHaveBeenCalledWith(
-        { minLat: -10, maxLat: 10, minLng: 170, maxLng: 180, categories: [] },
+        expect.objectContaining({ minLng: 159, maxLng: 180, categories: [] }),
         'zh',
         expect.any(AbortSignal),
     )
@@ -138,7 +138,7 @@ it('reports invalid links without fetching and updates nearby reference after a 
     expect(result.current.nearby?.located).toBe(false)
     act(() => result.current.location.locate())
     act(() =>
-        get.mock.calls[0]?.[0]({
+        get.mock.calls.at(-1)?.[0]({
             coords: { latitude: 32.12345678, longitude: 122 },
         } as GeolocationPosition),
     )
@@ -173,4 +173,179 @@ it('keeps a nearby search anchored while panning and cancels a superseded catego
     expect(signal.aborted).toBe(true)
     await act(async () => finishOld([syntheticPlace({ title: 'Old nearby' })]))
     expect(result.current.results[0]?.title).toBe('Newest nearby')
+})
+
+it('reuses a buffered region for small pans and one zoom step, then refreshes across its boundary', async () => {
+    const { result } = renderHook(() => usePlaceBrowse('en', null), { wrapper: wrapper() })
+    const view = (south: number, west: number, size = 1, zoom = 14) =>
+        mapView(
+            south,
+            south + size,
+            west,
+            west + size,
+            { lat: south + size / 2, lng: west + size / 2 },
+            zoom,
+        )
+    act(() => result.current.onView(view(31, 121)))
+    await waitFor(() => expect(result.current.results).toHaveLength(1))
+    expect(reads.readViewport).toHaveBeenCalledTimes(1)
+    act(() => result.current.onView(view(31.2, 121.2)))
+    await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 300))
+    })
+    expect(reads.readViewport).toHaveBeenCalledTimes(1)
+    act(() => result.current.onView(view(31.25, 121.25, 0.5, 15)))
+    await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 300))
+    })
+    expect(reads.readViewport).toHaveBeenCalledTimes(1)
+    act(() => result.current.onView(view(31.6, 121.6)))
+    await waitFor(() => expect(reads.readViewport).toHaveBeenCalledTimes(2))
+    act(() => result.current.onView(view(31.75, 121.75, 0.25, 16)))
+    await waitFor(() => expect(reads.readViewport).toHaveBeenCalledTimes(3))
+})
+it('retains loaded pins while fetching a new region and ignores superseded responses', async () => {
+    let finishOld!: (value: ReturnType<typeof syntheticPlace>[]) => void
+    const { result } = renderHook(() => usePlaceBrowse('en', null), { wrapper: wrapper() })
+    act(() => result.current.onView(mapView(31, 32, 121, 122, { lat: 31.5, lng: 121.5 }, 14)))
+    await waitFor(() => expect(result.current.results).toHaveLength(1))
+    const original = result.current.markers[0]
+    vi.mocked(reads.readViewport).mockImplementationOnce(
+        () =>
+            new Promise((resolve) => {
+                finishOld = resolve
+            }),
+    )
+    act(() => result.current.onView(mapView(33, 34, 123, 124, { lat: 33.5, lng: 123.5 }, 14)))
+    await waitFor(() => expect(reads.readViewport).toHaveBeenCalledTimes(2))
+    expect(result.current.markers[0]).toBe(original)
+    const signal = vi.mocked(reads.readViewport).mock.calls[1]![2]
+    vi.mocked(reads.readViewport).mockResolvedValue([
+        syntheticPlace({ id: 2, title: 'New region' }),
+    ])
+    act(() => result.current.onView(mapView(35, 36, 125, 126, { lat: 35.5, lng: 125.5 }, 14)))
+    await waitFor(() => expect(result.current.markers[0]?.id).toBe(2))
+    expect(signal.aborted).toBe(true)
+    await act(async () => finishOld([syntheticPlace({ title: 'Stale region' })]))
+    expect(result.current.markers[0]?.title).toBe('New region')
+})
+
+// Acceptance regression from reported mobile zoom loss.
+it('keeps previously loaded pins after a region request exhausts retries, then replaces them on recovery', async () => {
+    const { result } = renderHook(() => usePlaceBrowse('en', null), { wrapper: wrapper() })
+    act(() => result.current.onView(mapView(31, 32, 121, 122, { lat: 31.5, lng: 121.5 }, 14)))
+    await waitFor(() => expect(result.current.markers).toHaveLength(1))
+    const original = result.current.markers[0]!
+    vi.mocked(reads.readViewport).mockRejectedValue(new ApiError(503, 'Offline'))
+    act(() => result.current.onView(mapView(31, 32, 121, 122, { lat: 31.5, lng: 121.5 }, 16)))
+    await waitFor(() => expect(result.current.state.error).toContain('Could not load'), {
+        timeout: 3500,
+    })
+    expect(result.current.markers).toEqual([original])
+    vi.mocked(reads.readViewport).mockResolvedValue([syntheticPlace({ id: 2, title: 'Recovered' })])
+    act(() => result.current.state.retry())
+    await waitFor(() => expect(result.current.markers[0]?.title).toBe('Recovered'))
+})
+
+it('keeps recovered pins across 20 zoom-band changes including cancelled and late responses', async () => {
+    const { result } = renderHook(() => usePlaceBrowse('en', null), { wrapper: wrapper() })
+    act(() => result.current.onView(mapView(31, 32, 121, 122, { lat: 31.5, lng: 121.5 }, 14)))
+    await waitFor(() => expect(result.current.markers).toHaveLength(1))
+    expect(result.current.markers[0]?.id).toBe(1)
+    // Alternate an unrecoverable failure with successes and a hung (cancelled)
+    // request so every band crossing exercises a different settle path.
+    let n = 0
+    vi.mocked(reads.readViewport).mockImplementation(() => {
+        n += 1
+        if (n % 5 === 2) return Promise.reject(new ApiError(503, 'Offline'))
+        if (n % 5 === 4) return new Promise(() => {})
+        return Promise.resolve([syntheticPlace({ id: 1 })])
+    })
+    for (let step = 0; step < 20; step += 1) {
+        const zoom = 14 + (step % 6)
+        const south = 31 + step * 0.001
+        act(() =>
+            result.current.onView(
+                mapView(south, south + 1, 121, 122, { lat: south + 0.5, lng: 121.5 }, zoom),
+            ),
+        )
+        await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 0))
+        })
+        expect(result.current.markers.map((m) => m.id)).toEqual([1])
+    }
+    vi.mocked(reads.readViewport).mockResolvedValue([syntheticPlace({ id: 9, title: 'Latest' })])
+    // A far, previously unvisited center is outside every buffered window, so
+    // it must issue a fresh read and replace the retained fallback.
+    act(() => result.current.onView(mapView(48, 49, 138, 139, { lat: 48.5, lng: 138.5 }, 14)))
+    await waitFor(() => expect(result.current.markers[0]?.title).toBe('Latest'), { timeout: 4000 })
+})
+
+it('clears the fallback when a successful region read is honestly empty', async () => {
+    const { result } = renderHook(() => usePlaceBrowse('en', null), { wrapper: wrapper() })
+    act(() => result.current.onView(mapView(31, 32, 121, 122, { lat: 31.5, lng: 121.5 }, 14)))
+    await waitFor(() => expect(result.current.markers).toHaveLength(1))
+    vi.mocked(reads.readViewport).mockResolvedValue([])
+    act(() => result.current.onView(mapView(31, 32, 121, 122, { lat: 31.5, lng: 121.5 }, 16)))
+    await waitFor(() => expect(result.current.markers).toEqual([]))
+    // A later failure must not revive the cleared pins.
+    vi.mocked(reads.readViewport).mockRejectedValue(new ApiError(503, 'Offline'))
+    act(() => result.current.onView(mapView(31, 32, 121, 122, { lat: 31.5, lng: 121.5 }, 18)))
+    await waitFor(() => expect(result.current.state.error).toContain('Could not load'), {
+        timeout: 4000,
+    })
+    expect(result.current.markers).toEqual([])
+})
+
+it('never falls back to another language after a region failure', async () => {
+    vi.mocked(reads.readViewport).mockResolvedValue([
+        syntheticPlace({ id: 1, title: 'English pin' }),
+    ])
+    const { result, rerender } = renderHook(
+        ({ lang }: { lang: 'en' | 'zh' }) => usePlaceBrowse(lang, null),
+        { initialProps: { lang: 'en' as 'en' | 'zh' }, wrapper: wrapper() },
+    )
+    act(() => result.current.onView(mapView(31, 32, 121, 122, { lat: 31.5, lng: 121.5 }, 14)))
+    await waitFor(() => expect(result.current.markers).toHaveLength(1))
+    vi.mocked(reads.readViewport).mockRejectedValue(new ApiError(503, 'Offline'))
+    rerender({ lang: 'zh' })
+    act(() => result.current.onView(mapView(31, 32, 121, 122, { lat: 31.5, lng: 121.5 }, 14)))
+    await waitFor(() => expect(result.current.state.error).toContain('Could not load'), {
+        timeout: 4000,
+    })
+    expect(result.current.markers).toEqual([])
+})
+
+it('keeps a 404-pruned point dead after closing detail while the region keeps failing, then restores on success', async () => {
+    const { result, rerender } = renderHook(
+        ({ id }: { id: string | null }) => usePlaceBrowse('en', id),
+        { initialProps: { id: '1' as string | null }, wrapper: wrapper() },
+    )
+    act(() => result.current.onView(mapView(31, 32, 121, 122, { lat: 31.5, lng: 121.5 }, 14)))
+    await waitFor(() => expect(result.current.markers).toHaveLength(1))
+    await waitFor(() => expect(result.current.detail?.id).toBe(1))
+    // A new region that ultimately fails: the last success is retained.
+    vi.mocked(reads.readViewport).mockRejectedValue(new ApiError(503, 'Offline'))
+    act(() => result.current.onView(mapView(31, 32, 121, 122, { lat: 31.5, lng: 121.5 }, 16)))
+    await waitFor(() => expect(result.current.state.error).toContain('Could not load'), {
+        timeout: 4000,
+    })
+    expect(result.current.markers).toHaveLength(1)
+    // Detail confirms a 404; the retained fallback must be pruned, not merely
+    // filtered while `unavailable` happens to be true.
+    vi.mocked(reads.readPublicPlace).mockRejectedValue(new ApiError(404, 'HTTP 404'))
+    act(() => result.current.detailState.retry())
+    await waitFor(() => expect(result.current.detailState.error).toContain('unavailable'))
+    // Close the detail: `unavailable` is no longer true, so a surviving fallback
+    // would resurrect the withdrawn marker.
+    rerender({ id: null })
+    act(() => result.current.onView(mapView(31, 32, 121, 122, { lat: 31.5, lng: 121.5 }, 17)))
+    await waitFor(() => expect(result.current.state.error).toContain('Could not load'), {
+        timeout: 4000,
+    })
+    expect(result.current.markers).toEqual([])
+    // A later successful public read may honestly restore it.
+    vi.mocked(reads.readViewport).mockResolvedValue([syntheticPlace({ id: 1, title: 'Back' })])
+    act(() => result.current.onView(mapView(41, 42, 131, 132, { lat: 41.5, lng: 131.5 }, 14)))
+    await waitFor(() => expect(result.current.markers[0]?.title).toBe('Back'), { timeout: 4000 })
 })

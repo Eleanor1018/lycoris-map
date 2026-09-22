@@ -1,0 +1,15 @@
+{
+    "version": 1,
+    "include": [
+        "/tiles/osm",
+        "/tiles/osm/*",
+        "/api",
+        "/api/*",
+        "/uploads",
+        "/uploads/*",
+        "/health",
+        "/health/*",
+        "/__lycoris_media_cache/*"
+    ],
+    "exclude": []
+}

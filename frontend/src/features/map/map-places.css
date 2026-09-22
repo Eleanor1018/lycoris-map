@@ -11,6 +11,31 @@
     max-width: none;
     left: -31px;
     top: -31px;
+    transform-origin: 43px 43px;
+    transition: transform 120ms linear;
+    pointer-events: none;
+}
+.map-location-marker.has-heading {
+    overflow: visible;
+}
+.map-location-marker .location-mobile {
+    display: none;
+    width: 117.478px;
+    height: 117.478px;
+    left: -46.739px;
+    top: -46.739px;
+    transform-origin: 58.739px 58.739px;
+}
+.map-shell[data-mobile='true'] .map-location-marker .location-desktop {
+    display: none;
+}
+.map-shell[data-mobile='true'] .map-location-marker .location-mobile {
+    display: block;
+}
+@media (prefers-reduced-motion: reduce) {
+    .map-location-marker img {
+        transition: none;
+    }
 }
 .map-cluster-marker {
     display: grid;

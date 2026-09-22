@@ -55,9 +55,10 @@
     overflow-wrap: anywhere;
 }
 .mobile-preferences {
-    margin: 29px var(--mobile-content-inset) 22px;
+    margin: 5px var(--mobile-content-inset) 22px;
 }
 .mobile-preferences h1 {
+    padding-right: 44px;
     font: 400 32px/1.2 var(--ui-font-heading);
     letter-spacing: 0.1px;
     margin: 0 0 22px;
@@ -98,5 +99,151 @@
         scroll-behavior: auto !important;
         transition-duration: 0s !important;
         animation-duration: 0s !important;
+    }
+}
+
+.settings-cards .setting-card[data-state='open'],
+.mobile-settings .setting-card[data-state='open'],
+.settings-cards .setting-card:active,
+.mobile-settings .setting-card:active {
+    background: #e9e9ed;
+    box-shadow: none;
+}
+.setting-card:focus-visible {
+    outline: 2px solid #007aff;
+    outline-offset: 2px;
+}
+.settings-popover {
+    z-index: 30;
+    width: 280px;
+    max-width: calc(100vw - 22px);
+    max-height: var(--radix-popover-content-available-height);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid #00000014;
+    border-radius: 16px;
+    padding: 6px;
+    background: #f9f9fbf2;
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    backdrop-filter: blur(24px) saturate(150%);
+    box-shadow:
+        0 12px 32px #00000024,
+        0 2px 6px #0000000d,
+        inset 0 1px 0 #ffffffb3;
+    color: #1c1c1e;
+    font: 400 15px/20px var(--ui-font-body);
+    outline: none;
+    transform-origin: var(--radix-popover-content-transform-origin);
+    animation: settings-popover-in 120ms ease-out;
+}
+.settings-popover .compact-preferences {
+    margin: 0;
+    font: inherit;
+}
+.settings-popover .language-options {
+    border-radius: 10px;
+    background: transparent;
+}
+.settings-popover .language-options .design-button {
+    min-height: 44px;
+    padding: 11px;
+    gap: 10px;
+    border: 0;
+    border-radius: 10px;
+    font: 400 16px/22px var(--ui-font-body);
+    letter-spacing: normal;
+    white-space: normal;
+}
+.settings-popover .language-options .design-button + .design-button {
+    border-top: 0;
+}
+.settings-popover .language-options .design-button[aria-checked='true'] {
+    background: #00000008;
+    color: #1c1c1e;
+}
+@media (hover: hover) {
+    .settings-popover .language-options .design-button:hover {
+        background: #0000000d;
+    }
+}
+.settings-popover .language-options .design-button:focus-visible {
+    outline: 2px solid #007aff;
+    outline-offset: -2px;
+}
+.settings-popover[data-panel='range'] {
+    border-radius: var(--ui-card-radius);
+    padding: 11px;
+    color: var(--ui-brand);
+}
+.settings-popover[data-panel='range'] .preference-form {
+    margin: 0;
+    gap: 11px;
+}
+.settings-popover[data-panel='range'] .preference-form label {
+    padding-inline: 11px;
+}
+.settings-popover[data-panel='range'] .preference-form input {
+    min-height: var(--ui-control-height);
+    border: 1px solid white;
+    border-radius: var(--ui-control-radius);
+    padding: 11px;
+    background: #fafcf9;
+    color: #1d1b20;
+    box-shadow: 0 4px 32px #0000000a;
+    font: 400 17px/20px var(--ui-font-body);
+}
+.settings-popover[data-panel='range'] .preference-form input:focus-visible {
+    outline: 3px solid var(--ui-brand-blush);
+    outline-offset: 0;
+}
+.settings-popover[data-panel='range'] .preference-form .design-button {
+    min-height: var(--ui-control-height);
+    border: 1px solid var(--ui-brand);
+    border-radius: var(--ui-control-radius);
+    background: var(--ui-brand-blush);
+    color: var(--ui-brand);
+    font: 500 16px/22px var(--ui-font-body);
+}
+.settings-popover[data-panel='range'] .preference-form .design-button:focus-visible {
+    outline: 2px solid var(--ui-brand);
+    outline-offset: 2px;
+}
+.settings-popover[data-panel='range'] .preference-form .design-button:active {
+    background: var(--ui-selected);
+}
+.settings-popover .preferences-content p {
+    margin: 8px 11px 11px;
+    font: 400 14px/20px var(--ui-font-body);
+}
+.settings-popover .preference-form p {
+    margin: 0;
+}
+.settings-popover .preference-about {
+    gap: 11px;
+    padding: 8px 11px 11px;
+}
+.settings-popover .preference-about p {
+    margin: 0;
+}
+@keyframes settings-popover-in {
+    from {
+        opacity: 0;
+        transform: scale(0.97);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .settings-popover {
+        animation: none;
+    }
+}
+@media (prefers-reduced-transparency: reduce) {
+    .settings-popover {
+        background: #f9f9fb;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
     }
 }

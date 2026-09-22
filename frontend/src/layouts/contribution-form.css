@@ -163,10 +163,6 @@
     left: 101px;
     top: 9px;
 }
-.mobile-sheet.mobile-contribution {
-    height: calc(100dvh - 54px - env(safe-area-inset-bottom, 0px));
-    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-}
 .contribution-form-mobile {
     min-height: 758px;
     margin-top: -24px;
@@ -327,18 +323,92 @@
     opacity: 1;
 }
 .mobile-sheet.mobile-contribution {
-    max-height: calc(
-        var(--contribution-viewport-height, 100dvh) - 54px - env(safe-area-inset-bottom, 0px)
-    );
-    bottom: calc(var(--contribution-keyboard-offset, 0px) + 8px + env(safe-area-inset-bottom, 0px));
+    /* Visible-window height from the shared snapshot. The shell already grows
+       by the keyboard pan, so the sheet must not add it again. */
+    height: calc(var(--map-viewport-height, 100dvh) - 46px);
+    max-height: calc(var(--map-viewport-height, 100dvh) - 46px);
+    bottom: 0;
 }
 .mobile-contribution .sheet-scroll {
     scroll-padding: 16px;
 }
 @media (max-height: 480px) {
     .mobile-sheet.mobile-contribution {
-        max-height: calc(
-            var(--contribution-viewport-height, 100dvh) - 16px - env(safe-area-inset-bottom, 0px)
-        );
+        max-height: calc(var(--map-viewport-height, 100dvh) - 8px);
     }
+}
+
+/* Keep the reference form's spacing; the venue row only appears for toilets. */
+.contribution-venue {
+    position: absolute;
+    top: 226px;
+    left: 16px;
+    width: 280px;
+}
+.contribution-venue .contribution-label {
+    position: static;
+    display: block;
+}
+.contribution-venue select {
+    width: 100%;
+    margin-top: 8px;
+}
+.has-venue.contribution-form {
+    min-height: 828px;
+}
+.has-venue .description-label {
+    top: 306px;
+}
+.has-venue .contribution-description {
+    top: 334px;
+}
+.has-venue .opening-time {
+    top: 518px;
+}
+.has-venue .closing-time {
+    top: 598px;
+}
+.has-venue .upload-label {
+    top: 678px;
+}
+.has-venue .contribution-upload {
+    top: 708px;
+}
+.has-venue.contribution-form-live {
+    padding-top: 766px;
+    min-height: max(828px, 100%);
+}
+.has-venue.contribution-form-mobile {
+    min-height: 838px;
+}
+.has-venue.contribution-form-mobile:not(.contribution-form-live) .contribution-submit {
+    top: 782px;
+}
+.has-venue.contribution-form-mobile .contribution-venue {
+    top: 214px;
+    left: 11px;
+    right: 11px;
+    width: auto;
+}
+.has-venue.contribution-form-mobile .description-label {
+    top: 294px;
+}
+.has-venue.contribution-form-mobile .contribution-description {
+    top: 320px;
+}
+.has-venue.contribution-form-mobile .opening-time {
+    top: 526px;
+}
+.has-venue.contribution-form-mobile .closing-time {
+    top: 607px;
+}
+.has-venue.contribution-form-mobile .upload-label {
+    top: 688px;
+}
+.has-venue.contribution-form-mobile .contribution-upload {
+    top: 718px;
+}
+.has-venue.contribution-form-mobile.contribution-form-live {
+    padding-top: 782px;
+    min-height: 838px;
 }

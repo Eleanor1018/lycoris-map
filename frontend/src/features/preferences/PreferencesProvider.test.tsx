@@ -9,7 +9,10 @@ import {
 } from './PreferencesProvider'
 import { SettingsContent } from './Settings'
 import { localize } from '@/shared/i18n/ui'
-afterEach(() => localStorage.clear())
+afterEach(() => {
+    localStorage.clear()
+    vi.unstubAllEnvs()
+})
 it('validates untrusted settings and arbitrary status messages', () => {
     for (const value of [
         null,
@@ -49,12 +52,27 @@ it('keeps settings usable when storage writes fail', () => {
     render(
         <MemoryRouter>
             <PreferencesProvider>
-                <SettingsContent panel="range" open={() => {}} />
+                <SettingsContent panel="range" />
                 <Value />
             </PreferencesProvider>
         </MemoryRouter>,
     )
-    fireEvent.click(screen.getByRole('radio', { name: '2.5km' }))
+    const range = screen.getByRole('spinbutton', { name: 'Range (meters)' })
+    fireEvent.change(range, { target: { value: '2500' } })
+    fireEvent.submit(range.closest('form')!)
     expect(screen.getByRole('status')).toHaveTextContent('2500')
     fail.mockRestore()
+})
+
+it('restores only supported, configured map sources', () => {
+    vi.stubEnv('VITE_TENCENT_MAP_KEY', 'test-browser-key')
+    expect(parsePreferences('{"source":"tencent"}').source).toBe('tencent')
+    vi.stubEnv('VITE_TENCENT_MAP_KEY', '')
+    expect(parsePreferences('{"source":"tencent"}').source).toBe('osm')
+    vi.stubEnv('VITE_TIANDITU_API_KEY', 'browser-test-key')
+    expect(parsePreferences('{"source":"tianditu"}').source).toBe('tianditu')
+    for (const source of ['google', 'constructor', '', null, 1])
+        expect(parsePreferences(JSON.stringify({ source })).source).toBe('osm')
+    vi.stubEnv('VITE_TIANDITU_API_KEY', '  ')
+    expect(parsePreferences('{"source":"tianditu"}').source).toBe('osm')
 })

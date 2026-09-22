@@ -73,14 +73,10 @@
     background: var(--ui-selected);
 }
 .mobile-sheet .has-place-results {
-    height: 320px;
-}
-.mobile-sheet[data-snap='collapsed'] .has-place-results {
-    height: 158px;
-}
-.mobile-sheet[data-snap='full'] .mobile-search-content.has-place-results {
     padding: 0;
-    height: calc(100dvh - 54px - env(safe-area-inset-bottom, 0px));
+    /* Visible-window height from the shared snapshot; the sheet scroll area owns
+       the single safe-area inset. */
+    height: calc(var(--map-viewport-height, 100dvh) - 46px - env(safe-area-inset-bottom, 0px));
 }
 .mobile-place-results {
     top: 131px;
@@ -139,7 +135,7 @@
     position: static;
     width: calc(100% - 5px);
     height: auto;
-    min-height: 60px;
+    min-height: 0;
     display: block;
     overflow-wrap: anywhere;
 }
@@ -148,14 +144,14 @@
     gap: 6px;
 }
 .live-place-detail .place-actions {
-    margin: 10px -6px 0;
+    margin: 22px -6px 0;
 }
 .place-actions .share-button,
 .place-actions .navigate-button {
     position: relative;
     top: auto;
     left: auto;
-    display: block;
+    display: flex;
     flex: none;
     text-decoration: none;
 }
@@ -164,13 +160,14 @@
     outline: none;
 }
 .mobile-detail .live-mobile-detail {
-    padding: 29px var(--mobile-content-inset) 21px;
+    min-height: 0;
+    padding: 29px var(--mobile-content-inset) 22px;
 }
 .mobile-detail .live-mobile-detail h1 {
     position: static;
     height: auto;
-    min-height: 40px;
-    padding-right: 24px;
+    min-height: 0;
+    padding-right: 58px;
     overflow-wrap: anywhere;
 }
 .mobile-detail .live-mobile-detail .place-meta {
@@ -182,7 +179,7 @@
     position: static;
     width: 100%;
     height: auto;
-    min-height: 40px;
+    min-height: 0;
     overflow-wrap: anywhere;
 }
 .mobile-detail .live-mobile-detail .mobile-photo {
@@ -190,7 +187,8 @@
     position: static;
     margin-top: 9px;
     width: 100%;
-    height: 198px;
+    height: auto;
+    aspect-ratio: 353 / 198;
 }
 .live-mobile-detail .place-actions {
     margin: 27px 0 0;
@@ -201,9 +199,6 @@
     flex: 1;
     min-width: 0;
     max-width: 144px;
-}
-.live-mobile-detail .place-actions .navigate-button span {
-    left: 15px;
 }
 .live-mobile-detail .place-actions .mobile-bookmark {
     position: relative;
@@ -217,25 +212,48 @@
     font: 400 15px/20px var(--ui-font-body);
     margin: 12px 0 0;
 }
-.map-location-status,
-.map-read-status {
+.map-notices {
     position: absolute;
     z-index: 10;
     top: 16px;
     left: 576px;
     right: 80px;
+    display: grid;
+    gap: 8px;
+    pointer-events: none;
+}
+.map-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin: 0;
-    padding: 12px 16px;
+    padding: 4px 4px 4px 16px;
     border-radius: 22px;
     background: var(--ui-nav-surface);
     color: var(--ui-brand-deep);
     font: 400 15px/20px var(--ui-font-body);
+    pointer-events: auto;
 }
-.map-read-status button {
+.map-notice-content {
+    flex: 1;
+    min-width: 0;
+    padding-block: 8px;
+    overflow-wrap: anywhere;
+}
+.map-notice-retry {
+    margin-inline-start: 8px;
     text-decoration: underline;
 }
-.map-shell[data-mobile='true'] .map-location-status,
-.map-shell[data-mobile='true'] .map-read-status {
+.map-notice-close {
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+}
+.map-notice-close:hover {
+    background: var(--ui-selected);
+}
+.map-shell[data-mobile='true'] .map-notices {
     left: 16px;
     right: 64px;
     top: 8px;
@@ -246,16 +264,8 @@
     .live-mobile-detail .place-actions .navigate-button {
         font-size: 18px;
     }
-    .live-mobile-detail .place-actions .share-button span {
-        left: 20px;
-    }
-    .live-mobile-detail .place-actions .navigate-button span {
-        left: 12px;
-    }
     .live-mobile-detail .place-actions .share-button img,
     .live-mobile-detail .place-actions .navigate-button img {
-        left: auto;
-        right: 8px;
         width: 20px;
     }
 }

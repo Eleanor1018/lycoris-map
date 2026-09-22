@@ -68,20 +68,21 @@
     position: static;
     width: 283px;
     max-width: 100%;
-    height: 60px;
+    height: auto;
     overflow-wrap: anywhere;
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
 }
 .nearby-place .place-actions {
-    margin: 10px -6px 0;
+    margin: 22px -6px 0;
     gap: 7px;
 }
 .mobile-nearby-results {
-    inset: 0 var(--mobile-content-inset) 11px;
+    inset: 0 var(--mobile-content-inset) calc(11px + env(safe-area-inset-bottom, 0px));
 }
 .mobile-nearby-results .nearby-title {
+    padding-right: 44px;
     flex: none;
     margin: 5px 0 24px;
     color: var(--ui-brand-deep);

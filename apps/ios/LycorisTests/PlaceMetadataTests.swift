@@ -268,6 +268,22 @@ struct PlaceMetadataTests {
     #expect(try json(new)["venueType"] as? String == "metro")
   }
 
+  @Test func newVenueTypesSurviveDraftPersistenceAndBothWritePayloads() throws {
+    for venue in [PlaceVenue.publicToilet, .airport] {
+      let marker = try decodeMarker(venueType: venue.rawValue)
+      var edit = draft(original: marker)
+      edit.fields.title = "Updated"
+      let restored = try JSONDecoder().decode(
+        ContributionDraft.self, from: JSONEncoder().encode(edit))
+      #expect(restored.fields.venueType == venue)
+      #expect(try json(restored)["venueType"] as? String == venue.rawValue)
+      var new = draft()
+      new.fields.title = "New toilet"
+      new.fields.venueType = venue
+      #expect(try json(new)["venueType"] as? String == venue.rawValue)
+    }
+  }
+
   @Test func legacyDraftWithNoVenueKeyStaysNil() throws {
     let legacy =
       #"{"title":"Legacy","category":"accessible_toilet","description":"","openTimeStart":"","openTimeEnd":"","language":"en"}"#

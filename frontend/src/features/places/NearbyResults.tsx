@@ -1,12 +1,13 @@
+import { PlaceHours } from '@/features/places/PlaceHours'
 import { useUi } from '@/shared/i18n/ui'
-import { useState } from 'react'
 import type { Marker } from '@/shared/api/markers'
 import { DesignButton } from '@/shared/ui/design-primitives'
 import type { PlaceBrowse } from './usePlaceBrowse'
-import { categoryLabels, distanceLabel, openingHours, publicImageUrl } from './model'
+import { categoryLabels, distanceLabel, publicImageUrl } from './model'
 import { PlaceActions } from './PlaceActions'
 import { ReadMessage } from './PlaceResults'
 import { NearbyWindow } from './NearbyWindow'
+import { PlacePhoto } from './PlacePhoto'
 import { rangeLabel } from '@/features/preferences/PreferencesProvider'
 import './nearby.css'
 
@@ -59,7 +60,6 @@ function NearbyList({ browse, onSelect, mobile = false, listKey }: Props & { lis
 
 function NearbyPlace({ place, browse, onSelect, mobile }: Props & { place: Marker }) {
     const ui = useUi()
-    const [failedImage, setFailedImage] = useState<string | null>(null)
     const image = publicImageUrl(place.markImage)
     const focusId = `${mobile ? 'mobile' : 'desktop'}-nearby-place-${place.id}`
     const distance = distanceLabel(place, browse.nearby?.point ?? null)
@@ -87,16 +87,10 @@ function NearbyPlace({ place, browse, onSelect, mobile }: Props & { place: Marke
                         {distance}
                     </span>
                 )}
-                <span>{openingHours(place, browse.language)}</span>
+                <PlaceHours place={place} language={browse.language} />
             </span>
-            {image && image !== failedImage && (
-                <img
-                    className="place-photo"
-                    src={image}
-                    alt=""
-                    loading="lazy"
-                    onError={() => setFailedImage(image)}
-                />
+            {image && (
+                <PlacePhoto className="place-photo" src={image} loading="lazy" variant="thumb" />
             )}
             {place.description && (
                 <p className="place-description" lang={place.contentLanguage}>

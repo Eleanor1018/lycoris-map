@@ -1,14 +1,26 @@
+import { mapSourceNames } from '@/features/map/mapSources'
 import { usePreferences } from '@/features/preferences/PreferencesProvider'
 import { isSettingsPanel, settingsTitles, SettingsContent } from '@/features/preferences/Settings'
 import { useUi } from '@/shared/i18n/ui'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useRef,
+    useState,
+    type CSSProperties,
+} from 'react'
 import type { Map as LeafletMap } from 'leaflet'
 import { useNavigate } from 'react-router'
 import { MobileSheet } from './MobileSheet'
-import { useMobileLayout, useViewportHeight } from './useMobileLayout'
+import { useMobileLayout } from './useMobileLayout'
+import { useViewportSnapshot } from './viewport'
 import { MapSurface } from '@/features/map/MapSurface'
+import { HeadingPermission } from '@/features/map/HeadingPermission'
+import { MapSourcePicker } from '@/features/map/MapSourcePicker'
 import { FigmaIcon, type FigmaIconName } from '@/shared/ui/figma-icon'
 import { DesignButton, IconButton } from './primitives'
+import type { VoiceSearchState } from '@/shared/ui/design-primitives'
 import { DesktopPanel } from './DesktopPanel'
 import { usePanelRoute } from './usePanelRoute'
 import type { DesignSample, Panel, Snap } from './types'
@@ -30,7 +42,6 @@ const navigation: { panel: Panel; label: string; icon: FigmaIconName }[] = [
     { panel: 'search', label: 'Search', icon: 'navSearch' },
     { panel: 'bookmarks', label: 'Bookmarks', icon: 'navBookmarks' },
     { panel: 'contribute', label: 'Contribute', icon: 'navContribute' },
-    { panel: 'languages', label: 'Languages', icon: 'navLanguages' },
     { panel: 'settings', label: 'Settings', icon: 'navSettings' },
 ]
 export function MapShell({
@@ -43,7 +54,7 @@ export function MapShell({
     sharedTarget?: SharedTarget | undefined
 }) {
     const ui = useUi()
-    const { preferences } = usePreferences()
+    const { sourceFailure, retrySource, preferences } = usePreferences()
     const mobile = useMobileLayout()
     const session = useSession()
     const showBookmarks = Boolean(sample) || session.status === 'authenticated'
@@ -57,14 +68,41 @@ export function MapShell({
         close,
         location,
     } = usePanelRoute(Boolean(sample), mobile ? 'back' : 'dismiss', !!browse)
-    const panel = requestedPanel === 'bookmarks' && !showBookmarks ? 'initial' : requestedPanel
+    const contributionNeedsLogin =
+        !sample &&
+        !!accountFlow &&
+        (requestedPanel === 'contribute' || requestedPanel === 'contribute-form') &&
+        !session.scope
+    const panel =
+        contributionNeedsLogin || (requestedPanel === 'bookmarks' && !showBookmarks)
+            ? 'initial'
+            : requestedPanel
     const contributionOpen = panel === 'contribute-form' || (mobile && panel === 'contribute')
     const activeRoute = useRef(location.key)
     activeRoute.current = location.key
+    const loginRoute = useRef<string | null>(null)
+    useEffect(() => {
+        if (!contributionNeedsLogin) {
+            loginRoute.current = null
+            return
+        }
+        if (session.status === 'checking' || session.busy || loginRoute.current === location.key)
+            return
+        loginRoute.current = location.key
+        const key = location.key
+        // The requested route resumes naturally once the session is confirmed.
+        // Keep both the picker and composer hidden until then, including deep links.
+        accountFlow?.requireLogin(undefined, () => {
+            if (activeRoute.current === key) close()
+        })
+    }, [contributionNeedsLogin, session.status, session.busy, location.key, accountFlow, close])
     useEffect(() => {
         if (mobile && panel === 'contribute') open('contribute-form', 'nav-contribute', true)
     }, [mobile, panel, open])
-    const viewportHeight = useViewportHeight()
+    // One visual-viewport snapshot feeds both the CSS shell height and every JS
+    // sheet calc, so `100dvh` can never disagree with `innerHeight` again.
+    const viewport = useViewportSnapshot()
+    const viewportHeight = viewport.height
     const navigate = useNavigate()
     const mobileFixture = Boolean(sample) && location.pathname === '/__design/mobile'
     const params = new URLSearchParams(location.search)
@@ -73,20 +111,54 @@ export function MapShell({
         contributionOpen ||
         (mobile && (panel === 'bookmarks' || panel === 'nearby' || isSettingsPanel(panel)))
             ? 'full'
-            : snapValue === 'half' || snapValue === 'full'
+            : snapValue === 'collapsed' || snapValue === 'half' || snapValue === 'full'
               ? snapValue
               : browse && location.pathname === '/search' && params.get('q')?.trim() && !snapValue
                 ? 'full'
-                : 'collapsed'
-    const [dragHeight, setDragHeight] = useState<number | null>(null)
+                : mobile
+                  ? 'half'
+                  : 'collapsed'
+    const [detailHeight, setDetailHeight] = useState(433)
+    const [menuHeight, setMenuHeight] = useState<number | null>(null)
+    const [nearbyHeight, setNearbyHeight] = useState(326)
+    const [voice, setVoice] = useState(false)
+    const mainMenu =
+        (panel === 'initial' || panel === 'search') &&
+        browse?.mode !== 'search' &&
+        browse?.mode !== 'cluster'
+    const fullSheetHeight = Math.min(
+        viewportHeight - 46,
+        mainMenu && !voice ? (menuHeight ?? Infinity) : Infinity,
+    )
+    const halfSheetHeight = Math.min(mainMenu ? nearbyHeight : 320, fullSheetHeight)
     const sheetHeight =
-        dragHeight ??
-        (panel === 'details'
-            ? Math.min(433, viewportHeight - 46)
+        panel === 'details'
+            ? Math.min(detailHeight, viewportHeight - 46)
             : snap === 'full'
-              ? viewportHeight - 54
-              : Math.min(snap === 'half' ? 320 : 158, viewportHeight - 46))
-    const sheetTop = viewportHeight - sheetHeight - (panel !== 'details' && snap === 'full' ? 8 : 0)
+              ? fullSheetHeight
+              : snap === 'half'
+                ? halfSheetHeight
+                : Math.min(158, viewportHeight - 46)
+    // Top edge of the sheet in the shell's own (layout-origin) coordinates. The
+    // shell is anchored at the layout origin and is `bottom` tall, so the sheet
+    // top is `viewport.bottom - sheetHeight`; the tool controls are placed at
+    // shell-relative offsets (54px / 152px) and must be compared in the same
+    // frame, not in visual-window coordinates where the keyboard pan is dropped.
+    const sheetTop = viewport.bottom - sheetHeight
+    // Publish the shared snapshot on the document root for every map layout, so
+    // the shell and portalled overlays (the account dialog) read the same numbers
+    // on phones, landscape and tablets alike. Desktop values are unchanged
+    // because a normal desktop visual viewport equals innerHeight. Non-map pages
+    // never set these and fall back to 100dvh.
+    useLayoutEffect(() => {
+        const root = document.documentElement
+        root.style.setProperty('--map-viewport-height', `${viewportHeight}px`)
+        root.style.setProperty('--map-viewport-offset-top', `${viewport.offsetTop}px`)
+        return () => {
+            root.style.removeProperty('--map-viewport-height')
+            root.style.removeProperty('--map-viewport-offset-top')
+        }
+    }, [viewportHeight, viewport.offsetTop])
     const setSnap = (next: Snap) => {
         const nextParams = new URLSearchParams(location.search)
         nextParams.set(mobileFixture ? 'screen' : 'snap', next)
@@ -147,6 +219,15 @@ export function MapShell({
             if (mobile && (snap !== 'full' || panel !== 'search')) showMobileSearch('full')
         } else setSearch(value)
     }
+    // The mic click expands the menu to its maximum immediately, before any
+    // permission or recognition result. Keeping the SearchField mounted (only
+    // its props/state change) is what stops the recording from being cancelled.
+    const onMic = () => {
+        if (mobile && (snap !== 'full' || panel !== 'search')) showMobileSearch('full')
+    }
+    const onVoiceChange = useCallback((next: VoiceSearchState) => {
+        setVoice(next.active || next.finishing)
+    }, [])
     const nearbyCategory = params.get('nearbyCategory')
     const requestedCategory =
         nearbyCategory === 'baby_room' || nearbyCategory === 'friendly_clinic'
@@ -270,6 +351,7 @@ export function MapShell({
             data-panel={panel}
             data-mobile={mobile}
             data-snap={snap}
+            style={mobile ? ({ '--sheet-height': `${sheetHeight}px` } as CSSProperties) : undefined}
         >
             {sample ? (
                 <div
@@ -441,10 +523,17 @@ export function MapShell({
                     sample={sample}
                     search={browse?.search ?? search}
                     setSearch={updateSearch}
+                    voice={voice}
+                    onMic={onMic}
+                    onVoiceChange={onVoiceChange}
                     openDetails={(focusId) => open('details', focusId)}
                     close={close}
-                    dragHeight={dragHeight}
-                    setDragHeight={setDragHeight}
+                    height={sheetHeight}
+                    halfHeight={halfSheetHeight}
+                    fullHeight={fullSheetHeight}
+                    onDetailHeight={setDetailHeight}
+                    onMenuHeight={setMenuHeight}
+                    onNearbyHeight={setNearbyHeight}
                     contribution={contributionOpen ? contribution : undefined}
                     browse={browse}
                     selectPlace={selectPlace}
@@ -454,7 +543,6 @@ export function MapShell({
                             ? editPlace
                             : undefined
                     }
-                    openSettings={open}
                     secondaryLabel={
                         isSettingsPanel(panel)
                             ? settingsTitles[panel]
@@ -464,7 +552,7 @@ export function MapShell({
                     }
                     secondary={
                         isSettingsPanel(panel) ? (
-                            <SettingsContent panel={panel} open={open} mobile />
+                            <SettingsContent panel={panel} mobile />
                         ) : panel === 'nearby' && browse ? (
                             <NearbyResults browse={browse} onSelect={selectPlace} mobile />
                         ) : panel === 'bookmarks' && browse && !sample ? (
@@ -482,13 +570,7 @@ export function MapShell({
                 />
             )}
             <div className="map-tools top-tools" inert={mobile && sheetTop < 142}>
-                <IconButton
-                    icon={mobile ? 'mobileMap' : 'map'}
-                    size={20}
-                    id="map-source"
-                    label="Map source"
-                    onClick={() => open('source', 'map-source')}
-                />
+                <MapSourcePicker mobile={mobile} resetKey={`${panel}:${snap}`} />
                 <IconButton
                     icon={mobile ? 'mobileDirection' : 'direction'}
                     size={20}
@@ -537,19 +619,64 @@ export function MapShell({
                     />
                 </div>
             )}
-            {browse && (browse.location.error || browse.location.pending) && (
-                <p className="map-location-status" role="status">
-                    {ui.message(
-                        browse.location.pending ? 'Finding your location…' : browse.location.error,
-                    )}
-                </p>
-            )}
-            {browse?.mode === 'map' && browse.state.error && (
-                <div className="map-read-status" role="status">
-                    {ui.message(browse.state.error)}{' '}
-                    <DesignButton onClick={browse.state.retry}>{ui.text('Try again')}</DesignButton>
-                </div>
-            )}
+            <div className="map-notices">
+                {sourceFailure && (
+                    <MapNotice
+                        key={sourceFailure.id}
+                        message={
+                            sourceFailure.exhausted
+                                ? 'Map sources are unavailable. Check your connection and try again.'
+                                : ui.text('Map could not load. Switched to {source}.', {
+                                      source: mapSourceNames[preferences.source],
+                                  })
+                        }
+                        onRetry={sourceFailure.exhausted ? retrySource : undefined}
+                    />
+                )}
+                {!sample && <HeadingPermission />}
+                {browse && (browse.location.error || browse.location.pending) && (
+                    <MapNotice
+                        key={browse.location.pending ? 'locating' : browse.location.error}
+                        message={
+                            browse.location.pending
+                                ? 'Finding your location…'
+                                : browse.location.error!
+                        }
+                    />
+                )}
+                {browse?.mode === 'map' && browse.state.error && (
+                    <MapNotice
+                        key={`places:${browse.state.error}`}
+                        message={browse.state.error}
+                        onRetry={browse.state.retry}
+                    />
+                )}
+            </div>
         </main>
+    )
+}
+
+function MapNotice({ message, onRetry }: { message: string; onRetry?: (() => void) | undefined }) {
+    const ui = useUi()
+    const [dismissed, setDismissed] = useState(false)
+    if (dismissed) return null
+    return (
+        <div className="map-notice" role="status">
+            <div className="map-notice-content">
+                {ui.message(message)}
+                {onRetry && (
+                    <DesignButton className="map-notice-retry" onClick={onRetry}>
+                        {ui.text('Try again')}
+                    </DesignButton>
+                )}
+            </div>
+            <IconButton
+                className="map-notice-close"
+                icon="close"
+                size={16}
+                label="Dismiss notification"
+                onClick={() => setDismissed(true)}
+            />
+        </div>
     )
 }

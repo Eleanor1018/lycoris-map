@@ -341,5 +341,12 @@
         "nodeId": "126:799",
         "sha256": "1e7a390f7db5617bad4442a8c12692462c995dd41d92d2a423c1d81b38d37089",
         "bytes": 368
+    },
+    {
+        "file": "mobile-position.svg",
+        "fileKey": "nmsiDbbgm0LG0CSwXUSLPW",
+        "nodeId": "18:1763",
+        "sha256": "d544c07e9d163ea9475a0b6afff6381f50b549300ad88c22712df5ebddea807a",
+        "bytes": 752
     }
 ]

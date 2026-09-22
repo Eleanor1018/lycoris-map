@@ -1,0 +1,53 @@
+/* Navigation app chooser: reuses the settings popover surface and tokens. */
+.navigation-chooser {
+    z-index: 30;
+    min-width: 200px;
+    max-width: calc(100vw - 22px);
+    border: 1px solid #00000014;
+    border-radius: 16px;
+    padding: 6px;
+    background: #f9f9fbf2;
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    backdrop-filter: blur(24px) saturate(150%);
+    box-shadow:
+        0 12px 32px #00000024,
+        0 2px 6px #0000000d,
+        inset 0 1px 0 #ffffffb3;
+    color: #1c1c1e;
+    font: 400 15px/20px var(--ui-font-body);
+    outline: none;
+    transform-origin: var(--radix-popover-content-transform-origin);
+    animation: settings-popover-in 120ms ease-out;
+}
+.navigation-chooser .navigation-option {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 11px;
+    border-radius: 10px;
+    color: var(--ui-brand-deep);
+    font: 400 16px/22px var(--ui-font-body);
+    text-decoration: none;
+    overflow-wrap: anywhere;
+}
+.navigation-chooser .navigation-option:focus-visible {
+    outline: 2px solid #007aff;
+    outline-offset: -2px;
+}
+@media (hover: hover) {
+    .navigation-chooser .navigation-option:hover {
+        background: #0000000d;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .navigation-chooser {
+        animation: none;
+    }
+}
+@media (prefers-reduced-transparency: reduce) {
+    .navigation-chooser {
+        background: #f9f9fb;
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+}

@@ -1,10 +1,10 @@
 import { SettingsRows } from '@/features/preferences/Settings'
-import type { Panel } from './types'
 import { useUi } from '@/shared/i18n/ui'
-import { useEffect, useRef, type PointerEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { FigmaIcon } from '@/shared/ui/figma-icon'
 import { PlaceMeta, PlaceSummary, ShareButton } from './DesktopPanel'
 import { CategoryBadge, DesignButton, IconButton, NearbyCards, SearchField } from './primitives'
+import type { VoiceSearchState } from '@/shared/ui/design-primitives'
 import type { DesignSample, Snap } from './types'
 import { ContributionForm, type ContributionFormProps } from './ContributionForm'
 import type { PlaceBrowse } from '@/features/places/usePlaceBrowse'
@@ -13,6 +13,7 @@ import { PlaceDetails } from '@/features/places/PlaceDetails'
 import { PlaceResults } from '@/features/places/PlaceResults'
 import { AccountEntry } from '@/features/auth/AccountEntry'
 import { BookmarksPanel } from '@/features/bookmarks/BookmarksPanel'
+import { useSheetDrag } from './useSheetDrag'
 
 export function MobileSheet({
     snap,
@@ -21,10 +22,17 @@ export function MobileSheet({
     sample,
     search,
     setSearch,
+    voice,
+    onMic,
+    onVoiceChange,
     openDetails,
     close,
-    dragHeight,
-    setDragHeight,
+    height,
+    halfHeight,
+    fullHeight,
+    onDetailHeight,
+    onMenuHeight,
+    onNearbyHeight,
     contribution,
     browse,
     selectPlace,
@@ -33,7 +41,6 @@ export function MobileSheet({
     secondaryLabel = 'Bookmarks',
     openBookmarks,
     showBookmarks,
-    openSettings,
     editPlace,
 }: {
     snap: Snap
@@ -42,17 +49,24 @@ export function MobileSheet({
     sample: DesignSample | undefined
     search: string
     setSearch: (value: string) => void
+    voice: boolean
+    /** Expands the menu to its maximum before any recognised word arrives. */
+    onMic: () => void
+    onVoiceChange: (voice: VoiceSearchState) => void
     openDetails: (focusId: string) => void
     close: () => void
-    dragHeight: number | null
-    setDragHeight: (height: number | null) => void
+    height: number
+    halfHeight: number
+    fullHeight: number
+    onDetailHeight: (height: number) => void
+    onMenuHeight: (height: number) => void
+    onNearbyHeight: (height: number) => void
     contribution?: Omit<ContributionFormProps, 'mobile'> | undefined
     browse?: PlaceBrowse | undefined
     selectPlace?: ((place: Marker, focusId: string) => void) | undefined
     chooseCategory?: ((category: 'toilet' | 'nursing' | 'medical') => void) | undefined
     secondaryLabel?: string
     secondary?: ReactNode
-    openSettings: (panel: Panel, focusId?: string) => void
     openBookmarks?: (() => void) | undefined
     showBookmarks: boolean
     editPlace?: (() => void) | undefined
@@ -61,19 +75,59 @@ export function MobileSheet({
     const hasPlaceResults = browse?.mode === 'search' || browse?.mode === 'cluster'
     const sheet = useRef<HTMLElement>(null)
     const composing = !!contribution
-    useEffect(() => {
-        const element = sheet.current,
-            viewport = window.visualViewport
-        if (!composing || !element || !viewport) return
-        let frame = 0
-        const resize = () => {
-            const normalScale = Math.abs(viewport.scale - 1) < 0.05
-            const height = normalScale ? viewport.height : window.innerHeight
-            const offset = normalScale
-                ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop)
+    const liveDetail = detail && !!browse
+    const expandedPanel = detail || Boolean(contribution) || Boolean(secondary)
+    const mainMenu = !expandedPanel && !hasPlaceResults
+    useLayoutEffect(() => {
+        if (!liveDetail && !mainMenu) return
+        const content = sheet.current?.querySelector<HTMLElement>(
+            liveDetail ? '.live-mobile-detail' : '.mobile-search-content',
+        )
+        const scroll = content?.parentElement
+        if (!content || !scroll) return
+        const nearby = mainMenu ? content.querySelector<HTMLElement>('.nearby-cards') : null
+        const voiceBody = mainMenu ? content.querySelector<HTMLElement>('.voice-search-body') : null
+        const measure = () => {
+            const bounds = content.getBoundingClientRect()
+            const natural = bounds.height
+            if (!natural) return
+            const safeArea = parseFloat(getComputedStyle(scroll).paddingBottom) || 0
+            const onHeight = liveDetail ? onDetailHeight : onMenuHeight
+            // The voice body is absolutely placed inside the reserved body area,
+            // so a long transcript grows the menu to fit instead of being cut off.
+            const voiceBottom = voiceBody
+                ? voiceBody.getBoundingClientRect().bottom - bounds.top
                 : 0
-            element.style.setProperty('--contribution-viewport-height', `${height}px`)
-            element.style.setProperty('--contribution-keyboard-offset', `${offset}px`)
+            onHeight(
+                Math.max(
+                    liveDetail ? 158 : 326,
+                    Math.ceil(Math.max(natural, voiceBottom + 22) + safeArea),
+                ),
+            )
+            const cards = nearby?.getBoundingClientRect()
+            if (cards?.height) {
+                // The middle stop shows every nearby card and the same bottom
+                // inset as the full menu, including the device's safe area.
+                const inset = parseFloat(getComputedStyle(content).paddingBottom) || 22
+                onNearbyHeight(Math.ceil(cards.bottom - bounds.top + inset + safeArea))
+            }
+        }
+        measure()
+        const observer = new ResizeObserver(measure)
+        observer.observe(content)
+        observer.observe(scroll)
+        if (nearby) observer.observe(nearby)
+        if (voiceBody) observer.observe(voiceBody)
+        return () => observer.disconnect()
+    }, [liveDetail, mainMenu, voice, onDetailHeight, onMenuHeight, onNearbyHeight])
+    // Keep the focused field visible while the visual viewport moves for the
+    // keyboard. The shell owns the sizing: it grows by the keyboard pan, so the
+    // sheet does not recompute any height or subtract the pan here.
+    useEffect(() => {
+        const element = sheet.current
+        if (!composing || !element) return
+        let frame = 0
+        const reveal = () => {
             cancelAnimationFrame(frame)
             frame = requestAnimationFrame(() => {
                 const active = document.activeElement
@@ -85,73 +139,44 @@ export function MobileSheet({
                     active.scrollIntoView?.({ block: 'nearest' })
             })
         }
-        resize()
-        viewport.addEventListener('resize', resize)
-        viewport.addEventListener('scroll', resize)
+        element.addEventListener('focusin', reveal)
+        const viewport = window.visualViewport
+        viewport?.addEventListener('resize', reveal)
+        viewport?.addEventListener('scroll', reveal)
         return () => {
             cancelAnimationFrame(frame)
-            viewport.removeEventListener('resize', resize)
-            viewport.removeEventListener('scroll', resize)
-            element.style.removeProperty('--contribution-viewport-height')
-            element.style.removeProperty('--contribution-keyboard-offset')
+            element.removeEventListener('focusin', reveal)
+            viewport?.removeEventListener('resize', reveal)
+            viewport?.removeEventListener('scroll', reveal)
         }
     }, [composing])
-    const gesture = useRef<{ id: number; y: number; height: number; moved: boolean } | null>(null)
-    const suppressClick = useRef(false)
-    const expandedPanel = detail || Boolean(contribution) || Boolean(secondary)
     const cycle = () =>
         expandedPanel
             ? close()
             : setSnap(snap === 'collapsed' ? 'half' : snap === 'half' ? 'full' : 'collapsed')
-    const begin = (event: PointerEvent<HTMLButtonElement>) => {
-        if (event.button !== 0 || !sheet.current) return
-        gesture.current = {
-            id: event.pointerId,
-            y: event.clientY,
-            height: sheet.current.getBoundingClientRect().height,
-            moved: false,
-        }
-        event.currentTarget.setPointerCapture(event.pointerId)
-    }
-    const move = (event: PointerEvent<HTMLButtonElement>) => {
-        const current = gesture.current
-        if (!current || current.id !== event.pointerId) return
-        const delta = current.y - event.clientY
-        if (Math.abs(delta) > 5) current.moved = true
-        if (current.moved)
-            setDragHeight(
-                Math.max(
-                    Math.min(158, window.innerHeight - 46),
-                    Math.min(window.innerHeight - 54, current.height + delta),
-                ),
-            )
-    }
-    const finish = (event: PointerEvent<HTMLButtonElement>) => {
-        const current = gesture.current
-        if (!current || current.id !== event.pointerId) return
-        if (current.moved) {
-            suppressClick.current = true
-            if (expandedPanel) {
-                if (event.clientY - current.y > 48) close()
-            } else {
-                const height = current.height + current.y - event.clientY
-                const choices: [Snap, number][] = [
-                    ['collapsed', Math.min(158, window.innerHeight - 46)],
-                    ['half', Math.min(320, window.innerHeight - 46)],
-                    ['full', window.innerHeight - 54],
-                ]
-                choices.sort((a, b) => Math.abs(a[1] - height) - Math.abs(b[1] - height))
-                setSnap(choices[0]?.[0] ?? snap)
-            }
-        }
-        gesture.current = null
-        setDragHeight(null)
-    }
+    useSheetDrag({
+        sheet,
+        snap,
+        height,
+        halfHeight,
+        maxHeight: fullHeight,
+        expandedPanel,
+        close,
+        setSnap,
+        resetKey: contribution
+            ? 'contribution'
+            : secondary
+              ? secondaryLabel
+              : detail
+                ? `detail-${browse?.detail?.id ?? 'loading'}`
+                : 'search',
+    })
     return (
         <section
             ref={sheet}
             className={`mobile-sheet ${detail ? 'mobile-detail' : ''} ${contribution ? 'mobile-contribution' : ''}`}
             data-snap={snap}
+            data-expanded-panel={expandedPanel || undefined}
             aria-label={
                 ui.message(
                     contribution
@@ -163,7 +188,6 @@ export function MobileSheet({
                             : 'Search positions',
                 ) ?? undefined
             }
-            style={dragHeight === null ? undefined : { height: dragHeight }}
         >
             <DesignButton
                 id="sheet-handle"
@@ -180,20 +204,7 @@ export function MobileSheet({
                     ) ?? undefined
                 }
                 aria-expanded={expandedPanel || snap !== 'collapsed'}
-                onPointerDown={begin}
-                onPointerMove={move}
-                onPointerUp={finish}
-                onPointerCancel={() => {
-                    gesture.current = null
-                    setDragHeight(null)
-                }}
-                onClick={() => {
-                    if (suppressClick.current) {
-                        suppressClick.current = false
-                        return
-                    }
-                    cycle()
-                }}
+                onClick={cycle}
                 onKeyDown={(event) => {
                     if (['ArrowUp', 'ArrowDown', 'Home', 'End', 'Escape'].includes(event.key)) {
                         event.preventDefault()
@@ -217,6 +228,14 @@ export function MobileSheet({
             >
                 <span />
             </DesignButton>
+            {(secondary || detail) && (
+                <IconButton
+                    className="mobile-sheet-close"
+                    icon="close"
+                    label="Close panel"
+                    onClick={close}
+                />
+            )}
             <div
                 className="sheet-scroll"
                 key={
@@ -275,7 +294,13 @@ export function MobileSheet({
                         className={`mobile-search-content ${hasPlaceResults ? 'has-place-results' : ''}`}
                     >
                         <div className="mobile-logo">{ui.text('Lycoris Maps')}</div>
-                        <SearchField mobile value={search} onChange={setSearch} />
+                        <SearchField
+                            mobile
+                            value={search}
+                            onChange={setSearch}
+                            onVoiceStart={onMic}
+                            onVoiceChange={onVoiceChange}
+                        />
                         {!sample ? (
                             <AccountEntry mobile />
                         ) : (
@@ -287,24 +312,24 @@ export function MobileSheet({
                                 AA
                             </DesignButton>
                         )}
-                        {browse && hasPlaceResults && snap !== 'collapsed' && selectPlace ? (
-                            <PlaceResults browse={browse} onSelect={selectPlace} mobile />
+                        {voice ? null : browse && hasPlaceResults && selectPlace ? (
+                            <div
+                                inert={snap === 'collapsed'}
+                                aria-hidden={snap === 'collapsed' || undefined}
+                            >
+                                <PlaceResults browse={browse} onSelect={selectPlace} mobile />
+                            </div>
                         ) : (
-                            snap !== 'collapsed' && (
-                                <>
-                                    <h2 className="mobile-nearby-heading">
-                                        {ui.text('Find Nearby')}
-                                    </h2>
-                                    <NearbyCards
-                                        mobile
-                                        half={snap === 'half'}
-                                        onSelect={chooseCategory}
-                                    />
-                                </>
-                            )
+                            <div
+                                inert={snap === 'collapsed'}
+                                aria-hidden={snap === 'collapsed' || undefined}
+                            >
+                                <h2 className="mobile-nearby-heading">{ui.text('Find Nearby')}</h2>
+                                <NearbyCards mobile onSelect={chooseCategory} />
+                            </div>
                         )}
-                        {snap === 'full' && !hasPlaceResults && (
-                            <>
+                        {!hasPlaceResults && !voice && (
+                            <div inert={snap !== 'full'} aria-hidden={snap !== 'full' || undefined}>
                                 {showBookmarks && (
                                     <>
                                         <DesignButton
@@ -345,8 +370,8 @@ export function MobileSheet({
                                 <h2 className="mobile-section-heading mobile-settings-heading">
                                     <span>{ui.text('Settings')}</span>
                                 </h2>
-                                <SettingsRows mobile open={openSettings} />
-                            </>
+                                <SettingsRows mobile />
+                            </div>
                         )}
                     </div>
                 )}

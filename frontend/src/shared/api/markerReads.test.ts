@@ -5,7 +5,7 @@ import { parseMarkerId, readNearby, readPublicPlace, readSearch, readViewport } 
 afterEach(() => vi.unstubAllGlobals())
 function reply(body: unknown) {
     const fetcher = vi.fn(
-        async () =>
+        async (_input: RequestInfo | URL, _init?: RequestInit) =>
             new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } }),
     )
     vi.stubGlobal('fetch', fetcher)
@@ -24,18 +24,44 @@ it('reads bare arrays with explicit anonymous credentials, filters, language and
     expect(fetcher).toHaveBeenNthCalledWith(
         1,
         '/api/markers/viewport?minLat=31&maxLat=32&minLng=121&maxLng=122&lang=zh',
-        expect.objectContaining({ credentials: 'omit', signal }),
+        expect.objectContaining({ credentials: 'omit' }),
     )
     expect(fetcher).toHaveBeenNthCalledWith(
         2,
         '/api/markers/nearby?lat=31&lng=121&radius=1000&category=baby_room&lang=en',
-        expect.objectContaining({ credentials: 'omit', signal }),
+        expect.objectContaining({ credentials: 'omit' }),
     )
     expect(fetcher).toHaveBeenNthCalledWith(
         3,
         '/api/markers/search?q=clinic+%25&lang=zh',
-        expect.objectContaining({ credentials: 'omit', signal }),
+        expect.objectContaining({ credentials: 'omit' }),
     )
+    // The transport forwards a deadline wrapper (not the caller identity); its
+    // credentials/query contract above is the part that must not change.
+    for (const call of fetcher.mock.calls) expect(call[1]?.signal).toBeInstanceOf(AbortSignal)
+})
+it('propagates a caller abort while a request is still in flight', async () => {
+    const fetcher = vi.fn(
+        (_input: RequestInfo | URL, init?: RequestInit) =>
+            new Promise<Response>((_resolve, reject) => {
+                init?.signal?.addEventListener('abort', () =>
+                    reject(new DOMException('aborted', 'AbortError')),
+                )
+            }),
+    )
+    vi.stubGlobal('fetch', fetcher)
+    const controller = new AbortController()
+    const live = readNearby(
+        { lat: 31, lng: 121, radius: 1000, category: 'baby_room' },
+        'en',
+        controller.signal,
+    )
+    const forwarded = fetcher.mock.calls[0]?.[1]?.signal
+    expect(forwarded).toBeInstanceOf(AbortSignal)
+    expect(forwarded?.aborted).toBe(false)
+    controller.abort()
+    expect(forwarded?.aborted).toBe(true)
+    await expect(live).rejects.toBeInstanceOf(DOMException)
 })
 it('never sends cookies to OptionalUser details', async () => {
     const fetcher = reply(syntheticPlace())

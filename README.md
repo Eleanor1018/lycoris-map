@@ -4,15 +4,9 @@
 
 **夏水仙**是一个为**跨性别者**提供**无障碍设施信息**和**互助信息**的平台 💗
 
-夏水仙目前由以下页面组成：
+正式网站：[lycoris-map.com](https://lycoris-map.com)。新 Web 提供地图、附近搜索、点位详情、收藏、贡献、账号与设置；后端使用 Rust。原生 iOS 工程位于 `apps/ios/`，旧 React Native 应用仅保留作历史参考。
 
-- 地图：夏水仙的**核心功能**，我们可以在地图上标注无障碍卫生间、跨性别友好的医疗机构、母婴室等地点，实现信息共享
-- 文档：目前编写了**雪雁的HRT指南**；旨在尽量用最简洁的语言、最容易理解的方式，把行之有效的HRT方案和踩过的坑分享给大家
-- 关于：介绍夏水仙的项目理念、背景故事与联系方式，让来到这里的人知道这盏小灯为何被点亮
-
-目前提供**网页端**；已发布的 React Native 移动端见下方下载信息。旧 App 源码已转为本地保留，后续将进行原生应用重构。
-
-## Android APK 下载
+## 历史 Android APK（旧版）
 
 [下载 Lycoris 1.0.1 Android APK](https://github.com/Eleanor1018/lycoris/releases/download/v1.0.1/Lycoris-v1.0.1.apk) · [SHA-256 校验文件](https://github.com/Eleanor1018/lycoris/releases/download/v1.0.1/Lycoris-v1.0.1.apk.sha256) · [发布说明](https://github.com/Eleanor1018/lycoris/releases/tag/v1.0.1)
 
@@ -22,12 +16,12 @@
 
 2026-09-06 使用同一证书的 **1.0.3 测试版（versionCode 2）可以直接覆盖更新**，无需卸载。本次显示版本为 1.0.1，Android 用于判断更新顺序的 `versionCode` 已由 2 递增至 3。
 
-APK 包含运行所需的 JavaScript 和文档资源，**不需要启动 Metro**；连接生产 API `https://api.lycoris.online`，地图和账号等在线功能需要网络。
+此历史 APK 固定连接旧 API `https://api.lycoris.online`，旧后端已停用，不再作为可用客户端推荐。请使用新网站；下载链接仅作为历史发布归档。
 
 ## 地图的内置功能
 
 - 标记：可以在地图上标注无障碍卫生间，友好医疗机构，母婴室等点位信息，包含名称 图片 开放时间等。
-- 搜索附近：快速搜索定位点附近（0-10000m）的无障碍卫生间等信息。
+- 搜索附近：快速搜索定位点附近（可自定义搜索范围）的无障碍卫生间等信息。
 - 收藏：可以把点位添加到自己的收藏列表中，需要时快速查看。
 
 **注意：添加或编辑点位需要管理员审核，这是为了防止被恶意破坏，敬请谅解。**
@@ -51,11 +45,11 @@ APK 包含运行所需的 JavaScript 和文档资源，**不需要启动 Metro**
 
 开发者快速了解项目：[Rust 后端说明](./backend/README.md)。
 
-- frontend：Web v2 新工程，React 19 + TypeScript 7 + Vite 8 + Tailwind 4（S1 工程基础，页面未完成）
-- frontend-old：旧 Web 归档，React + MUI + Leaflet，保留用于行为对照与回退，不再新增功能
+- frontend：Web v2 新工程，React 19 + TypeScript 7 + Vite 8 + Tailwind 4（正式 Web，部署到 Cloudflare Pages）
+- frontend-old：旧 Web 本地归档，已取消 Git 跟踪并加入 `.gitignore`；历史版本仍可从 Git 提取
 - backend：Rust + Axum + SQLx（默认后端；无 ORM）
-- backend-old：已弃用的 Java / Spring Boot 实现，保留供现有线上与回退参考
-- mobile：旧 React Native 应用，仅本地保留；原生 App 重构待实施
+- backend-old：旧 Java / Spring Boot 本地归档，已取消 Git 跟踪并忽略；历史源码仍可从 Git 提取
+- apps/ios：原生 Swift / SwiftUI iOS 应用；mobile 为仅本地保留的旧 React Native 应用
 - 数据库：PostgreSQL + PostGIS；Redis 用于会话、缓存与限流
 
 ## 开源协议
@@ -64,7 +58,7 @@ APK 包含运行所需的 JavaScript 和文档资源，**不需要启动 Metro**
 
 ## 克隆与初始化
 
-本仓库已采用单仓库（Monorepo）结构，`backend` / `frontend` 在同一仓库中，`backend-old` 为旧 Java 实现，`frontend-old` 为归档旧 Web；`mobile/` 仅保留本地并由 Git 忽略。
+本仓库已采用单仓库（Monorepo）结构，`backend` / `frontend` 在同一仓库中，`backend-old/`、`frontend-old/` 和 `mobile/` 仅保留本地并由 Git 忽略；`apps/ios/` 为原生 iOS 工程。
 
 ### 1. 准备环境并获取代码
 
@@ -75,17 +69,17 @@ APK 包含运行所需的 JavaScript 和文档资源，**不需要启动 Metro**
 | 数据库 | 本地 Compose 固定 PostgreSQL 18.6 + PostGIS 3.6.4；附近查询使用 PostGIS 候选筛选与距离计算。 |
 | 缓存与会话 | 本地 Compose 固定 Redis 8.10.1；登录会话需要 Redis。 |
 
-以下示例获取包含本 README 所述功能的 `refactor/rust-backend` 分支：
+以下示例获取主分支：
 
 ```bash
-git clone --branch refactor/rust-backend https://github.com/Eleanor1018/lycoris-map.git
+git clone --branch main https://github.com/Eleanor1018/lycoris-map.git
 cd lycoris-map
 ```
 
 已有仓库时切换到该分支再更新；本机配置和依赖分别安装，不要复制其他机器的 `node_modules`。
 
 ```bash
-git switch refactor/rust-backend
+git switch main
 git pull
 ```
 
@@ -93,7 +87,7 @@ git pull
 
 ### 2. 后端：Rust、数据库与本地启动
 
-**仓库与本地默认后端为 `backend/`（Axum + SQLx）。** `backend-old/` 的 Java 实现保留供现有线上服务与回退参考，线上 API 本次未切换。
+**仓库与本地默认后端为 `backend/`（Axum + SQLx）。** 线上 API `https://api.lycoris-map.com` 已运行于新服务器；`backend-old/` 仅保留历史参考，不能直接重启旧数据库副本上的写入服务。
 
 从仓库根目录启动本地 PostgreSQL / PostGIS 与 Redis（需要 Docker）：
 
@@ -138,7 +132,7 @@ Python 开发脚本与根 `docs/` 文档仅保留本地，不随 Git 分发。�
 
 ### 3. 网页：安装依赖并启动
 
-> **当前状态：Web v2 处于 S1 工程基础阶段。** 新工程只有工程外壳与后端连通状态屏，完整 Figma 页面在后续阶段实现，尚未达到可用产品状态。需要对照旧行为时参阅 [frontend-old](./frontend-old)（归档，不再新增功能，其 MUI/Cypress/旧构建命令仅适用于旧工程）。
+> **`frontend/` 是唯一正式 Web 工程。** 开发、测试和部署均使用这个目录。部署配置见 [Cloudflare 说明](./frontend/deploy/cloudflare/README.md)。
 
 在新的终端，从仓库根目录执行：
 
@@ -161,34 +155,12 @@ pnpm test:unit
 
 静态产物在 `frontend/dist/`。本工程不包含 ESLint 或 lint 脚本，类型边界由 TypeScript 7 strict 检查负责。
 
-### S1 开发验证入口（不是产品页面，S1 构建不可部署）
+### 3.1 生产部署与开发诊断
 
-S1 只交付工程基础与验证工具；正式地图与账号流程分别在 S2、S4 实现。以下路径**包含在当前 S1 构建产物中**（并非仅开发服务器存在、也未在生产构建中被排除），但约定只在本机使用、不对外发布，不构成可上线功能：
+Cloudflare Pages 的 Git 集成跟踪 `main`，构建根目录为 `frontend/`，输出为 `dist/`。测试和类型检查成功后发布静态资源及同源 API 代理。开发分支推送用于预览，合并 PR 后触发正式站点更新；无需手动上传 ZIP。
 
-| 路径 | 用途 |
-| --- | --- |
-| `/` | 状态屏：后端 `/health/live`、`/health/ready` 连通性与重试 |
-| `/__dev/map-spike` | 地图生命周期验证：200 个固定**合成**上海点位、常驻 Leaflet 实例、语言/面板/字段更新/增删按钮与更新耗时 |
-| `/__dev/qa` | 本机浏览器诊断：375×812 固定 CSS 视口 iframe 预览 + 开发会话表单（真实 `/api/login`、`/api/me`、头像 Blob、`/api/logout`；不注册、不改密码、不硬编码凭据） |
+`/__dev/map-spike`、`/__dev/qa`、`/__dev/places-performance` 是仅开发模式按需加载的合成数据诊断页，不进入正式应用构建。旧 `frontend-old/` 保留在已有本机副本中，新克隆不再包含它；需要历史代码时从切换前的 Git 提交提取。
 
-上述诊断不写部署脚本；S1 构建与静态产物**不作为可部署产物**，上线与切流属后续任务。
+### 4. 原生 App
 
-### 3.1 旧 Web（frontend-old，归档对照）
-
-`frontend-old` 是重构前的 Web，使用 React 19.2 + TypeScript 5.9 + Vite 7 + MUI + Leaflet，并带有 Cypress 用例。它只用于回退与行为对照，依赖安装与构建命令均属于旧工程：
-
-```bash
-cd frontend-old
-npm ci
-npm run dev
-npm run build
-npm run lint
-```
-
-旧工程的历史说明（MUI 组件、Cypress 端到端用例、旧的 `.env.local` 与底图 key 配置）仅适用于 `frontend-old`，不影响新 `frontend`。
-
-### 4. App：准备原生重构
-
-旧 React Native 应用完整保留在本机 `mobile/`，整个目录已由 Git 忽略，新拉取仓库不包含它。旧开发说明可在本机 `mobile/README.md` 与 `mobile/IOS.md` 查阅。
-
-接下来将重构为原生应用；本次仅整理仓库，尚未创建新的原生 App 工程。上方已发布 APK 的下载信息保留为旧版本参考。
+原生 iOS 工程与运行说明见 [apps/ios/README.md](./apps/ios/README.md)。Android 原生应用后续开发。旧 `mobile/` 目录由 Git 忽略；上方 APK 链接仅保留历史发布记录。

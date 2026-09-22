@@ -14,6 +14,7 @@ import { useSession } from '@/features/auth/SessionProvider'
 import { readAccountPlace } from '@/shared/api/privatePlaces'
 import type { LatLng } from '@/features/map/coords'
 import type { MapFocus, MapView } from '@/features/map/viewport'
+import { viewportWindow, type ViewportWindow } from '@/features/map/viewportWindow'
 import { usePreferences } from '@/features/preferences/PreferencesProvider'
 import { useLocationFix } from '@/features/map/useLocationFix'
 
@@ -57,7 +58,11 @@ export function usePlaceBrowse(
     const session = useSession()
     const scope = reads === defaultReads ? session.scope : null
     const [view, setView] = useState<MapView | null>(null)
-    const viewport = useDebounced(view, 250)
+    const settledView = useDebounced(view, 250)
+    const [viewport, setViewport] = useState<ViewportWindow | null>(null)
+    useEffect(() => {
+        if (settledView) setViewport((previous) => viewportWindow(previous, settledView))
+    }, [settledView])
     const [search, setSearchState] = useState(initialSearch)
     const [nearby, setNearby] = useState<{
         point: LatLng
@@ -75,11 +80,12 @@ export function usePlaceBrowse(
         [],
     )
     const onLocated = useCallback(
-        (point: LatLng) => {
-            focusPoint(point)
+        (point: LatLng, automatic: boolean) => {
+            // A late initial permission grant must not replace an opened/shared place.
+            if (!automatic || (!rawMarkerId && focusSequence.current === 0)) focusPoint(point)
             setNearby((previous) => (previous ? { ...previous, point, located: true } : null))
         },
-        [focusPoint],
+        [focusPoint, rawMarkerId],
     )
     const location = useLocationFix(onLocated)
     const listPositions = useRef(
@@ -107,10 +113,20 @@ export function usePlaceBrowse(
         setClusterIds(null)
         setNearby({ point, category, located: location.position !== null })
     }
-    const mapQuery = useQuery({
+    const mapQuery = useQuery<Marker[]>({
         ...readOptions,
-        queryKey: [...publicKeys.markers(), 'viewport-set', language, viewport?.bounds ?? null],
+        queryKey: [
+            ...publicKeys.markers(),
+            'viewport-set',
+            language,
+            viewport?.scale ?? null,
+            viewport?.bounds ?? null,
+        ],
         enabled: viewport !== null,
+        // Keep existing pins during a region update, but never show an old
+        // language's DTOs while loading another language.
+        placeholderData: (previous, query) =>
+            query?.queryKey[3] === language ? previous : undefined,
         queryFn: async ({ signal }) => {
             const batches = await Promise.all(
                 viewport!.bounds.map((bounds) =>
@@ -120,6 +136,27 @@ export function usePlaceBrowse(
             return [...new Map(batches.flat().map((marker) => [marker.id, marker])).values()]
         },
     })
+    // `placeholderData` only survives while a query is pending; React Query
+    // clears `data` when the latest window settles in error. Keep the last
+    // successful public viewport payload per language so a failed/cancelled
+    // region read cannot blank every already-valid pin. A successful empty
+    // response overwrites this (honest empty), and a language change isolates
+    // it immediately. Only the public viewport write path feeds this ref, so
+    // owner-private detail data can never leak into public markers.
+    const lastMapData = useRef<{ language: Language; markers: readonly Marker[] } | null>(null)
+    useEffect(() => {
+        // A placeholder is the previous window's data marked as success; it is
+        // not a freshly confirmed result and must not overwrite the retained
+        // fallback (which would also defeat the 404 pruning below).
+        if (!mapQuery.isSuccess || mapQuery.isPlaceholderData) return
+        lastMapData.current = { language, markers: mapQuery.data }
+    }, [
+        mapQuery.isSuccess,
+        mapQuery.isPlaceholderData,
+        mapQuery.dataUpdatedAt,
+        mapQuery.data,
+        language,
+    ])
     const nearbyFilters = nearby
         ? {
               lat: Math.round(nearby.point.lat * 1e6) / 1e6,
@@ -164,25 +201,38 @@ export function usePlaceBrowse(
                 query.queryKey[1] === 'markers' &&
                 query.queryKey[2] !== 'detail',
         }
-        // Cancel pre-404 responses, remove the stale item, then allow fresh public
-        // reads to restore it if it becomes visible again.
+        // Cancel pre-404 responses, remove the stale item from caches and from
+        // the retained fallback, then allow fresh public reads to restore it if
+        // it becomes visible again. Pruning the ref matters because a later
+        // viewport failure falls back to it even after the detail is closed.
         void client.cancelQueries(lists).then(() => {
             client.setQueriesData<Marker[]>(lists, (data) =>
                 data?.filter((marker) => String(marker.id) !== id),
             )
+            if (lastMapData.current?.language === language)
+                lastMapData.current = {
+                    language,
+                    markers: lastMapData.current.markers.filter(
+                        (marker) => String(marker.id) !== id,
+                    ),
+                }
             void client.invalidateQueries(lists)
         })
-    }, [client, id, unavailable])
+    }, [client, id, unavailable, language])
     const activeQuery = term ? searchQuery : nearby ? nearbyQuery : mapQuery
     const debouncing = !!term && term !== query
+    const fallback =
+        !term && !nearby && lastMapData.current?.language === language
+            ? lastMapData.current.markers
+            : undefined
     const allResults: readonly Marker[] = useMemo(
         () =>
             debouncing
                 ? []
-                : (activeQuery.data ?? []).filter(
+                : (activeQuery.data ?? fallback ?? []).filter(
                       (marker) => !(unavailable && String(marker.id) === id),
                   ),
-        [debouncing, activeQuery.data, unavailable, id],
+        [debouncing, activeQuery.data, fallback, unavailable, id],
     )
     const results = useMemo(() => {
         if (!clusterIds) return allResults

@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, act } from '@testing-libra
 import { afterEach, expect, it, vi } from 'vitest'
 import { AppProviders } from '@/app/providers'
 import { useBookmarks } from './BookmarksProvider'
+import { useSession } from '@/features/auth/SessionProvider'
 import { syntheticPlace } from '@/features/dev/placeFixtures'
 import * as api from '@/shared/api/session'
 import * as places from '@/shared/api/privatePlaces'
@@ -69,4 +70,160 @@ it('preserves the target-language title while a bookmark from another language i
     await act(async () => {
         resolve()
     })
+})
+
+it('keeps the first-save state when the ids read is still unresolved, and ignores a late stale read', async () => {
+    let finishStaleIds!: (ids: number[]) => void
+    let calls = 0
+    vi.spyOn(api, 'fetchMe').mockResolvedValue({
+        publicId: 'A',
+        username: 'A',
+        email: null,
+        nickname: null,
+        pronouns: null,
+        signature: null,
+        avatarUrl: null,
+    })
+    vi.spyOn(places, 'readFavorites').mockImplementation(() => {
+        calls += 1
+        // The read in flight when the write starts hangs; the authoritative
+        // re-read after invalidation returns the post-write server state.
+        return calls === 1
+            ? new Promise((resolve) => {
+                  finishStaleIds = resolve
+              })
+            : Promise.resolve([5])
+    })
+    vi.spyOn(places, 'readFavoriteDetails').mockResolvedValue([])
+    vi.spyOn(places, 'setFavorite').mockResolvedValue(undefined)
+    let latest: ReturnType<typeof useBookmarks> | undefined
+    function Harness() {
+        const bookmarks = useBookmarks('en', true)
+        latest = bookmarks
+        return (
+            <button
+                disabled={!bookmarks.scope}
+                onClick={() => {
+                    void bookmarks.controller.toggle(
+                        syntheticPlace({ id: 5 }),
+                        true,
+                        'en',
+                        bookmarks.scope!,
+                    )
+                }}
+            >
+                Save
+            </button>
+        )
+    }
+    render(
+        <AppProviders>
+            <Harness />
+        </AppProviders>,
+    )
+    await waitFor(() => expect(screen.getByRole('button')).toBeEnabled())
+    fireEvent.click(screen.getByRole('button'))
+    await waitFor(() => expect(latest?.saved.has(5)).toBe(true))
+    // The stale pre-write read resolves with data that never saw the write; it
+    // must not erase the confirmed state.
+    await act(async () => {
+        finishStaleIds([])
+    })
+    await waitFor(() => expect(latest?.saved.has(5)).toBe(true))
+})
+
+it('reflects a confirmed save after the server re-read and keeps it across a source refresh', async () => {
+    vi.spyOn(api, 'fetchMe').mockResolvedValue({
+        publicId: 'A',
+        username: 'A',
+        email: null,
+        nickname: null,
+        pronouns: null,
+        signature: null,
+        avatarUrl: null,
+    })
+    let serverFavorites: number[] = []
+    const read = vi
+        .spyOn(places, 'readFavorites')
+        .mockImplementation(async () => [...serverFavorites])
+    vi.spyOn(places, 'readFavoriteDetails').mockResolvedValue([])
+    const write = vi.spyOn(places, 'setFavorite').mockImplementation(async (id, saved) => {
+        serverFavorites = saved ? [id] : []
+    })
+    let latest: ReturnType<typeof useBookmarks> | undefined
+    function Harness() {
+        const bookmarks = useBookmarks('en', true)
+        latest = bookmarks
+        return (
+            <button
+                disabled={!bookmarks.scope}
+                onClick={() =>
+                    void bookmarks.controller.toggle(
+                        syntheticPlace({ id: 7 }),
+                        true,
+                        'en',
+                        bookmarks.scope!,
+                    )
+                }
+            >
+                Save
+            </button>
+        )
+    }
+    render(
+        <AppProviders>
+            <Harness />
+        </AppProviders>,
+    )
+    await waitFor(() => expect(screen.getByRole('button')).toBeEnabled())
+    await waitFor(() => expect(read).toHaveBeenCalled())
+    expect(latest?.saved.has(7)).toBe(false)
+    fireEvent.click(screen.getByRole('button'))
+    await waitFor(() => expect(write).toHaveBeenCalledWith(7, true, expect.anything()))
+    await waitFor(() => expect(latest?.saved.has(7)).toBe(true))
+    // A later refresh that re-reads the server keeps the saved state.
+    await act(async () => {
+        await latest?.retry()
+    })
+    await waitFor(() => expect(latest?.saved.has(7)).toBe(true))
+})
+
+it('does not leak a saved place from a previous account into the next one', async () => {
+    let account = 'A'
+    const favorites: Record<string, number[]> = { A: [7], B: [] }
+    vi.spyOn(api, 'fetchMe').mockImplementation(async () => ({
+        publicId: account,
+        username: account,
+        email: null,
+        nickname: null,
+        pronouns: null,
+        signature: null,
+        avatarUrl: null,
+    }))
+    vi.spyOn(places, 'readFavorites').mockImplementation(async () => [...favorites[account]!])
+    vi.spyOn(places, 'readFavoriteDetails').mockResolvedValue([])
+    let latest: ReturnType<typeof useBookmarks> | undefined
+    let refresh: (() => Promise<void>) | undefined
+    function Harness() {
+        const session = useSession()
+        const bookmarks = useBookmarks('en', false)
+        latest = bookmarks
+        refresh = async () => {
+            await session.store?.refresh()
+        }
+        return <p>{[...bookmarks.saved].join(',')}</p>
+    }
+    render(
+        <AppProviders>
+            <Harness />
+        </AppProviders>,
+    )
+    await waitFor(() => expect(latest?.saved.has(7)).toBe(true))
+    account = 'B'
+    await act(async () => {
+        await refresh?.()
+    })
+    await waitFor(() => expect(latest?.scope?.publicId).toBe('B'))
+    await waitFor(() => expect(latest?.saved.has(7)).toBe(false))
+    expect(latest?.saved.size).toBe(0)
 })

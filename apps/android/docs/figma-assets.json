@@ -1,0 +1,80 @@
+[
+  {
+    "file": "settings.svg",
+    "url": "https://www.figma.com/api/mcp/asset/3dc6f7fd-cbc4-4e3c-80d2-6d6b800fa2da.svg",
+    "sha256": "eaa111f5e06137165526fc32b9e3110f2d570666db9434884ae69b4f7457b28d",
+    "node": "53:580"
+  },
+  {
+    "file": "bookmark.svg",
+    "url": "https://www.figma.com/api/mcp/asset/c70f79d2-2c00-4acc-8664-7f190d7aca2f.svg",
+    "sha256": "4cea2d1ed8c9fab2982ea365d3af0fa8a1777534a3cd89ab724d957b18608fb9",
+    "node": "53:580"
+  },
+  {
+    "file": "explore.svg",
+    "url": "https://www.figma.com/api/mcp/asset/d330f311-6947-49be-9702-baf3bff767e1.svg",
+    "sha256": "e23854e52fb12394688040483cb0796cd64624d57102a50df4bf6710aaaf40d3",
+    "node": "53:580"
+  },
+  {
+    "file": "nearby.svg",
+    "url": "https://www.figma.com/api/mcp/asset/1f8addba-1f4d-46af-9bd4-6545281bc02e.svg",
+    "sha256": "028d1b22fdff4461d043243c039e1494266460dedd5753af20229ecf27d581f3",
+    "node": "53:580"
+  },
+  {
+    "file": "location_heading.svg",
+    "url": "https://www.figma.com/api/mcp/asset/260fb42c-931c-44f9-a7b6-9c63fde8504d.svg",
+    "sha256": "3b8b87641096d3a0738012d9cfc451e41327d02d0b502b058d10b608f4eba3ba",
+    "node": "53:580"
+  },
+  {
+    "file": "layers.svg",
+    "url": "https://www.figma.com/api/mcp/asset/6adab7c9-047e-4d7f-b99f-1e35cc1072f0.svg",
+    "sha256": "2372a8c1f12fd4b1093794cc7989720eb4a603f73fc8d1550221beef6586b0ac",
+    "node": "53:580"
+  },
+  {
+    "file": "search.svg",
+    "url": "https://www.figma.com/api/mcp/asset/04174c72-3b2f-4989-af13-bdef1b6ba1cd.svg",
+    "sha256": "884f770e2fc454f58870915adb0174417747a1737ece873ff6c3124e6fd4ee87",
+    "node": "53:580"
+  },
+  {
+    "file": "accessible_toilet.svg",
+    "url": "https://www.figma.com/api/mcp/asset/82e7acc0-0a1d-4356-a0ba-20af07195e8f.svg",
+    "sha256": "51ceb87db6b570c5612b6748a780f530dff8774996c81c2a8d97a4433cdb568a",
+    "node": "53:580"
+  },
+  {
+    "file": "baby_room.svg",
+    "url": "https://www.figma.com/api/mcp/asset/7ba901f3-bf50-4a56-94d9-2ad749e861d0.svg",
+    "sha256": "a8b387552bf5af5be0a10ffbbecefa3246ea7c17a73fe17ed3725f853766a77f",
+    "node": "53:580"
+  },
+  {
+    "file": "friendly_clinic.svg",
+    "url": "https://www.figma.com/api/mcp/asset/c69a489f-c15a-48a6-821e-8be8ebfad86b.svg",
+    "sha256": "903f789c4feb4399ed15c50ad668c3593200fc3e7cb3f971b86e8834d0292568",
+    "node": "53:580"
+  },
+  {
+    "file": "contribute.svg",
+    "url": "https://www.figma.com/api/mcp/asset/b7e9abed-3f07-4fc6-ba2d-742c4ed96039.svg",
+    "sha256": "a8f941ff1e818204968eec56371b7fed5b723bdb6e759085ac09e3e8c05a1839",
+    "node": "53:580"
+  },
+  {
+    "file": "locate.svg",
+    "url": "https://www.figma.com/api/mcp/asset/86a9ed70-430c-481e-918e-7a1992429e15.svg",
+    "sha256": "b2c8b326cb299b32e5377b790748b2d2684be71ca7ba6941bdb260623c6b486e",
+    "node": "53:580"
+  },
+  {
+    "file": "place_pin.svg",
+    "node": "68:2231",
+    "url": "https://www.figma.com/api/mcp/asset/72f16240-d5ac-423f-be23-d4ca891731c9.svg",
+    "sha256": "54a88bef4f9984fa5436266f81a261d1bfee73a0bf4abe1be0df8774c6914c3f"
+  }
+]

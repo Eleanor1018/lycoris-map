@@ -1,4 +1,4 @@
-import type { Marker } from '@/shared/api/markers'
+import type { Marker, VenueType } from '@/shared/api/markers'
 import type { MarkerText } from '@/shared/api/markerWrites'
 import type { Language } from '@/shared/query/keys'
 import type { LatLng } from '@/features/map/coords'
@@ -6,6 +6,7 @@ import type { LatLng } from '@/features/map/coords'
 export type ContributionDraft = {
     title: string
     category: 'toilet' | 'nursing' | 'medical' | 'custom' | null
+    venueType: VenueType | null
     description: string
     openingHour: string
     openingMinute: string
@@ -17,6 +18,7 @@ export type ContributionDraft = {
 export const emptyContributionDraft: ContributionDraft = {
     title: '',
     category: null,
+    venueType: 'other',
     description: '',
     openingHour: '',
     openingMinute: '',
@@ -40,6 +42,7 @@ export function draftFromMarker(marker: Marker): ContributionDraft {
     return {
         ...emptyContributionDraft,
         category,
+        venueType: marker.venueType ?? null,
         title: marker.title,
         description: marker.description ?? '',
         isPublic: marker.isPublic,
@@ -65,6 +68,7 @@ export function draftText(draft: ContributionDraft, language: Language): MarkerT
     return {
         title,
         category: categories[draft.category],
+        venueType: draft.category === 'toilet' ? draft.venueType : null,
         description: draft.description,
         language,
         isPublic: draft.isPublic,

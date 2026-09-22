@@ -1,6 +1,6 @@
 # Lycoris 默认后端（Rust）
 
-仓库与本地开发默认使用本目录；HTTP 默认 `127.0.0.1:8080`。旧 `backend-old/` Java 实现已退出默认开发流程，保留供现有线上服务与回退参考。本次只切换仓库和本地，线上 API 保持 Java。
+仓库、本地开发及生产均使用本目录的 Rust 实现；本地 HTTP 默认 `127.0.0.1:8080`，生产 API 为 `https://api.lycoris-map.com`。旧 `backend-old/` Java 实现已停用，取消 Git 跟踪并加入忽略；已有本地文件保留，新克隆可从历史提交提取。部署与停用记录见 [生产部署说明](deploy/production/README.md)。
 
 Lycoris Rust 后端采用 Axum + SQLx + PostgreSQL + Redis。阶段 0 至 5 已通过本地验收，
 实现全部 **43 个既有 API 契约模板**：公开点位、认证与用户、头像、点位写入、收藏、译文与
@@ -12,14 +12,48 @@ TCP 验收 **64/64**、覆盖 **43/43** 个接口模板。阶段 4 已实现已�
 `--check-baseline`/`--adopt-baseline` 基线接管与数据库超时/密码并发运行配置；阶段 5 已实现
 `0002_spatial` 生成列/GiST 部分索引与 `nearby:v2` PostGIS 候选查询，并已在重构分支 Linux 发布
 容器跑通全套门禁（fmt / 离线全 targets / clippy / 全部 cargo test）与运行验证。空间迁移后的原
-Java JAR 真实 HTTP 读写与回退、Web/Android 查询复查也已通过。生产切换不在本阶段范围内。
-详细证据与差异见 `docs/rust-migration/execution.md`（仅本地）。生产仍由 `backend-old/` 的
-Spring Boot 服务承担。
+Java JAR 真实 HTTP 读写与回退、Web/Android 查询复查也已通过。以上为生产切换前的阶段验收记录。
+详细证据与差异见 `docs/rust-migration/execution.md`（仅本地）。生产现已切换到 Rust，旧 Java 服务和旧数据库服务均已停用。
 
 设计依据：`docs/rust-migration/auth-design.md`、`docs/rust-migration/api-contract.md`。
 本轮保留 Cookie + 账号 + 密码 + 管理员二次验证体验，最终认证重设计另案。
 
 Python 开发/演练脚本与根 `docs/` 文档仅保留本地，不随 Git 分发。下文的历史 Python 验收命令仅适用于仍有这些本地文件的工作区；仓库基础构建、启动与 Rust 测试不依赖它们。
+
+## 场所标签与营业时间
+
+迁移 `0005_marker_venue_type.sql` 为点位和编辑提案增加 `venue_type`。API 使用
+`venueType`：`metro`、`hospital`、`mall`、`railway_station`、`school`、`public_toilet`、`airport`、`other`。
+迁移 `0006_add_public_toilet_airport_venues.sql` 扩展两张表的约束，加入公共卫生间与飞机场；
+仅调整允许值，不改现有标签或停用状态。历史分类待客户端支持新值后独立执行。
+仅 `accessible_toilet` 可带标签，数据库和写接口均校验；新建省略时为 `other`，
+编辑省略或传空值时保留原标签，改为其它类别时清空。旧客户端可继续省略此字段。
+贡献、编辑提案、审核、管理员编辑及图片审核返回值均保留标签。
+
+点位响应另含只读 `hoursTimezone`（IANA 名称），与服务端营业状态使用同一时区。
+Web 在关门前 30 分钟显示“即将结束营业”，支持跨午夜和相同起止时间表示全天开放；
+未提供营业时间时不推断营业状态。当前时间规则仍是服务端统一配置时区，并非逐点时区。
+
+历史数据分类和去重独立于结构迁移：先备份，再逐项审核，事务内校验快照、版本与关联
+记录，只改类别、标签、`deactivated`、版本和更新时间。保留原图、收藏、译文和提案，
+恢复也检查版本。具体清单和演练脚本按仓库约定仅留本地，不随应用启动自动执行。
+
+## 点位停用与恢复
+
+迁移 `0004_marker_deactivation.sql` 添加 `map_markers.deactivated`，默认 `false`。
+普通用户和管理员原有的点位 DELETE 接口现在仅把此字段设为 `true`，保留点位、
+收藏、译文、编辑提案、图片提案和图片文件。永久删除没有 HTTP 接口，只能由维护者
+直接操作数据库。账号删除继续使用已有的 `users.deleted` 软删除机制。
+
+停用点位不会出现在公开地图、搜索、附近列表、普通用户详情、贡献、收藏或待审列表中，
+公开图片访问也会重新校验状态。管理员的全部点位列表保留它，
+`POST /api/admin/markers/{id}/restore` 在管理员二次验证后恢复；恢复不改变原本的
+公开/私有、审核状态或开放时段。`isActive` 仍表示开放时段状态，与停用独立。
+实际状态变化才推进 `version`；重复停用/恢复是幂等的，停用前的旧编辑提案不能直接覆盖恢复后的点位。
+
+后台“清理失效图片引用”（原 `Clean Missing Images`）只清空本地服务器文件确实缺失或
+不再是普通文件的图片地址，不删除点位或图片文件；它跳过停用点位和 I/O 异常，
+并用点位 ID、版本及图片地址作条件更新，避免覆盖并发上传的新图。不要把此操作当作图片修复或恢复工具。
 
 ## 目录
 

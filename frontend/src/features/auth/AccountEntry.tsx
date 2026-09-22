@@ -50,11 +50,7 @@ export function AccountEntry({ mobile = false }: { mobile?: boolean }) {
         return (
             <div className="desktop-guest-account">
                 <p className="desktop-login-hint" id="desktop-login-hint">
-                    <span>
-                        {ui.text('Login to bookmark points')}
-                        <br />
-                        {ui.text('or contribute.')}
-                    </span>
+                    {ui.text('Login to bookmark points or contribute.')}
                 </p>
                 <DesignButton
                     id="desktop-account"

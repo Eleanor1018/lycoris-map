@@ -9,3 +9,9 @@ ping
 
 # 旧 React Native 应用仅保留本地，后续另行实现原生 App
 /mobile/
+
+# Legacy Web retained locally; frontend/ is the production Web app
+/frontend-old/
+
+# Legacy Java backend retained locally; backend/ is the production Rust API
+/backend-old/

@@ -4,6 +4,7 @@ import {
     markerListSchema,
     markerSchema,
     markerCategorySchema,
+    venueTypeReadSchema,
     reviewStatusSchema,
 } from '@/shared/api/markers'
 import { markerTextSchema, type MarkerText } from '@/shared/api/markerWrites'
@@ -37,6 +38,7 @@ export const editSchema = z.object({
     lat: z.number(),
     lng: z.number(),
     category: markerCategorySchema,
+    venueType: venueTypeReadSchema,
     title: z.string(),
     description: z.string().nullable(),
     language: z.string(),
@@ -125,8 +127,15 @@ export async function editMarker(value: number, text: MarkerText, signal: AbortS
         }),
     )
 }
-export async function deleteMarker(value: number, signal: AbortSignal) {
+export async function deactivateMarker(value: number, signal: AbortSignal) {
     await request(`${prefix}/${id.parse(value)}`, { method: 'DELETE', signal, cache: 'no-store' })
+}
+export async function restoreMarker(value: number, signal: AbortSignal) {
+    await request(`${prefix}/${id.parse(value)}/restore`, {
+        method: 'POST',
+        signal,
+        cache: 'no-store',
+    })
 }
 export async function cleanupImages(signal: AbortSignal) {
     return z

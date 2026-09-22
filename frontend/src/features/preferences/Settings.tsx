@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Popover } from 'radix-ui'
 import { useLocation, useNavigate } from 'react-router'
 import { useOptionalLanguage } from '@/shared/i18n/LanguageProvider'
 import { useUi } from '@/shared/i18n/ui'
@@ -6,6 +7,8 @@ import { DesignButton } from '@/shared/ui/design-primitives'
 import { FigmaIcon } from '@/shared/ui/figma-icon'
 import type { Panel } from '@/layouts/types'
 import { rangeLabel, searchCategories, usePreferences } from './PreferencesProvider'
+import { MapSourceOptions } from '@/features/map/MapSourcePicker'
+import { mapSourceNames } from '@/features/map/mapSources'
 import './settings.css'
 
 export const settingsTitles = {
@@ -25,25 +28,83 @@ const categoryNames = {
     baby_room: 'Nursing Rooms',
     friendly_clinic: 'Medical Institutions',
 } as const
-type OpenSettings = (panel: Panel, focusId?: string) => void
-
-export function SettingsRows({ mobile = false, open }: { mobile?: boolean; open: OpenSettings }) {
+export function SettingsRows({ mobile = false }: { mobile?: boolean }) {
     const ui = useUi(),
         { preferences } = usePreferences()
-    const row = (panel: SettingsPanel, label: string, value = '') => (
-        <DesignButton
+    const [active, setActive] = useState<SettingsPanel | null>(null)
+    useEffect(() => {
+        if (!active) return
+        // A touch drag may never produce a click. Dismiss before the underlying
+        // sheet moves so a portalled menu cannot be left floating away from it.
+        const touch = (event: TouchEvent) => {
+            if (
+                !(event.target instanceof Element) ||
+                !event.target.closest('.settings-popover, .setting-card')
+            )
+                setActive(null)
+        }
+        const scroll = (event: Event) => {
+            if (!(event.target instanceof Element) || !event.target.closest('.settings-popover'))
+                setActive(null)
+        }
+        document.addEventListener('touchstart', touch, { passive: true })
+        document.addEventListener('scroll', scroll, true)
+        return () => {
+            document.removeEventListener('touchstart', touch)
+            document.removeEventListener('scroll', scroll, true)
+        }
+    }, [active])
+    const row = (panel: Exclude<SettingsPanel, 'settings'>, label: string, value = '') => (
+        <Popover.Root
             key={panel}
-            id={`${mobile ? 'mobile-' : ''}setting-${panel}`}
-            className="setting-card"
-            aria-label={`${ui.message(label)}${value ? ` ${ui.message(value)}` : ''}`}
-            onClick={() => open(panel, `${mobile ? 'mobile-' : ''}setting-${panel}`)}
+            open={active === panel}
+            onOpenChange={(shown) =>
+                setActive((current) => (shown ? panel : current === panel ? null : current))
+            }
         >
-            <span>{ui.message(label)}</span>
-            <span className="setting-value">{ui.message(value)}</span>
-            <span className="chevron-slot">
-                <FigmaIcon name={mobile ? 'mobileChevronBlue' : 'chevron'} />
-            </span>
-        </DesignButton>
+            <Popover.Trigger asChild>
+                <DesignButton
+                    id={`${mobile ? 'mobile-' : ''}setting-${panel}`}
+                    className="setting-card"
+                    aria-label={`${ui.message(label)}${value ? ` ${ui.message(value)}` : ''}`}
+                >
+                    <span>{ui.message(label)}</span>
+                    <span className="setting-value">{ui.message(value)}</span>
+                    <span className="chevron-slot">
+                        <FigmaIcon name={mobile ? 'mobileChevronBlue' : 'chevron'} />
+                    </span>
+                </DesignButton>
+            </Popover.Trigger>
+            <Popover.Portal>
+                <Popover.Content
+                    className="settings-popover"
+                    data-panel={panel}
+                    lang={ui.language}
+                    aria-label={ui.message(settingsTitles[panel])}
+                    side={mobile ? 'bottom' : 'right'}
+                    align={mobile ? 'end' : 'start'}
+                    sideOffset={8}
+                    collisionPadding={11}
+                    sticky="always"
+                    hideWhenDetached
+                    onOpenAutoFocus={(event) => {
+                        event.preventDefault()
+                        const content = event.currentTarget as HTMLElement
+                        content
+                            .querySelector<HTMLElement>(
+                                '[role="radio"][aria-checked="true"], input, a',
+                            )
+                            ?.focus({ preventScroll: true })
+                    }}
+                    onEscapeKeyDown={(event) => {
+                        if (event.isComposing) event.preventDefault()
+                        event.stopPropagation()
+                    }}
+                >
+                    <SettingsContent panel={panel} compact onSelect={() => setActive(null)} />
+                </Popover.Content>
+            </Popover.Portal>
+        </Popover.Root>
     )
     const language = row(
         'languages',
@@ -52,7 +113,7 @@ export function SettingsRows({ mobile = false, open }: { mobile?: boolean; open:
     )
     const range = row('range', 'Searching Range', rangeLabel(preferences.radius))
     const category = row('category', 'Searching Type', categoryNames[preferences.category])
-    const source = row('source', 'Map Source', 'OSM')
+    const source = row('source', 'Map Source', mapSourceNames[preferences.source])
     return (
         <div className={mobile ? 'mobile-settings' : 'settings-cards'}>
             {language}
@@ -79,11 +140,13 @@ function Choices<T extends string | number>({
     value,
     options,
     change,
+    onSelect,
 }: {
     label: string
     value: T
     options: readonly { value: T; label: string }[]
     change: (value: T) => void
+    onSelect?: (() => void) | undefined
 }) {
     return (
         <div className="language-options" role="radiogroup" aria-label={label}>
@@ -98,7 +161,10 @@ function Choices<T extends string | number>({
                             ? 0
                             : -1
                     }
-                    onClick={() => change(option.value)}
+                    onClick={() => {
+                        change(option.value)
+                        onSelect?.()
+                    }}
                     onKeyDown={(event) => {
                         const offset = ['ArrowDown', 'ArrowRight'].includes(event.key)
                             ? 1
@@ -130,11 +196,13 @@ function Choices<T extends string | number>({
 export function SettingsContent({
     panel,
     mobile = false,
-    open,
+    compact = false,
+    onSelect,
 }: {
     panel: SettingsPanel
     mobile?: boolean
-    open: OpenSettings
+    compact?: boolean
+    onSelect?: (() => void) | undefined
 }) {
     const ui = useUi(),
         language = useOptionalLanguage(),
@@ -146,14 +214,17 @@ export function SettingsContent({
     useEffect(() => {
         setRadius(String(preferences.radius))
     }, [preferences.radius])
-    if (panel === 'settings') return <SettingsRows mobile={mobile} open={open} />
+    if (panel === 'settings') return <SettingsRows mobile={mobile} />
     return (
-        <div className={`preferences-content ${mobile ? 'mobile-preferences' : ''}`}>
+        <div
+            className={`preferences-content ${mobile ? 'mobile-preferences' : ''} ${compact ? 'compact-preferences' : ''}`}
+        >
             {mobile && <h1>{ui.message(settingsTitles[panel])}</h1>}
             {panel === 'languages' && (
                 <Choices
                     label={ui.text('Language')}
                     value={ui.language}
+                    onSelect={onSelect}
                     options={[
                         { value: 'en', label: 'English' },
                         { value: 'zh', label: '简体中文' },
@@ -177,6 +248,7 @@ export function SettingsContent({
                 <Choices
                     label={ui.text('Searching Type')}
                     value={preferences.category}
+                    onSelect={onSelect}
                     options={searchCategories.map((value) => ({
                         value,
                         label: ui.message(
@@ -189,68 +261,48 @@ export function SettingsContent({
                 />
             )}
             {panel === 'range' && (
-                <>
-                    <Choices
-                        label={ui.text('Searching Range')}
-                        value={preferences.radius}
-                        options={[1000, 2500].map((value) => ({ value, label: rangeLabel(value) }))}
-                        change={(radius) => {
-                            update({ radius })
-                            setError(false)
-                        }}
+                <form
+                    className="preference-form"
+                    onSubmit={(event) => {
+                        event.preventDefault()
+                        const number = Number(radius)
+                        if (
+                            !/^\d+$/.test(radius) ||
+                            !Number.isSafeInteger(number) ||
+                            number < 1 ||
+                            number > 50000
+                        ) {
+                            setError(true)
+                            return
+                        }
+                        update({ radius: number })
+                        setError(false)
+                        onSelect?.()
+                    }}
+                >
+                    <label htmlFor="search-range">{ui.text('Range (meters)')}</label>
+                    <input
+                        id="search-range"
+                        type="number"
+                        min="1"
+                        max="50000"
+                        step="1"
+                        inputMode="numeric"
+                        required
+                        value={radius}
+                        aria-invalid={error || undefined}
+                        aria-describedby={error ? 'range-error' : undefined}
+                        onChange={(event) => setRadius(event.target.value)}
                     />
-                    <form
-                        className="preference-form"
-                        onSubmit={(event) => {
-                            event.preventDefault()
-                            const number = Number(radius)
-                            if (
-                                !/^\d+$/.test(radius) ||
-                                !Number.isSafeInteger(number) ||
-                                number < 1 ||
-                                number > 50000
-                            ) {
-                                setError(true)
-                                return
-                            }
-                            update({ radius: number })
-                            setError(false)
-                        }}
-                    >
-                        <label htmlFor="search-range">{ui.text('Range (meters)')}</label>
-                        <input
-                            id="search-range"
-                            type="number"
-                            min="1"
-                            max="50000"
-                            step="1"
-                            inputMode="numeric"
-                            required
-                            value={radius}
-                            aria-invalid={error || undefined}
-                            aria-describedby={error ? 'range-error' : undefined}
-                            onChange={(event) => setRadius(event.target.value)}
-                        />
-                        {error && (
-                            <p id="range-error" role="alert">
-                                {ui.text('Use a whole number between 1 and 50000.')}
-                            </p>
-                        )}
-                        <DesignButton type="submit">{ui.text('Save')}</DesignButton>
-                    </form>
-                </>
+                    {error && (
+                        <p id="range-error" role="alert">
+                            {ui.text('Use a whole number between 1 and 50000.')}
+                        </p>
+                    )}
+                    <DesignButton type="submit">{ui.text('Save')}</DesignButton>
+                </form>
             )}
-            {panel === 'source' && (
-                <>
-                    <Choices
-                        label={ui.text('Map Source')}
-                        value="osm"
-                        options={[{ value: 'osm', label: 'OSM' }]}
-                        change={() => update({ source: 'osm' })}
-                    />
-                    <p>{ui.text('OSM is the map source available in this version.')}</p>
-                </>
-            )}
+            {panel === 'source' && <MapSourceOptions onSelect={onSelect} />}
             {panel === 'about' && (
                 <div className="preference-about">
                     <p>{ui.text('A map of accessible and friendly places.')}</p>

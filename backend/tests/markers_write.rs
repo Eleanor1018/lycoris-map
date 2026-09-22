@@ -2,7 +2,7 @@
 //!
 //! 测试直接调用 `MarkerWriteService`（不伪造 HTTP 认证路由），在 UUID 临时库与独立 Redis
 //! 命名空间上验证业务效果与并发约束：幂等创建与收藏、收藏/删除竞争、可见性、提案审核一次性、
-//! 同基准提案竞争、版本仲裁、强制译文失败回滚、删除级联与历史提案留存、缓存失效与故障提交。
+//! 同基准提案竞争、版本仲裁、强制译文失败回滚、软删除与关联数据留存、缓存失效与故障提交。
 
 mod common;
 
@@ -149,6 +149,7 @@ fn valid_create() -> MarkerCreateRequest {
         open_time_end: None,
         client_request_id: None,
         mark_image: None,
+        venue_type: None,
     }
 }
 
@@ -488,7 +489,7 @@ async fn favorite_and_delete_race_leaves_no_orphan() {
     assert_eq!(
         count(
             &pool,
-            "SELECT count(*) FROM map_markers WHERE id = $1",
+            "SELECT count(*) FROM map_markers WHERE id = $1 AND deactivated = false",
             &[marker]
         )
         .await,
@@ -527,7 +528,7 @@ async fn non_owner_delete_is_forbidden() {
 }
 
 #[tokio::test]
-async fn owner_delete_cascades_and_keeps_proposals() {
+async fn owner_delete_preserves_all_data_and_admin_can_restore() {
     let (_temp, pool) = TempDatabase::create_migrated().await;
     let redis = connect_redis().await;
     let write = write_service(pool.clone(), redis, &unique_cache_namespace());
@@ -556,7 +557,7 @@ async fn owner_delete_cascades_and_keeps_proposals() {
             &[marker]
         )
         .await,
-        0
+        1
     );
     assert_eq!(
         count(
@@ -565,7 +566,7 @@ async fn owner_delete_cascades_and_keeps_proposals() {
             &[marker]
         )
         .await,
-        0
+        2
     );
     assert_eq!(
         count(
@@ -574,7 +575,7 @@ async fn owner_delete_cascades_and_keeps_proposals() {
             &[marker]
         )
         .await,
-        0
+        1
     );
     assert_eq!(
         count(
@@ -587,6 +588,67 @@ async fn owner_delete_cascades_and_keeps_proposals() {
         "历史提案必须留存"
     );
 
+    let disabled = write.list_all_markers(&admin()).await.unwrap().remove(0);
+    assert_eq!(disabled.version, 1);
+    write.delete_owned_marker(&owner(), marker).await.unwrap();
+    write.admin_delete_marker(&admin(), marker).await.unwrap();
+    assert_eq!(
+        write.list_all_markers(&admin()).await.unwrap()[0].version,
+        1
+    );
+    let proposal: i64 =
+        sqlx::query_scalar("SELECT id FROM marker_edit_proposals WHERE marker_id = $1")
+            .bind(marker)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(
+        write
+            .approve_edit_proposal(&admin(), proposal)
+            .await
+            .is_err()
+    );
+    assert!(
+        write
+            .pending_edit_proposals(&admin())
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(write.favorite_ids(&owner()).await.unwrap().is_empty());
+    assert!(write.list_created(&owner()).await.unwrap().is_empty());
+    assert!(
+        write
+            .list_all_markers(&admin())
+            .await
+            .unwrap()
+            .iter()
+            .any(|m| m.id == marker && m.deactivated)
+    );
+    assert!(matches!(
+        write.admin_restore_marker(&owner(), marker).await,
+        Err(WriteError::Forbidden)
+    ));
+    write.admin_restore_marker(&admin(), marker).await.unwrap();
+    assert_eq!(write.favorite_ids(&owner()).await.unwrap(), vec![marker]);
+    let restored = write.list_created(&owner()).await.unwrap();
+    assert_eq!(restored.len(), 1);
+    assert!(!restored[0].deactivated);
+    assert_eq!(restored[0].review_status, "APPROVED");
+    assert!(restored[0].is_public);
+    assert_eq!(restored[0].version, 2);
+    write.admin_restore_marker(&admin(), marker).await.unwrap();
+    assert_eq!(
+        write.list_all_markers(&admin()).await.unwrap()[0].version,
+        2
+    );
+    assert!(
+        write
+            .approve_edit_proposal(&admin(), proposal)
+            .await
+            .is_err(),
+        "恢复不能放行基于旧版本的编辑提案"
+    );
     pool.close().await;
 }
 
