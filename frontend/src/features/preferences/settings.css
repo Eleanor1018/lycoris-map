@@ -218,12 +218,83 @@
 .settings-popover .preference-form p {
     margin: 0;
 }
-.settings-popover .preference-about {
-    gap: 11px;
-    padding: 8px 11px 11px;
+/* About keeps one compact hierarchy across the popover and routed panel. */
+.settings-popover[data-panel='about'] {
+    width: 336px;
+    border-radius: var(--ui-card-radius);
 }
-.settings-popover .preference-about p {
+.preference-about {
+    gap: 22px;
+    text-align: center;
+}
+.settings-popover .preference-about {
+    gap: 22px;
+    padding: 16px 11px;
+}
+.preference-about .about-identity {
+    display: grid;
+    gap: 6px;
+}
+.preference-about .about-icon {
+    justify-self: center;
+    border-radius: 16px;
+    margin-bottom: 5px;
+}
+.preference-about h2 {
     margin: 0;
+    color: var(--ui-brand);
+    font: 500 26px/1.2 var(--ui-font-logo);
+}
+.preferences-content .preference-about p {
+    margin: 0;
+    font: 400 14px/1.5 var(--ui-font-body);
+}
+.preferences-content .preference-about .about-version,
+.preferences-content .preference-about .about-footer {
+    color: #636366;
+}
+.preferences-content .preference-about .about-tagline {
+    color: var(--ui-brand);
+    font-size: 16px;
+    font-weight: 500;
+    text-wrap: balance;
+}
+.preference-about .about-links {
+    display: grid;
+    gap: 11px;
+    min-width: 0;
+}
+.preference-about .about-repository-button {
+    width: 100%;
+    min-height: var(--ui-control-height);
+    height: auto;
+    padding: 11px;
+    border: 1px solid var(--ui-brand);
+    border-radius: var(--ui-control-radius);
+    background: var(--ui-brand-blush);
+    color: var(--ui-brand);
+    text-decoration: none;
+    white-space: normal;
+}
+.preference-about .about-repository-button:hover,
+.preference-about .about-repository-button:active {
+    background: var(--ui-selected);
+}
+.preference-about a:focus-visible {
+    outline: 2px solid var(--ui-brand);
+    outline-offset: 3px;
+}
+.preference-about .about-repository-url {
+    font-size: 12px;
+    line-height: 1.5;
+}
+.preference-about .about-footer {
+    display: grid;
+    gap: 11px;
+}
+.preferences-content .preference-about .about-version,
+.preferences-content .preference-about .about-attribution {
+    font-size: 12px;
 }
 @keyframes settings-popover-in {
     from {

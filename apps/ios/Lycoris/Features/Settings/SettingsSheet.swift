@@ -59,19 +59,37 @@ struct SettingsSheet: View {
           }
         case .about:
           Section {
-            LabeledContent(
-              "Lycoris Maps",
-              value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
-                as? String ?? "")
-            Text(
-              "A simple map for finding accessible toilets, nursing rooms, and medical institutions."
-            )
-          }
+            VStack(spacing: 11) {
+              Image("LycorisMark")
+                .resizable().scaledToFit().frame(width: 72, height: 72)
+                .clipShape(RoundedRectangle(cornerRadius: 18))
+                .accessibilityHidden(true)
+              Text(verbatim: "Lycoris Maps").font(.title2.bold())
+              Text("Version \(appVersion)").font(.caption).foregroundStyle(.secondary)
+              Text("Across mountains and seas, together.").font(.headline)
+                .padding(.top, 11)
+              Text("A simple map for finding accessible toilets, nursing rooms, and medical institutions.")
+            }
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+          }.listRowBackground(Color.clear)
           Section {
-            Text(
-              "Shared Lycoris links open places in the installed app. Place availability depends on your access."
-            )
-          }
+            VStack(spacing: 11) {
+              Link("View on GitHub", destination: repositoryURL)
+                .buttonStyle(.borderedProminent).controlSize(.large)
+                .accessibilityIdentifier("settings.about.repository")
+              Link(destination: repositoryURL) {
+                Text(verbatim: "github.com/Project-Lycoris/lycoris-map")
+                  .font(.footnote)
+              }
+              .accessibilityIdentifier("settings.about.repository-url")
+              Text("Thank you to all our contributors.")
+                .font(.footnote).foregroundStyle(.secondary).padding(.top, 11)
+            }
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+          }.listRowBackground(Color.clear)
         }
       }
       .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
@@ -97,6 +115,12 @@ struct SettingsSheet: View {
       }
       .onDisappear { commitRadius() }
   }
+
+  private var appVersion: String {
+    Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+  }
+
+  private let repositoryURL = URL(string: "https://github.com/Project-Lycoris/lycoris-map")!
 
   private func commitRadius() {
     guard destination == .range else { return }

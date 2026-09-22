@@ -1,5 +1,7 @@
 # 夏水仙 · Lycoris
 
+**一起跨越山与海**
+
 [简体中文](README.md) | [English](README.en.md)
 
 夏水仙是一款简洁的地图，帮你找到无障碍卫生间、母婴室和医疗机构。我们希望把实用的无障碍设施信息带给每一个需要的人，让出门少一些顾虑。
@@ -29,7 +31,7 @@ Web 已可使用，原生 iOS 和 Android 应用正在测试中。
 ## 开发
 
 ```sh
-git clone https://github.com/Eleanor1018/lycoris-map.git
+git clone https://github.com/Project-Lycoris/lycoris-map.git
 cd lycoris-map
 ```
 
