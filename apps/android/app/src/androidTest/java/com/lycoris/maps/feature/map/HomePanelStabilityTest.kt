@@ -42,7 +42,9 @@ class HomePanelStabilityTest {
                             mapLayers = { Text("Map update ${mapTick.intValue}") },
                             panelContent = {
                                 if (nearby.value) {
-                                    item("categories") { NearbyCategories(false, {}) }
+                                    // Production Nearby shows a selected-category/radius subtitle row
+                                    // followed by the results, not the category cards again.
+                                    item("nearby-subtitle") { Text("Nursing Rooms · 1km", Modifier.padding(horizontal = 30.dp, vertical = 11.dp)) }
                                     when (resultCount.intValue) {
                                         -1 -> item("loading") { Text("Loading nearby places") }
                                         0 -> item("empty") { Text("No places in this area") }

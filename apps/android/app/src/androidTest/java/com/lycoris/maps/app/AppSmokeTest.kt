@@ -95,12 +95,23 @@ class AppSmokeTest {
         categories.forEach { (english, chinese, category) ->
             compose.onNode(text(english, chinese) and hasClickAction()).performClick()
             compose.onNode(heading("Nearby", "附近点位")).assertIsDisplayed()
+            var radiusMeters = 0
             withModel {
                 assertEquals(SecondaryPage.NEARBY, it.page.value)
                 assertEquals(category, it.nearbyCategory.value)
+                radiusMeters = it.preferences.value.radiusMeters
             }
+            // Entering a category must show its result list, not the three category cards again.
+            categories.forEach { (en, zh, _) ->
+                compose.onAllNodes(text(en, zh) and hasClickAction()).assertCountEquals(0)
+            }
+            // The selected category and search radius appear as a short subtitle row.
+            val range = if (radiusMeters % 1000 == 0) "${radiusMeters / 1000}km" else "${radiusMeters}m"
+            compose.onNode(text("$english · $range", "$chinese · $range")).assertIsDisplayed()
             closePanel()
+            // Closing returns to the original three-category entry point.
             compose.onNode(heading("Find Nearby", "查找附近")).assertIsDisplayed()
+            categories.forEach { (en, zh, _) -> compose.onNode(text(en, zh) and hasClickAction()).assertIsDisplayed() }
             compose.onNode(tab("Explore", "探索")).assertIsSelected()
         }
     }
