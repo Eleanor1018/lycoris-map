@@ -1,18 +1,10 @@
 #!/usr/bin/env bash
-# Lycoris Rust 后端 Linux 测试运行器（容器内，阶段 4 发布基础）。
-#
-# 目标：在真实 Linux 上执行 fmt / clippy / 离线 SQLx 全 targets 编译 / 全部 cargo test，
-#       覆盖 Unix 路径、符号链接与文件读取用例（tests/media.rs、tests/media_business.rs、
-#       tests/media_http.rs 等在 Linux 上走真实 Unix 语义）。
-#
-# 网络策略：只把温晓已授权的合成测试服务（host.docker.internal:55432/:56379）转发到本容器回环
-#   127.0.0.1 同端口，以满足 tests/common/mod.rs 的回环强制校验；上游/监听/测试 URL 固定，任何
-#   覆写在网络/DDL 前失败。绝不连接 lycoris-restore-review、恢复库或生产地址。
-#   转发器随本进程退出而终止，不留常驻监听。
-#
-# 并发：RUST_TEST_THREADS / CARGO_BUILD_JOBS 只接受 1 或 2（未设置默认 2；共享 1 GiB 合成 PG）。
-#
-# 退出码：0 表示全部检查通过；非零表示某项失败（不跳过、不放宽任何现有校验）。
+# Linux container runner for formatting, compilation, linting, and tests.
+# Runs filesystem tests with real Linux path and symlink semantics.
+# Only synthetic host.docker.internal:55432/:56379 services are forwarded to loopback;
+# overrides fail before network access or DDL, and forwarders stop when this runner exits.
+# Test/build concurrency is limited to 1 or 2 for the small shared test database.
+# Exit zero means every check passed; failures are never skipped.
 
 set -euo pipefail
 

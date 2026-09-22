@@ -1,6 +1,8 @@
 import Foundation
 import Observation
 
+/// Owns identity and private UI data together. Async reads must validate their
+/// captured epoch before publishing, even when transport cancellation was requested.
 @MainActor @Observable
 final class AccountStore {
   private let api: any AccountServing

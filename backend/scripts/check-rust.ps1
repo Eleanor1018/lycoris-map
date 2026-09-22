@@ -1,6 +1,5 @@
 #!/usr/bin/env pwsh
-# Lycoris Rust backend local checks (all 43 mounted contract templates: phase 1 marker reads,
-# phase 2 auth/users/avatars, phase 3 marker writes/review and image proposals/cleanup).
+# Rust checks for the API, migrations, sessions, places, and media.
 #
 # Validates targets BEFORE any DDL: TEST_DATABASE_URL / TEST_REDIS_URL must be loopback and
 # the migration database must be `lycoris_rust` or a `lycoris_test_` synthetic database.
@@ -9,8 +8,8 @@
 #   2. `cargo sqlx prepare --check` verifies `.sqlx` offline metadata matches that database;
 #   3. builds with `SQLX_OFFLINE=true` for all targets to prove offline compilation works;
 #   4. runs fmt / clippy / test (integration tests use their own UUID temp databases).
-# No user or system environment is modified. Targets are loopback-only lycoris-rust
-# containers; `lycoris-restore-review` and other held databases are never touched.
+# No persistent user or system environment is modified. Targets are loopback-only
+# synthetic databases; production and restored user data must never be used.
 #
 # Prerequisite: SQLx CLI must be 0.9.0 (`cargo sqlx --version`).
 # Usage: pwsh backend/scripts/check-rust.ps1

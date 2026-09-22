@@ -17,7 +17,7 @@ path = "src/main.rs"
 [dependencies]
 axum = { version = "0.8.9", features = ["multipart"] }
 bytes = "1"
-# 复用 tower-http/axum body limit 的 `LengthLimitError` 类型，沿 source 链识别真实超限。
+# Recognize body-limit failures through the underlying error chain.
 http-body-util = "0.1.5"
 image = { version = "0.25.10", default-features = false, features = [
     "gif",
@@ -46,8 +46,7 @@ tokio = { version = "1.53.1", features = [
 ] }
 tower = { version = "0.5.3", features = ["util"] }
 tower-http = { version = "0.7.1", features = ["cors", "limit", "timeout"] }
-# 阶段 2 头像/阶段 3 图片上传：multipart 读取与文件流式响应体。
-# axum `multipart` 提供 multer 解析；`tokio-util::io::ReaderStream` 包装文件句柄。
+# Stream uploaded files without buffering the entire response.
 tokio-util = { version = "0.7.19", features = ["io"] }
 fred = { version = "10.1.0", features = ["i-scripts"] }
 serde = { version = "1.0.229", features = ["derive"] }
@@ -60,8 +59,7 @@ sha2 = "0.11.0"
 tempfile = "3.27.0"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-# 阶段 2 认证：Cookie 解析/生成、历史 BCrypt 兼容。
-# 均为温晓锁定的候选版本，仅加入不降级已有依赖。
+# Session cookies and compatibility with existing password hashes.
 cookie = "0.18.2"
 bcrypt = "0.19.3"
 lettre = { version = "0.11.23", default-features = false, features = ["builder", "smtp-transport", "tokio1-rustls-tls", "pool"] }

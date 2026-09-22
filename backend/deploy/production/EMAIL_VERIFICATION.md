@@ -36,57 +36,41 @@ uses required STARTTLS with certificate validation and a 15-second outer timeout
 Errors use the existing JSON envelope. `429` also includes `Retry-After` and
 `data.retryAfterSeconds` so clients can display the actual remaining cooldown:
 
-| Code | Meaning |
-| --- | --- |
-| 40021 | Invalid, expired, consumed or mismatched code |
-| 40022 | Invalid email address |
-| 42931 | Five incorrect attempts; email locked |
-| 42932 | Resend/hourly/daily quota reached |
+| Code  | Meaning                                                        |
+| ----- | -------------------------------------------------------------- |
+| 40021 | Invalid, expired, consumed or mismatched code                  |
+| 40022 | Invalid email address                                          |
+| 42931 | Five incorrect attempts; email locked                          |
+| 42932 | Resend/hourly/daily quota reached                              |
 | 50321 | SMTP, Redis, configuration or delivery temporarily unavailable |
 
 The existing registration IP limiter also remains active. SMTP credentials and
 `EMAIL_VERIFICATION_SECRET` never enter frontend builds or responses. Do not log
 request bodies or codes. Preserve Redis data across restarts to retain locks.
 
-## Configuration and coordinated rollout
+## Configuration
 
-Production Compose loads `/opt/lycoris/private/app.env` and the required private
-`/opt/lycoris/private/smtp.env` (raw format, root mode 0600). The latter contains
+Production Compose loads private `app.env` and `smtp.env` files. SMTP requires
 `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY=starttls`, `SMTP_USERNAME`,
-`SMTP_PASSWORD`, `SMTP_FROM_ADDRESS`, `SMTP_FROM_NAME`, and a separate random
-`EMAIL_VERIFICATION_SECRET` of at least 32 bytes. Use the Gmail app password
-already configured privately, never the account password. No credentials belong
-in this document or Git. An absent SMTP configuration returns 503 rather than
-allowing unverified registration; an incomplete configured transport fails startup.
+`SMTP_PASSWORD`, `SMTP_FROM_ADDRESS`, `SMTP_FROM_NAME`, and an independent
+`EMAIL_VERIFICATION_SECRET` of at least 32 bytes. With Gmail, use an app password,
+not the account password. Keep these values out of Git, logs, and client builds.
 
-1. Prepare/build the backend image and matching Web, iOS and Android releases.
-   Retain current image/config and take a database backup under the deployment lock.
-2. Add the independent secret privately and verify the SMTP settings without
-   printing them. Run migration 0007 explicitly; normal app startup never migrates.
-3. Coordinate the backend switch with the owner's Web merge/deployment. Do not
-   enable mandatory verification while the live registration form is still the
-   old disabled placeholder. Publish updated native clients in the same release.
-   Old clients can still log in, but registration now requires an upgrade.
-4. Verify readiness and the live Web assets. Send a real verification email only
-   to an explicitly authorized test address, then check registration/recovery with
-   a disposable test account. Do not reset an existing user's password to test.
-5. Keep the additive migration on application rollback. Preserve new accounts,
-   session versions and Redis locks; investigate mail/config errors before
-   changing enforcement.
+Missing SMTP configuration returns 503 for code requests; incomplete configured
+transport fails startup. Verification is never bypassed. Preserve Redis data
+across restarts so quotas and lockouts remain effective.
 
-## Local verification
+Deploy a matching registration/recovery UI when enabling verification. Older
+clients can log in, but registration requires the code field. Apply migration
+0007 explicitly and retain it during compatible application rollbacks; existing
+users remain unverified until a relevant verified flow succeeds. See the
+[deployment procedure](README.md).
 
-`cargo test --lib email_verification` uses isolated Redis keys. The HTTP suite
-`cargo test --test email_verification` uses temporary PostgreSQL databases,
-isolated Redis and an injected mailbox (no real messages). It covers required
-verification, replay rejection, missing accounts, SMTP failure, password change
-and old-session invalidation. Existing account/media tests provision synthetic
-challenges so the rest of the authenticated API continues to be exercised.
+## Tests
 
-Recorded acceptance for this change: 5 Redis challenge tests, 5 email HTTP
-tests, 29 account/session HTTP tests, 11 migration/readiness tests and 22 media
-HTTP tests passed; `cargo clippy --all-targets --locked -- -D warnings` passed.
-Web strict type checking/production build and 97 account/admin/contribution/map
-regressions passed. Native acceptance is recorded in each app README. Local
-Computer Use checked Chinese registration/recovery forms at 390×844 and 1280×900.
-These checks do not claim a production verification-email delivery or rollout.
+`cargo test --lib email_verification` checks Redis challenges.
+`cargo test --test email_verification` exercises HTTP flows with temporary
+PostgreSQL databases, isolated Redis, and an injected mailbox. Tests cover
+required codes, replay, SMTP failure, recovery, and old-session invalidation
+without sending real messages. Test actual delivery only with a designated
+disposable account and an authorized recipient.
