@@ -529,3 +529,39 @@ body:has(.account-mobile) .mobile-sheet {
 .account-desktop.account-created {
     height: min(758px, calc(var(--map-viewport-height, 100dvh) - 32px));
 }
+
+.verification-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 11px;
+}
+.design-button.verification-send {
+    min-height: 44px;
+    max-width: 155px;
+    white-space: normal;
+    padding: 8px 11px;
+    border: 1px solid var(--ui-brand);
+    border-radius: 22px;
+    background: var(--ui-brand-blush);
+    color: var(--ui-brand);
+    font: 500 14px/20px var(--ui-font-body);
+    text-align: center;
+}
+.verification-send:disabled {
+    opacity: 0.6;
+}
+.auth-switch .auth-forgot {
+    margin-left: auto;
+}
+.account-desktop.account-reset {
+    height: auto;
+    max-height: calc(var(--map-viewport-height, 100dvh) - 32px);
+    border: 3px solid var(--ui-brand);
+}
+.account-reset .account-dialog-inner {
+    min-height: 0;
+}
+.account-reset .account-dialog-scroll {
+    height: auto;
+}

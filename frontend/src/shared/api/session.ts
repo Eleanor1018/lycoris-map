@@ -4,7 +4,12 @@ import { ApiError } from './ApiError'
 import { userOrNullSchema, type User } from './users'
 
 export type LoginInput = { username: string; password: string }
-export type RegisterInput = LoginInput & { email: string; nickname?: string; website?: string }
+export type RegisterInput = LoginInput & {
+    email: string
+    verificationCode: string
+    nickname?: string
+    website?: string
+}
 export type ProfileInput = { nickname?: string; pronouns?: string; signature?: string }
 export type PasswordInput = { oldPassword: string; newPassword: string }
 
@@ -62,4 +67,24 @@ export async function uploadMyAvatar(file: File, signal?: AbortSignal): Promise<
             }),
         ),
     )
+}
+
+export type EmailCodePurpose = 'register' | 'reset_password'
+export async function sendEmailCode(
+    email: string,
+    purpose: EmailCodePurpose,
+    language: string,
+): Promise<void> {
+    envelopeData(
+        await request('/api/auth/email-code', {
+            method: 'POST',
+            json: { email, purpose },
+            headers: { 'X-App-Language': language },
+            timeoutMs: 22000,
+        }),
+    )
+}
+export type ResetPasswordInput = { email: string; verificationCode: string; newPassword: string }
+export async function resetPassword(input: ResetPasswordInput): Promise<void> {
+    envelopeData(await request('/api/auth/reset-password', { method: 'POST', json: input }))
 }

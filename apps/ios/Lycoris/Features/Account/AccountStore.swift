@@ -85,8 +85,9 @@ final class AccountStore {
   }
 
   /// Auth and account writes are serialized. A dismissed sheet cannot cancel a cookie-changing request.
-  func authenticate(username: String, email: String, password: String, register: Bool) async -> Bool
-  {
+  func authenticate(
+    username: String, email: String, password: String, register: Bool, verificationCode: String = ""
+  ) async -> Bool {
     guard !isBusy else { return false }
     isBusy = true
     invalidatePrivateData()
@@ -100,7 +101,10 @@ final class AccountStore {
       var fields = [
         "username": username.trimmingCharacters(in: .whitespacesAndNewlines), "password": password,
       ]
-      if register { fields["email"] = email.trimmingCharacters(in: .whitespacesAndNewlines) }
+      if register {
+        fields["email"] = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        fields["verificationCode"] = verificationCode
+      }
       _ = try await api.user(.json(register ? "api/register" : "api/login", fields: fields))
       // Verify the cookie, rather than trusting only the login response body.
       let current = try await api.user()
@@ -110,7 +114,15 @@ final class AccountStore {
     } catch {
       await reconcile()
       let failure = error as? AccountFailure
-      if !register && failure?.status == 401 {
+      if [40021, 40022, 42931, 42932, 50321].contains(failure?.code ?? 0) {
+        message = failureMessage(error)
+        if failure?.code == 42931 {
+          verificationLockedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+          verificationLockedUntil = Date().addingTimeInterval(
+            Double(failure?.retryAfterSeconds ?? 3600))
+        }
+      } else if !register && failure?.status == 401 {
         message = String(
           appLocalized: "The email, username, or password is incorrect.", table: "AccountFeedback")
       } else if register && failure?.status == 503 {
@@ -124,6 +136,54 @@ final class AccountStore {
       } else {
         message = failureMessage(error)
       }
+      return false
+    }
+  }
+
+  private(set) var verificationLockedUntil = Date.distantPast
+  private(set) var verificationLockedEmail = ""
+
+  func sendEmailCode(email: String, reset: Bool) async throws {
+    guard !isBusy else { throw AccountFailure(status: 429) }
+    isBusy = true
+    message = nil
+    defer { isBusy = false }
+    _ = try await api.send(
+      .json(
+        "api/auth/email-code",
+        fields: [
+          "email": email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+          "purpose": reset ? "reset_password" : "register",
+        ]))
+  }
+
+  func resetPassword(email: String, code: String, password: String) async -> Bool {
+    guard !isBusy else { return false }
+    isBusy = true
+    message = nil
+    defer { isBusy = false }
+    do {
+      _ = try await api.send(
+        .json(
+          "api/auth/reset-password",
+          fields: [
+            "email": email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+            "verificationCode": code, "newPassword": password,
+          ]))
+      // The acknowledged reset revoked the session server-side; do not retain
+      // private state if a subsequent network read is unavailable.
+      expire()
+      hasChecked = true
+      message = String(appLocalized: "Password reset. Please log in with your new password.")
+      return true
+    } catch {
+      let failure = error as? AccountFailure
+      if failure?.code == 42931 {
+        verificationLockedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        verificationLockedUntil = Date().addingTimeInterval(
+          Double(failure?.retryAfterSeconds ?? 3600))
+      }
+      message = failureMessage(error)
       return false
     }
   }
