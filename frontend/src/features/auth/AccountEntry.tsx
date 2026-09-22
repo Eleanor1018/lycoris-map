@@ -31,11 +31,30 @@ export function useAccountAvatar() {
     }, [blob, key])
     return image?.key === key && image.blob === blob ? image.url : null
 }
+function GuestAvatar() {
+    return (
+        <svg
+            className="account-guest-icon"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+        >
+            <circle cx="12" cy="7.5" r="3.5" />
+            <path d="M5 20v-1a7 6 0 0 1 14 0v1Z" />
+        </svg>
+    )
+}
 export function AccountAvatar() {
     const { user } = useSession(),
         url = useAccountAvatar()
     const [failed, setFailed] = useState<string | null>(null)
-    const initials = (user?.nickname || user?.username || 'AA').trim().slice(0, 2).toUpperCase()
+    const initials = (user?.nickname || user?.username || '').trim().slice(0, 2).toUpperCase()
+    if (!user) return <GuestAvatar />
     return url && failed !== url ? (
         <img className="account-avatar-image" src={url} alt="" onError={() => setFailed(url)} />
     ) : (
@@ -74,12 +93,12 @@ export function AccountEntry({ mobile = false }: { mobile?: boolean }) {
                 session.store ? (
                     <AccountAvatar />
                 ) : (
-                    'AA'
+                    <GuestAvatar />
                 )
             ) : (
                 <>
                     <span className="account-avatar">
-                        {session.store ? <AccountAvatar /> : 'AA'}
+                        {session.store ? <AccountAvatar /> : <GuestAvatar />}
                     </span>
                     <span className="account-entry-text">
                         <span className="account-name">
