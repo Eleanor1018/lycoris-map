@@ -50,6 +50,7 @@ const UNMATCHED_ROUTE: &str = "<unmatched>";
 /// 应用共享状态。`Client` 与 `PgPool` 均为克隆廉价的句柄。
 #[derive(Clone)]
 pub struct AppState {
+    pub email_codes: crate::email_verification::EmailCodes,
     pub db: PgPool,
     pub redis: Client,
     pub config: Arc<Config>,
@@ -74,6 +75,7 @@ impl AppState {
     /// 读取、写入与媒体三个服务共用同一个 `MarkerCache`（同一命名空间），
     /// 避免为 read/write/media 建出不一致的缓存实例。
     pub fn new(db: PgPool, redis: Client, config: Config) -> Result<Self, AppError> {
+        let email_codes = crate::email_verification::EmailCodes::new(redis.clone(), &config)?;
         let marker_cache = MarkerCache::new(
             redis.clone(),
             config.marker_cache_enabled,
@@ -102,6 +104,7 @@ impl AppState {
         let images = ImageStore::new(&config.upload_dir, config.media_max_concurrency)?;
         let media = MediaService::new(db.clone(), images.clone(), marker_cache);
         Ok(Self {
+            email_codes,
             db,
             redis,
             config: Arc::new(config),
@@ -131,6 +134,14 @@ pub fn build_router(state: AppState) -> Router {
         // 阶段 2：AuthController（9 个中的 6 个非头像路由）
         .route("/api/login", axum::routing::post(routes::auth::login))
         .route("/api/register", axum::routing::post(routes::auth::register))
+        .route(
+            "/api/auth/email-code",
+            axum::routing::post(routes::email::send_code),
+        )
+        .route(
+            "/api/auth/reset-password",
+            axum::routing::post(routes::email::reset_password),
+        )
         .route(
             "/api/me",
             get(routes::auth::me).patch(routes::auth::update_me),

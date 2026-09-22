@@ -5,6 +5,7 @@ pub mod admin;
 pub mod admin_markers;
 pub mod auth;
 pub mod avatar;
+pub mod email;
 pub mod uploads;
 
 use std::net::{IpAddr, SocketAddr};

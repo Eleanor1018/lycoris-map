@@ -247,6 +247,7 @@ impl TestEnv {
         config.rate_limit_namespace = format!("lycoris:test:{unique}:ratelimit");
         // 测试统一使用 cost 4；生产默认 10。
         config.bcrypt_cost = 4;
+        config.email_verification_secret = Some("test-email-secret-not-for-production-32".into());
         config.write_allowed_origins = vec![HeaderValue::from_static(ALLOWED_ORIGIN)];
         config.admin_second_password_hash = Some(test_second_hash().await);
         configure(&mut config);
@@ -406,13 +407,36 @@ impl Resp {
     }
 }
 
-fn register_body(username: &str, email: &str) -> serde_json::Value {
+async fn register_body(env: &TestEnv, username: &str, email: &str) -> serde_json::Value {
+    // Existing account/session tests use a synthetic delivered challenge.
+    // The separate email-verification suite exercises send limits and failures.
+    use lycoris_backend::email_verification::Purpose;
+    let normalized = email.trim().to_lowercase();
+    if let Ok(nonce) = env
+        .state
+        .email_codes
+        .reserve(
+            &normalized,
+            Purpose::Register,
+            "register",
+            "127.0.0.1".parse().unwrap(),
+            "123456",
+        )
+        .await
+    {
+        env.state
+            .email_codes
+            .finish(&normalized, Purpose::Register, &nonce, true)
+            .await
+            .unwrap();
+    }
     serde_json::json!({
         "username": username,
         "nickname": username,
         "email": email,
         "password": "test-password",
         "website": "",
+        "verificationCode": "123456",
     })
 }
 
@@ -421,7 +445,7 @@ async fn register(env: &TestEnv, username: &str, email: &str) -> Resp {
     env.send(TestRequest::json(
         Method::POST,
         "/api/register",
-        register_body(username, email),
+        register_body(env, username, email).await,
     ))
     .await
 }
@@ -744,7 +768,7 @@ async fn concurrent_registration_creates_exactly_one_account() {
     })
     .await;
 
-    let body = register_body("race-user", "race@example.com");
+    let body = register_body(&env, "race-user", "race@example.com").await;
     let mut handles = Vec::new();
     for _ in 0..10 {
         let router = env.router.clone();
@@ -1436,7 +1460,7 @@ async fn register_rate_limit_and_redis_failure() {
         TestRequest::json(
             Method::POST,
             "/api/register",
-            register_body("broken", "broken@example.com"),
+            register_body(&env, "broken", "broken@example.com").await,
         ),
     )
     .await;
@@ -1458,7 +1482,7 @@ async fn trusted_proxy_forwarded_ip_partitions_rate_limit() {
             TestRequest::json(
                 Method::POST,
                 "/api/register",
-                register_body("xff-a", "xff-a@example.com"),
+                register_body(&env, "xff-a", "xff-a@example.com").await,
             )
             .connect_ip(connect)
             .header("x-forwarded-for", "1.1.1.1, 10.0.0.5"),
@@ -1470,7 +1494,7 @@ async fn trusted_proxy_forwarded_ip_partitions_rate_limit() {
             TestRequest::json(
                 Method::POST,
                 "/api/register",
-                register_body("xff-b", "xff-b@example.com"),
+                register_body(&env, "xff-b", "xff-b@example.com").await,
             )
             .connect_ip(connect)
             .header("x-forwarded-for", "2.2.2.2"),
@@ -1482,7 +1506,7 @@ async fn trusted_proxy_forwarded_ip_partitions_rate_limit() {
             TestRequest::json(
                 Method::POST,
                 "/api/register",
-                register_body("xff-c", "xff-c@example.com"),
+                register_body(&env, "xff-c", "xff-c@example.com").await,
             )
             .connect_ip(connect)
             .header("x-forwarded-for", "1.1.1.1"),
@@ -1501,7 +1525,7 @@ async fn trusted_proxy_forwarded_ip_partitions_rate_limit() {
             TestRequest::json(
                 Method::POST,
                 "/api/register",
-                register_body("spoof-a", "spoof-a@example.com"),
+                register_body(&env, "spoof-a", "spoof-a@example.com").await,
             )
             .connect_ip(untrusted)
             .header("x-forwarded-for", "1.1.1.1"),
@@ -1513,7 +1537,7 @@ async fn trusted_proxy_forwarded_ip_partitions_rate_limit() {
             TestRequest::json(
                 Method::POST,
                 "/api/register",
-                register_body("spoof-b", "spoof-b@example.com"),
+                register_body(&env, "spoof-b", "spoof-b@example.com").await,
             )
             .connect_ip(untrusted)
             .header("x-forwarded-for", "2.2.2.2"),
@@ -1739,7 +1763,7 @@ async fn register_rotates_existing_session() {
             TestRequest::json(
                 Method::POST,
                 "/api/register",
-                register_body("second-account", "second@example.com"),
+                register_body(&env, "second-account", "second@example.com").await,
             )
             .cookie(old_token.clone()),
         )
@@ -1779,13 +1803,13 @@ async fn logout_delete_failure_returns_503_and_keeps_session() {
         .expect("无法以受限 ACL 用户连接测试 Redis");
     let router = env.router_with_redis(acl_client);
 
-    // 通过受限用户注册（EVAL 创建会话允许，DEL 被拒）。
+    // 正常客户端完成注册/验证码消费，再通过受限客户端验证退出故障。
     let created = send_with(
-        &router,
+        &env.router,
         TestRequest::json(
             Method::POST,
             "/api/register",
-            register_body("logout-acl", "logout-acl@example.com"),
+            register_body(&env, "logout-acl", "logout-acl@example.com").await,
         ),
     )
     .await;
