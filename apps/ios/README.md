@@ -157,3 +157,21 @@ VoiceOver headers, detail focus, refreshed annotation labels, 44pt touch targets
 ## Coordinate alignment
 
 MapKit coordinates are calibrated against a fixed public landmark before interpreting mainland map picks. API/storage values stay WGS84; display, picking and viewport boundaries are handled explicitly. See [the measured control-point comparison and failure behavior](docs/coordinate-alignment.md). Map pins use the Web category palette: toilet blue, nursing orange, medical green, and other yellow; their visible tips anchor to the actual coordinates.
+
+## Email verification
+
+Registration requires an emailed six-digit code with `.oneTimeCode` autofill.
+The login page now opens password recovery; matching new passwords and a code
+are sent to `/api/auth/reset-password`. `/api/auth/email-code` uses `register`
+or `reset_password`, and `X-App-Language` selects the email language. Server
+`Retry-After` drives resend/cooldown feedback. Five wrong codes lock that email
+for one hour without locking ordinary password login; returning to a page cannot
+bypass the backend lock. Recovery clears private state after acknowledgement and
+returns to login without automatic authentication.
+
+Publish this client with the Web/backend verification release. Existing clients
+can still log in, but registration requires the updated code field. No SMTP
+credentials are bundled. The 21 `AccountTests` cover normalized addresses/code
+payloads, recovery/private-data invalidation even if subsequent reads fail,
+cooldown feedback, and the existing session/bookmark regressions. These use
+in-process fixtures and send no real email.
