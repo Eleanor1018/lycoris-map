@@ -1,5 +1,7 @@
 # Lycoris
 
+**Across mountains and seas, together.**
+
 [简体中文](README.md) | [English](README.en.md)
 
 Lycoris is a simple map for finding accessible toilets, nursing rooms, and medical institutions. We want useful information about accessible facilities to reach anyone who needs it, making it a little easier to go out.
@@ -29,7 +31,7 @@ The Web app is available now. Native iOS and Android apps are in testing.
 ## Development
 
 ```sh
-git clone https://github.com/Eleanor1018/lycoris-map.git
+git clone https://github.com/Project-Lycoris/lycoris-map.git
 cd lycoris-map
 ```
 

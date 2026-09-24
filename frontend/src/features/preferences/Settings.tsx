@@ -9,6 +9,9 @@ import type { Panel } from '@/layouts/types'
 import { rangeLabel, searchCategories, usePreferences } from './PreferencesProvider'
 import { MapSourceOptions } from '@/features/map/MapSourcePicker'
 import { mapSourceNames } from '@/features/map/mapSources'
+import { Button } from '@/shared/ui/button'
+import { version } from '../../../package.json'
+import lycorisMark from '@/assets/lycoris-mark.png'
 import './settings.css'
 
 export const settingsTitles = {
@@ -305,25 +308,54 @@ export function SettingsContent({
             {panel === 'source' && <MapSourceOptions onSelect={onSelect} />}
             {panel === 'about' && (
                 <div className="preference-about">
-                    <p>{ui.text('A map of accessible and friendly places.')}</p>
-                    <p>{ui.text('Place details are contributed by the community.')}</p>
-                    <p>
-                        {ui.text('Map data')}:{' '}
-                        <a
-                            href="https://www.openstreetmap.org/copyright"
-                            target="_blank"
-                            rel="noreferrer"
-                        >
-                            © OpenStreetMap contributors
-                        </a>
+                    <header className="about-identity">
+                        <img
+                            className="about-icon"
+                            src={lycorisMark}
+                            width={64}
+                            height={64}
+                            alt=""
+                            decoding="async"
+                        />
+                        <h2>Lycoris Maps</h2>
+                        <p className="about-version">{ui.text('Version {version}', { version })}</p>
+                    </header>
+                    <p className="about-tagline">
+                        {ui.text('Across mountains and seas, together.')}
                     </p>
-                    <a
-                        href="https://github.com/Eleanor1018/lycoris-map"
-                        target="_blank"
-                        rel="noreferrer"
-                    >
-                        {ui.text('Source code')}
-                    </a>
+                    <p>{ui.text('A map of accessible and friendly places.')}</p>
+                    <div className="about-links">
+                        <Button asChild className="about-repository-button">
+                            <a
+                                href="https://github.com/Project-Lycoris/lycoris-map"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                {ui.text('View on GitHub')}
+                            </a>
+                        </Button>
+                        <a
+                            className="about-repository-url"
+                            href="https://github.com/Project-Lycoris/lycoris-map"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            github.com/Project-Lycoris/lycoris-map
+                        </a>
+                    </div>
+                    <footer className="about-footer">
+                        <p>{ui.text('Thank you to all our contributors.')}</p>
+                        <p className="about-attribution">
+                            {ui.text('Map data')}:{' '}
+                            <a
+                                href="https://www.openstreetmap.org/copyright"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                © OpenStreetMap contributors
+                            </a>
+                        </p>
+                    </footer>
                 </div>
             )}
         </div>
