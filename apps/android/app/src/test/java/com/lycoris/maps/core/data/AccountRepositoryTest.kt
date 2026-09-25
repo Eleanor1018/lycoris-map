@@ -3,6 +3,7 @@ package com.lycoris.maps.core.data
 import com.lycoris.maps.core.model.Language
 import com.lycoris.maps.core.network.ApiClients
 import com.lycoris.maps.core.network.ApiFailure
+import com.lycoris.maps.core.network.EmailCodeReceipt
 import com.lycoris.maps.core.network.MemoryCookiePersistence
 import com.lycoris.maps.core.network.SessionCookieJar
 import java.util.concurrent.TimeUnit
@@ -44,7 +45,7 @@ class AccountRepositoryTest {
 
     @Test fun emailCodeAndRegistrationSendNormalizedEmailAndCode() = withRepository { server, repository, _ ->
         server.enqueue(MockResponse().setBody("""{"code":0,"data":{"retryAfterSeconds":60,"expiresInSeconds":600}}"""))
-        repository.sendEmailCode(" Synthetic@Example.test ", false, "zh")
+        assertEquals(EmailCodeReceipt(60, 600), repository.sendEmailCode(" Synthetic@Example.test ", false, "zh"))
         val send = server.takeRequest()
         assertEquals("/api/auth/email-code", send.path)
         assertEquals("zh", send.getHeader("X-App-Language"))
@@ -58,6 +59,90 @@ class AccountRepositoryTest {
         assertTrue(registration.body.readUtf8().contains("\"verificationCode\":\"123456\""))
     }
 
+    @Test fun recoveryCodeReturnsServerDurationsAndPreservesSession() = withRepository { server, repository, jar ->
+        login(server, repository)
+        val identity = repository.identity()
+        server.enqueue(MockResponse().setBody("""{"code":0,"data":{"retryAfterSeconds":90,"expiresInSeconds":300}}"""))
+        assertEquals(EmailCodeReceipt(90, 300), repository.sendEmailCode(" Synthetic@Example.test ", true, "en"))
+        val request = server.takeRequest()
+        assertEquals("en", request.getHeader("X-App-Language"))
+        assertTrue(request.body.readUtf8().contains("\"purpose\":\"reset_password\""))
+        assertEquals(identity, repository.identity())
+        assertTrue(jar.hasCookies())
+    }
+
+    @Test fun unusableCodeReceiptsFailWithoutChangingTheSession() = withRepository { server, repository, jar ->
+        login(server, repository)
+        val identity = repository.identity()
+        for (data in listOf("null", "{}", """{"retryAfterSeconds":0,"expiresInSeconds":600}""",
+            """{"retryAfterSeconds":60,"expiresInSeconds":-1}""")) {
+            server.enqueue(MockResponse().setBody("""{"code":0,"data":$data}"""))
+            try { repository.sendEmailCode("synthetic@example.test", false, "en"); fail("Expected invalid receipt") }
+            catch (_: ApiFailure.InvalidResponse) { }
+            assertEquals(identity, repository.identity())
+            assertTrue(jar.hasCookies())
+        }
+    }
+
+    @Test fun invalidEmailsNeverSendOrChangeTheSession() = withRepository { server, repository, jar ->
+        login(server, repository)
+        val identity = repository.identity()
+        for (email in listOf("", "no-at", "a@domain", "a @example.test", "a@example.test\r\nBcc:b@example.test",
+            "界".repeat(81) + "@example.test")) {
+            val actions: List<suspend () -> Any?> = listOf(
+                { repository.sendEmailCode(email, false, "en") },
+                { repository.register("synthetic", "", email, "new-password", "123456") },
+                { repository.resetPassword(email, "123456", "new-password") },
+            )
+            for (action in actions) {
+                try { action(); fail("Expected invalid email") }
+                catch (error: ApiFailure.InvalidInput) { assertEquals("email", error.field) }
+            }
+        }
+        assertEquals(1, server.requestCount)
+        assertEquals(identity, repository.identity())
+        assertTrue(jar.hasCookies())
+    }
+
+    @Test fun invalidNewPasswordsAndCodesNeverStartAnAccountTransition() = withRepository { server, repository, jar ->
+        login(server, repository)
+        val identity = repository.identity()
+        for (password in listOf("abc", "界".repeat(25), "a".repeat(73))) {
+            val actions: List<suspend () -> Any?> = listOf(
+                { repository.register("synthetic", "", "synthetic@example.test", password, "123456") },
+                { repository.resetPassword("synthetic@example.test", "123456", password) },
+            )
+            for (action in actions) {
+                try { action(); fail("Expected invalid password") }
+                catch (error: ApiFailure.InvalidInput) { assertEquals("password", error.field) }
+            }
+        }
+        for (code in listOf("12345", "１２３４５６", "1234567")) {
+            val actions: List<suspend () -> Any?> = listOf(
+                { repository.register("synthetic", "", "synthetic@example.test", "new-password", code) },
+                { repository.resetPassword("synthetic@example.test", code, "new-password") },
+            )
+            for (action in actions) {
+                try { action(); fail("Expected invalid code") }
+                catch (error: ApiFailure.InvalidInput) { assertEquals("verificationCode", error.field) }
+            }
+        }
+        assertEquals(1, server.requestCount)
+        assertEquals(identity, repository.identity())
+        assertTrue(jar.hasCookies())
+    }
+
+    @Test fun formValidatorsMatchNormalizedEmailBytesAndBackendPasswordBoundaries() {
+        assertTrue(isValidAccountEmail(" Synthetic@Example.test "))
+        assertTrue(isValidAccountEmail("界".repeat(80) + "@example.test"))
+        assertFalse(isValidAccountEmail("界".repeat(81) + "@example.test"))
+        assertFalse(isValidAccountEmail("a\u2003b@example.test"))
+        assertTrue(isValidNewAccountPassword("😀😀"))
+        assertFalse(isValidNewAccountPassword("a😀"))
+        assertTrue(isValidNewAccountPassword("界".repeat(24)))
+        assertFalse(isValidNewAccountPassword("界".repeat(24) + "a"))
+    }
+
     @Test fun recoveryClearsOldSessionWithoutAutomaticLogin() = withRepository { server, repository, jar ->
         login(server, repository)
         server.enqueue(MockResponse().setBody("""{"code":0,"data":null}"""))
@@ -69,6 +154,17 @@ class AccountRepositoryTest {
         assertTrue(body.contains("newPassword"))
         assertNull(repository.state.value.user)
         assertFalse(jar.hasCookies())
+    }
+
+    @Test fun failedRecoveryPreservesSessionAndReportsBodyCooldown() = withRepository { server, repository, jar ->
+        login(server, repository)
+        val identity = repository.identity()
+        server.enqueue(MockResponse().setResponseCode(429)
+            .setBody("""{"code":42931,"message":"locked","data":{"retryAfterSeconds":3597}}"""))
+        try { repository.resetPassword("synthetic@example.test", "123456", "new-password"); fail("Expected cooldown") }
+        catch (error: ApiFailure.Http) { assertEquals(42931, error.serviceCode); assertEquals(3597, error.retryAfterSeconds) }
+        assertEquals(identity, repository.identity())
+        assertTrue(jar.hasCookies())
     }
 
     @Test fun verificationCooldownRetainsServerRetryDeadlineAndDoesNotClearLogin() = withRepository { server, repository, jar ->

@@ -46,7 +46,12 @@ fun Response<*>.requireSuccess() {
     val code = runCatching { objectValue?.get("code")?.jsonPrimitive?.intOrNull }.getOrNull()
     val message = runCatching { objectValue?.get("message")?.jsonPrimitive?.content }
         .getOrNull()?.take(300)?.filter { !it.isISOControl() || it == '\n' }
-    throw ApiFailure.Http(code(), code, requestId, message, headers()["Retry-After"]?.toIntOrNull())
+    val retryAfter = headers()["Retry-After"]?.trim()?.toIntOrNull()?.takeIf { it > 0 }
+        ?: if (code() == 429) runCatching {
+            objectValue?.get("data")?.jsonObject?.get("retryAfterSeconds")?.jsonPrimitive
+                ?.takeUnless { it.isString }?.intOrNull?.takeIf { it > 0 }
+        }.getOrNull() else null
+    throw ApiFailure.Http(code(), code, requestId, message, retryAfter)
 }
 
 fun <T : Any> Response<T>.requireBody(): T {

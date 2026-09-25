@@ -10,6 +10,7 @@ import com.lycoris.maps.core.network.ChangePasswordRequest
 import com.lycoris.maps.core.network.LoginRequest
 import com.lycoris.maps.core.network.LycorisApi
 import com.lycoris.maps.core.network.RegisterRequest
+import com.lycoris.maps.core.network.EmailCodeReceipt
 import com.lycoris.maps.core.network.EmailCodeRequest
 import com.lycoris.maps.core.network.ResetPasswordRequest
 import com.lycoris.maps.core.network.SessionCookieJar
@@ -124,23 +125,27 @@ class AccountRepository(
         validateRegistration(username, nickname, email, password)
         if (!verificationCode.matches(Regex("[0-9]{6}"))) throw ApiFailure.InvalidInput("verificationCode")
         return authenticate {
-            register(RegisterRequest(username.trim(), nickname.trim(), email.trim().lowercase(), password, verificationCode)).requireUserData()
+            register(RegisterRequest(username.trim(), nickname.trim(), normalizeAccountEmail(email), password, verificationCode)).requireUserData()
         }
     }
 
-    suspend fun sendEmailCode(email: String, reset: Boolean, language: String) = withContext(io) {
+    suspend fun sendEmailCode(email: String, reset: Boolean, language: String): EmailCodeReceipt = withContext(io) {
+        validateEmail(email)
         gate.withLock {
             apiCall { apiForEpoch(state.value.epoch).sendEmailCode(
-                EmailCodeRequest(email.trim().lowercase(), if (reset) "reset_password" else "register"), language,
-            ).requireEnvelope() }
+                EmailCodeRequest(normalizeAccountEmail(email), if (reset) "reset_password" else "register"), language,
+            ).requireUserData().also { receipt ->
+                if (receipt.retryAfterSeconds <= 0 || receipt.expiresInSeconds <= 0) throw ApiFailure.InvalidResponse()
+            } }
         }
     }
 
     suspend fun resetPassword(email: String, code: String, password: String) = withContext(io) {
+        validateEmail(email)
         if (!code.matches(Regex("[0-9]{6}"))) throw ApiFailure.InvalidInput("verificationCode")
-        if (password.length < 4 || password.toByteArray(Charsets.UTF_8).size > 72) throw ApiFailure.InvalidInput("password")
+        validatePassword(password)
         gate.withLock {
-            apiCall { apiForEpoch(state.value.epoch).resetPassword(ResetPasswordRequest(email.trim().lowercase(), code, password)).requireEnvelope() }
+            apiCall { apiForEpoch(state.value.epoch).resetPassword(ResetPasswordRequest(normalizeAccountEmail(email), code, password)).requireEnvelope() }
             transition(clearCookies = true)
         }
     }
@@ -481,12 +486,29 @@ class AccountRepository(
 
 private fun User.validUser(): User = also { if (publicId.isBlank()) throw ApiFailure.InvalidResponse() }
 private fun String.scalarCount(): Int = codePointCount(0, length)
+private fun normalizeAccountEmail(value: String): String = value.trim().lowercase()
+
+/** Match the web form's mailbox shape; the service remains the authoritative address parser. */
+internal fun isValidAccountEmail(value: String): Boolean {
+    val email = normalizeAccountEmail(value)
+    return email.toByteArray(Charsets.UTF_8).size <= 254 &&
+        email.none { it.isWhitespace() || it.isISOControl() } &&
+        email.matches(Regex("[^@]+@[^@]+\\.[^@]+"))
+}
+
+/** The backend preserves Java's four UTF-16 unit minimum, including surrogate pairs. */
+internal fun isValidNewAccountPassword(value: String): Boolean =
+    value.length >= 4 && value.toByteArray(Charsets.UTF_8).size <= 72
+
+private fun validateEmail(email: String) {
+    if (!isValidAccountEmail(email)) throw ApiFailure.InvalidInput("email")
+}
 private fun validatePassword(password: String) {
-    if (password.length < 4 || password.toByteArray(Charsets.UTF_8).size > 72) throw ApiFailure.InvalidInput("password")
+    if (!isValidNewAccountPassword(password)) throw ApiFailure.InvalidInput("password")
 }
 private fun validateRegistration(username: String, nickname: String, email: String, password: String) {
     if (username.isBlank() || username.trim().scalarCount() > 255) throw ApiFailure.InvalidInput("username")
     if (nickname.trim().scalarCount() > 255) throw ApiFailure.InvalidInput("nickname")
-    if (email.isBlank() || email.trim().scalarCount() > 255) throw ApiFailure.InvalidInput("email")
+    validateEmail(email)
     validatePassword(password)
 }
